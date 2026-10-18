@@ -674,7 +674,15 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
         }
         en = withVulgarEnglish(hits, src);
     }
-    return completions(en, glen(typed) >= glen(src) ? typed : src);
+    // PredictionLogic.englishDisplay: a word with its own display form (DisplayCase:
+    // "viettelex"→"VietTelex", "github"→"GitHub") uses it, cased by the typed word.
+    std::vector<std::u32string> shown;
+    for (const auto& w : completions(en, glen(typed) >= glen(src) ? typed : src)) {
+        const std::u32string low = lowerS(w);
+        const std::u32string p = displayCase(low, r.prev);
+        shown.push_back(p == low ? w : suggestionCase(p, typed));
+    }
+    return shown;
 }
 
 }  // namespace vtx::app::predict

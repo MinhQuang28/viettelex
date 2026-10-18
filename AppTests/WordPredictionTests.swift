@@ -144,6 +144,16 @@ final class WordPredictionTests: XCTestCase {
         return PredictionModel.shared.candidates(r, raw: raw)
     }
 
+    /// 18/10/2026 (user): "VietTel" gợi ý "Viettelex" — nhánh tiếng Anh bỏ qua DisplayCase.
+    func testEnglishCompletionUsesDisplayCase() {
+        XCTAssertEqual(L.englishDisplay(["Viettelex", "Github", "house"], typed: "VietTel", after: nil),
+                       ["VietTelex", "GitHub", "house"])
+        XCTAssertEqual(L.englishDisplay(["VIETTELEX"], typed: "VIETTEL", after: nil), ["VIETTELEX"])
+        let c = candidates("dùng VietTel", typed: "VietTel", raw: "VietTel", english: true)
+        XCTAssertEqual(c.first, "VietTelex", "\(c)")
+        XCTAssertEqual(candidates("dùng viettel", typed: "viettel", raw: "viettel", english: true).first, "VietTelex")
+    }
+
     func testNextWordRanking() {
         XCTAssertFalse(candidates("cảm ơn ").isEmpty, "hai từ ngữ cảnh có dòng trigram ⇒ có gợi ý")
         XCTAssertFalse(candidates("xin chào ").isEmpty, "\(candidates("xin chào "))")
@@ -304,10 +314,10 @@ final class WordPredictionTests: XCTestCase {
             guard let r = L.request(before: t, typed: t, english: true) else { return [] }
             return PredictionModel.shared.candidates(r, raw: t, filterSensitive: true)
         }
-        XCTAssertTrue(en("kuber").contains("kubernetes"), "\(en("kuber"))")
+        XCTAssertTrue(en("kuber").contains("Kubernetes"), "\(en("kuber"))")
         XCTAssertTrue(en("stablec").contains("stablecoin"), "\(en("stablec"))")
-        XCTAssertTrue(en("typesc").contains("typescript"), "\(en("typesc"))")
-        XCTAssertTrue(en("viettel").contains("viettelex"), "\(en("viettel"))")
+        XCTAssertTrue(en("typesc").contains("TypeScript"), "\(en("typesc"))")
+        XCTAssertTrue(en("viettel").contains("VietTelex"), "\(en("viettel"))")
         XCTAssertTrue(en("paracet").contains("paracetamol"), "\(en("paracet"))")
         // tác giả: "Phil ␣" → Trinh (không dấu, hoa theo chuỗi DisplayCase)
         XCTAssertEqual(c("Phil ").first, "Trinh")

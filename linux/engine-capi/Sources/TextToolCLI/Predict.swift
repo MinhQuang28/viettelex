@@ -155,6 +155,17 @@ enum PredictionLogic {
         return out + extra[i...]
     }
 
+    /// Gợi ý tiếng Anh → dạng hiển thị riêng nếu có (DisplayCase: "viettelex"→"VietTelex",
+    /// "github"→"GitHub"), rồi chữ hoa theo chữ đang gõ; từ không có dạng riêng giữ nguyên
+    /// (đã theo chữ đang gõ). Trước 18/10/2026 nhánh tiếng Anh bỏ qua DisplayCase: "VietTel" → "Viettelex".
+    static func englishDisplay(_ words: [String], typed: String, after prev: String?) -> [String] {
+        words.map { w in
+            let low = w.lowercased()
+            let p = DisplayCase.resolve(low, after: prev)
+            return p == low ? w : SuggestionCase.display(p, shift: .off, typed: typed)
+        }
+    }
+
     static func completions(_ ranked: [String], typed: String) -> [String] {
         let n = typed.count
         var seen = Set<String>(), out: [String] = []
@@ -281,7 +292,8 @@ final class PredictionModel {
         let hits = SwipeEnglish.completions(src, limit: 24)
         let en = filterOn ? SensitiveWords.filter(hits.map(\.word), after: r.prev, enabled: true)
             : PredictionLogic.withVulgarEnglish(hits, typed: src, rank: count)
-        return PredictionLogic.completions(en, typed: typed.count >= src.count ? typed : src)
+        return PredictionLogic.englishDisplay(PredictionLogic.completions(en, typed: typed.count >= src.count ? typed : src),
+                                              typed: typed, after: r.prev)
     }
 }
 

@@ -126,6 +126,13 @@ long long footprint() { return 0; }
 
 // ---------------------------------------------------------------- the Windows setting
 
+// 18/10/2026 (user): "VietTel" suggested "Viettelex" — the English branch skipped DisplayCase.
+TEST(english_completion_uses_display_case) {
+    const std::string c = cands("dùng VietTel", "VietTel", "VietTel", true);
+    CHECK(c.rfind("VietTelex", 0) == 0);
+    CHECK(cands("dùng viettel", "viettel", "viettel", true).rfind("VietTelex", 0) == 0);
+}
+
 TEST(prediction_setting_resolution) {
     CHECK(!predict::resolveHwkbPrediction(false, 0));  // never toggled: Windows default OFF
     CHECK(!predict::resolveHwkbPrediction(false, 1));
@@ -339,8 +346,8 @@ TEST(prediction_slang_batches) {
     CHECK(cands("vãi ").find("nồi") != std::string::npos);
     CHECK(predict::isSensitive(U("cc")) && predict::isSensitive(U("đb")) && predict::isSensitive(U("lìn")));
     // tech / finance / health English words (gen-enlexicon SUPPLEMENT) + DisplayCase
-    CHECK(cands("kuber", "kuber", "kuber", true).find("kubernetes") != std::string::npos);
-    CHECK(cands("viettel", "viettel", "viettel", true).find("viettelex") != std::string::npos);
+    CHECK(cands("kuber", "kuber", "kuber", true).find("Kubernetes") != std::string::npos);
+    CHECK(cands("viettel", "viettel", "viettel", true).find("VietTelex") != std::string::npos);
     CHECK(predict::displayCase(U("viettelex"), std::nullopt) == U("VietTelex"));
     CHECK(predict::displayCase(U("kubernetes"), std::nullopt) == U("Kubernetes"));
     CHECK(predict::displayCase(U("x"), U("chụp")) == U("X"));
