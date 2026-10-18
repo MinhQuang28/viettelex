@@ -56,6 +56,7 @@ int flagFor(char c) {
     case 'C': return VT_FLAG_CONTEXTUAL_ENGLISH;
     case 'e': return VT_FLAG_ENGLISH_WORD_RESTORE; // "e" = OFF
     case 'P': return VT_FLAG_COLLISION_PREFERS_VIETNAMESE;
+    case 'E': return VT_FLAG_EAGER_ENGLISH_RESTORE;
     default: return -1;
     }
 }
