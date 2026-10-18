@@ -193,6 +193,26 @@ final class CaretSuggestionsTests: XCTestCase {
         XCTAssertNil(ToneRunLogic.run(before: "open the file "))
     }
 
+    /// 18/10/2026 (user): "Toi di hoc" (chữ hoa đầu câu) không thấy gợi ý thêm dấu.
+    func testToneRunCapitalizedSentenceStart() {
+        var t = ToneRunLogic.Tracker()
+        XCTAssertEqual(feed(&t, "Toi di hoc "), [nil, nil, .pause])
+        XCTAssertEqual(ToneRunLogic.run(before: "Toi di hoc "), "Toi di hoc ")
+        let restored = TextActionTransform.addTonesInProcess("Toi di hoc ")
+        XCTAssertEqual(restored, "Tôi đi học ")
+        XCTAssertNotNil(ToneRunLogic.suggestion(run: "Toi di hoc ", restored: restored))
+    }
+
+    /// 18/10/2026: bật Sửa lỗi gõ + Thêm dấu — từ đáng xét lỗi gõ mà không ra lỗi vẫn phải xét thêm dấu.
+    func testTypoCheckDoesNotSwallowTones() {
+        XCTAssertEqual(CaretHintLogic.wordHintPlan(typo: true, tones: true), .typoThenTones)
+        XCTAssertEqual(CaretHintLogic.wordHintPlan(typo: true, tones: false), .typo)
+        XCTAssertEqual(CaretHintLogic.wordHintPlan(typo: false, tones: true), .tones)
+        XCTAssertEqual(CaretHintLogic.wordHintPlan(typo: false, tones: false), .none)
+        XCTAssertTrue(TypoFixLogic.worthChecking(boundary: " ", raw: "hoc", word: "hoc"),
+                      "từ không dấu cuối cụm 'toi di hoc' đi nhánh lỗi gõ — vì thế phải rơi tiếp sang thêm dấu")
+    }
+
     func testToneSuggestionFromAddTones() {
         let run = "toi di hoc "
         let restored = TextActionTransform.addTonesInProcess(run)

@@ -67,6 +67,19 @@ struct CaretSuggestion: Equatable {
 
 /// Logic THUẦN của gợi ý cạnh con trỏ (test được, không AppKit sống).
 enum CaretHintLogic {
+    /// Thứ tự gợi ý ranh giới từ (sau ngày giờ): có lỗi gõ đáng xét thì xét trước; KHÔNG ra
+    /// sửa lỗi nào thì vẫn xét Thêm dấu (`typoThenTones`). Bug 18/10/2026: nhánh lỗi gõ
+    /// return luôn ⇒ bật Sửa lỗi gõ là mất gợi ý thêm dấu ("toi di hoc").
+    enum WordHintPlan: Equatable { case none, typo, tones, typoThenTones }
+    static func wordHintPlan(typo: Bool, tones: Bool) -> WordHintPlan {
+        switch (typo, tones) {
+        case (true, true): return .typoThenTones
+        case (true, false): return .typo
+        case (false, true): return .tones
+        case (false, false): return .none
+        }
+    }
+
     // MARK: Phím khi gợi ý đang hiện
 
     enum KeyAction: Equatable {
@@ -470,46 +483,78 @@ final class CaretHint {
             }
             return
         }
-        if f.typo, !ev.raw.isEmpty,
-           TypoFixLogic.worthChecking(boundary: ev.boundary, raw: ev.raw, word: ev.run),
-           !lock.withLock({ rejectedTypos.contains(ev.run) }) {
+        let typoWorth = f.typo && !ev.raw.isEmpty
+            && TypoFixLogic.worthChecking(boundary: ev.boundary, raw: ev.raw, word: ev.run)
+            && !lock.withLock({ rejectedTypos.contains(ev.run) })
+        let tonesTrigger = f.tones ? ev.tones : nil
+        switch CaretHintLogic.wordHintPlan(typo: typoWorth, tones: tonesTrigger != nil) {
+        case .none: return
+        case .tones: scheduleTones(ev, trigger: tonesTrigger!, gen: gen, client: client, controller: controller)
+        case .typo, .typoThenTones:
             let flags = AppState.shared.engineFlags()
             let stream = ev.typoStream
             work.async { [weak self] in
                 guard let fix = TypoFixLogic.lexiconCorrection(raw: ev.raw, flags: flags,
-                                                              filterSensitive: f.filterSensitive) else { return }
+                                                              filterSensitive: f.filterSensitive) else {
+                    // Không có lỗi gõ ⇒ vẫn xét Thêm dấu cho cụm (trước 18/10/2026: return luôn ⇒
+                    // "toi di hoc " không bao giờ được gợi ý thêm dấu khi bật Sửa lỗi gõ).
+                    if let t = tonesTrigger {
+                        DispatchQueue.main.async {
+                            self?.scheduleTones(ev, trigger: t, gen: gen, client: client, controller: controller)
+                        }
+                    }
+                    return
+                }
                 DispatchQueue.main.async {
                     self?.showIfCurrent(gen, client: client, controller: controller, keyStream: stream) { before in
                         TypoFixLogic.suggestion(before: before, word: ev.run, boundary: ev.boundary, raw: ev.raw, fix: fix)
                     }
                 }
             }
-            return
         }
-        if f.tones, let t = ev.tones {
-            let delay = t == .pause ? ToneRunLogic.pauseDelay : 0.04
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
-                guard let self, self.keyGeneration == gen, !self.isShowing, !IsSecureEventInputEnabled(),
-                      let before = Self.textBeforeCaret(client: client, window: ToneRunLogic.window),
-                      let run = ToneRunLogic.run(before: before),
-                      self.lock.withLock({ !(self.declinedTones.map { run.hasPrefix($0) } ?? false)
-                                            && self.fruitlessTones.allows(run, trigger: t) })
-                else { return }
-                self.work.async {
-                    // Process con (dữ liệu Thêm dấu không vào process IME); ~0.2 s.
-                    guard self.keyGeneration == gen else { return }
-                    guard let restored = TextActionTransform.addTonesViaHelper(run, timeout: 3),
-                          ToneRunLogic.suggestion(run: run, restored: restored) != nil else {
-                        // Vô ích cho cụm này: đừng spawn lại ở mỗi lần dừng gõ kế tiếp.
-                        self.lock.withLock { self.fruitlessTones.note(fruitless: run) }
-                        return
-                    }
-                    DispatchQueue.main.async {
-                        self.showIfCurrent(gen, client: client, controller: controller, keyStream: nil,
-                                           window: ToneRunLogic.window) { before in
-                            CaretHintLogic.standsAlone(before: before, token: run)
-                                ? ToneRunLogic.suggestion(run: run, restored: restored) : nil
+    }
+
+    /// MAIN. Thêm dấu cho cụm không dấu: chờ `pauseDelay` (dừng gõ) hoặc 0.04 s (cuối câu),
+    /// đọc màn hình, chạy process con, hiện nếu cụm còn đứng riêng.
+    private func scheduleTones(_ ev: WordEvent, trigger t: ToneRunLogic.Trigger, gen: UInt64,
+                               client: IMKTextInput?, controller: TelexInputController?) {
+        let delay = t == .pause ? ToneRunLogic.pauseDelay : 0.04
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) { [weak self] in
+            guard let self else { return }
+            // Nhật ký gỡ lỗi (chỉ độ dài/cờ, không chữ người gõ): vì sao gợi ý thêm dấu không hiện.
+            guard self.keyGeneration == gen, !self.isShowing, !IsSecureEventInputEnabled() else {
+                DebugLog.log("tones: skip gen=\(self.keyGeneration == gen) showing=\(self.isShowing)")
+                return
+            }
+            guard let before = Self.textBeforeCaret(client: client, window: ToneRunLogic.window) else {
+                DebugLog.log("tones: no text before caret"); return
+            }
+            guard let run = ToneRunLogic.run(before: before) else {
+                DebugLog.log("tones: no run (before \(before.count) chars)"); return
+            }
+            guard self.lock.withLock({ !(self.declinedTones.map { run.hasPrefix($0) } ?? false)
+                                        && self.fruitlessTones.allows(run, trigger: t) }) else {
+                DebugLog.log("tones: declined/fruitless run \(run.count) chars"); return
+            }
+            self.work.async {
+                // Process con (dữ liệu Thêm dấu không vào process IME); ~0.2 s.
+                guard self.keyGeneration == gen else { return }
+                let restored = TextActionTransform.addTonesViaHelper(run, timeout: 3)
+                guard let restored, ToneRunLogic.suggestion(run: run, restored: restored) != nil else {
+                    DebugLog.log("tones: helper \(restored == nil ? "failed" : "no change") run \(run.count) chars")
+                    // Vô ích cho cụm này: đừng spawn lại ở mỗi lần dừng gõ kế tiếp.
+                    self.lock.withLock { self.fruitlessTones.note(fruitless: run) }
+                    return
+                }
+                DebugLog.log("tones: suggestion ready run \(run.count) chars")
+                DispatchQueue.main.async {
+                    self.showIfCurrent(gen, client: client, controller: controller, keyStream: nil,
+                                       window: ToneRunLogic.window) { before in
+                        guard CaretHintLogic.standsAlone(before: before, token: run) else {
+                            DebugLog.log("tones: run no longer stands alone (before \(before.count) chars)")
+                            return nil
                         }
+                        return ToneRunLogic.suggestion(run: run, restored: restored)
                     }
                 }
             }
