@@ -78,6 +78,7 @@ let protected: Set<String> = [
     "sĩ",   // six   (bác sĩ)
     "tã",   // tax
     "úp",   // ups   (úp mở)
+    "gét",  // gets  (gét gô — user 2026-10-18)
     "rẽ",   // res   (rẽ trái)
     // Đợt corpus-from-suite 2026-07-26 (minLen 5): từ Anh ≥5 chữ trùng đúng telex
     // của một từ Việt phổ biến.

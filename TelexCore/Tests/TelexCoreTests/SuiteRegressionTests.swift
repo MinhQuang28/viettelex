@@ -121,7 +121,9 @@ final class SuiteRegressionTests: XCTestCase {
         // wi≡ưi already counted among this bucket's accepted misses. 7135 → 7133.
         // 19/08/2026: +2 (wise, wife) — fix chồng đặc cách teencode (onset w→qu
         // KHÔNG được cộng dồn với rime "ie") nâng sàn 7133 → 7135.
-        XCTAssertGreaterThanOrEqual(pass["restore_raw"] ?? 0, 7135,
+        // 18/10/2026 (maintainer): "gets"≡gét (gét gô) vào protect list — tiếng Việt
+        // thắng như thus≡thú. 7135 → 7134.
+        XCTAssertGreaterThanOrEqual(pass["restore_raw"] ?? 0, 7134,
                                     "English-restore coverage regressed")
         // Trailing-cancel screen-truth (2026-07-31): the escape gesture commits the
         // rendered text even when raw is a real English word — EXACT, no floor.

@@ -37,7 +37,7 @@ efficient efficiently effort efforts element elementary elements embassy emissio
 emissions enterprise enterprises ericsson err error errors essay essays essence essential
 essentially essentials essex establish established estimates exists expenses explorer
 express expressed expression february ferrari ferry fitness fleece former forward fossil
-freeze furniture further fuss gary gene genes genre genres gets ghost gifts glass glasses
+freeze furniture further fuss gary gene genes genre genres ghost gifts glass glasses
 glossary goes gore gossip governor grass greece greene griffin gross guess guests guns
 guys happiness hardcore hardcover hardware harris harrison harry her here hire hiss honor
 honors horrible horror horse hose hospitals host houses hurricane illness implemented

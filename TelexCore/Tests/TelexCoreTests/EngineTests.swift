@@ -194,6 +194,7 @@ final class EngineGoldenTests: XCTestCase {
         // audit 2026-07-23: English spellings that ARE the canonical telex keys
         // of common Vietnamese words — Vietnamese wins (protect list).
         XCTAssertEqual(commitFree("thus"), "thú")
+        XCTAssertEqual(commitFree("gets"), "gét")   // gét gô (2026-10-18)
         XCTAssertEqual(commitFree("queen"), "quên")
         XCTAssertEqual(commitFree("songs"), "sóng")
         XCTAssertEqual(commitFree("char"), "chả")

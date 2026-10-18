@@ -63,7 +63,7 @@ enum EnglishCollisions {
     establish established estimates exists expenses explorer express expressed
     expression february ferrari ferry fitness fleece former forward
     fossil freeze furniture further fuss gary gene genes
-    genre genres gets ghost gifts glass glasses glossary
+    genre genres ghost gifts glass glasses glossary
     goes gore gossip governor grass greece greene griffin
     gross guess guests guns guys happiness hardcore hardcover
     hardware harris harrison harry her here hire hiss
