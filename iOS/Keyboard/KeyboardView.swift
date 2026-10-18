@@ -502,17 +502,23 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         return b
     }()
     /// Ô mép trái thanh gợi ý đang làm gì (thuần theo cài đặt — OneHandTests).
-    enum LeftZone: Equatable { case templates, oneHand, none }
-    static func leftZone(templatesEnabled: Bool, pad: Bool, split: Bool) -> LeftZone {
+    /// `.tools`: Mẫu câu TẮT nhưng Công cụ văn bản hiện (Plus + công tắc — `toolsEnabled` là
+    /// KeyboardSettings.textToolsActive()) ⇒ ☰ vẫn hiện, chạm mở thẳng danh sách công cụ
+    /// (user 10/2026: tắt Mẫu câu làm mất lối vào Công cụ). Giữ lâu vẫn bật/tắt một tay.
+    enum LeftZone: Equatable { case templates, tools, oneHand, none }
+    static func leftZone(templatesEnabled: Bool, toolsEnabled: Bool = false,
+                         pad: Bool, split: Bool) -> LeftZone {
         if templatesEnabled { return .templates }
+        if toolsEnabled { return .tools }
         return pad || split ? .none : .oneHand
     }
     private var leftZone: LeftZone {
-        Self.leftZone(templatesEnabled: templatesEnabled, pad: Self.isPad, split: splitMode)
+        Self.leftZone(templatesEnabled: templatesEnabled, toolsEnabled: textToolsEnabled,
+                      pad: Self.isPad, split: splitMode)
     }
     private func leftZoneTapped() {
         switch leftZone {
-        case .templates: toggleTemplates()
+        case .templates, .tools: toggleTemplates()
         case .oneHand: toggleOneHandFromKeyboard()
         case .none: break
         }
@@ -534,6 +540,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         case .oneHand:
             b.accessibilityLabel = oneHand == .off ? L("Bật chế độ một tay") : L("Thoát chế độ một tay")
             b.accessibilityHint = nil
+        case .tools:
+            b.accessibilityLabel = templatesActive ? L("Đóng công cụ văn bản") : L("Công cụ văn bản")
+            b.accessibilityHint = Self.isPad ? nil : L("Giữ lâu để bật hoặc tắt chế độ một tay")
         default:
             b.accessibilityLabel = templatesActive ? L("Đóng mẫu câu") : L("Mẫu câu")
             b.accessibilityHint = Self.isPad ? nil : L("Giữ lâu để bật hoặc tắt chế độ một tay")
@@ -1220,7 +1229,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// đặt mỗi lần hiện bàn phím.
     var textToolsEnabled = false {
         didSet {
-            if oldValue != textToolsEnabled, templatesActive { rebuildUncachedPlane() }
+            guard oldValue != textToolsEnabled else { return }
+            // Chỉ-công-cụ (Mẫu câu tắt) mà công cụ vừa tắt ⇒ lưới rỗng: về bàn phím chữ.
+            if templatesActive, !templatesEnabled, !textToolsEnabled { plane = .letters; rebuild() }
+            else if templatesActive { rebuildUncachedPlane() }
+            setNeedsLayout()   // ô mép trái (☰ / một tay) đổi theo
         }
     }
     var onTextTool: ((TextTool) -> Void)?
@@ -1245,9 +1258,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
 
     private func toggleTemplates() {
-        guard templatesEnabled else { return }
+        guard templatesEnabled || textToolsEnabled else { return }
         Self.clickModifier()
-        textToolsMode = false
+        textToolsMode = !templatesEnabled   // chỉ-công-cụ: mở thẳng danh sách công cụ
         plane = templatesActive ? .letters : .templates
         lastSuggestionSig = nil
         rebuild()
@@ -1784,7 +1797,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         templatesEnabled = d?.object(forKey: "templatesEnabled") == nil
             || d?.bool(forKey: "templatesEnabled") == true
         userTemplatesCache = nil      // đọc lại (lười) lần mở plane mẫu câu kế — app có thể vừa sửa
-        if !templatesEnabled, plane == .templates { plane = .letters }
+        if !templatesEnabled, !textToolsEnabled, plane == .templates { plane = .letters }
         rebuild()
     }
 
@@ -2121,13 +2134,16 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// [ABC][space][return] để quay lại như plane số.
     private func buildTemplates() {
         rowsContainer.distribution = .fill
-        let tools = textToolsEnabled && textToolsMode
+        // Mẫu câu tắt (☰ = .tools): chỉ danh sách công cụ, không nút "‹ Mẫu câu" / ⚙️.
+        let toolsOnly = !templatesEnabled
+        let tools = textToolsEnabled && (textToolsMode || toolsOnly)
         if !textToolsEnabled { textToolsMode = false }
         let extras: [(display: String, id: String)] = tools
-            ? [(L("\u{2039} Mẫu câu"), Self.textToolsBackID)] + TextTool.allCases.map { ($0.label, $0.rawValue) }
+            ? (toolsOnly ? [] : [(L("\u{2039} Mẫu câu"), Self.textToolsBackID)])
+                + TextTool.allCases.map { ($0.label, $0.rawValue) }
                 + (translateChipLabel.map { [($0, Self.translateID)] } ?? [])
             : (textToolsEnabled ? [(L("⚒️ Công cụ"), Self.textToolsEntryID)] : [])
-        let chips = TemplateChipsView(items: tools ? [] : userTemplates, extras: extras,
+        let chips = TemplateChipsView(items: tools || toolsOnly ? [] : userTemplates, extras: extras,
                                       showGear: !tools, dark: dark,
                                       plainFill: plainFill,
                                       ink: palette.barInk.ui,

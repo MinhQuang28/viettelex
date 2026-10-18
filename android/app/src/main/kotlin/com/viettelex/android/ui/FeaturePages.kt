@@ -509,12 +509,12 @@ private fun GoTatPage(onBack: () -> Unit) {
     SubPageHeader(FeaturePage.GoTat.title, onBack)
     ShortcutsSection { showShortcuts = true }
     VTSection(header = tr("Mẫu câu")) {
-        BoolToggle(Keys.TEMPLATES_ENABLED, Prefs.D.templatesEnabled, tr("Mẫu câu"), tr("Nút ☰ trên bàn phím chèn câu soạn sẵn — quản lý ở tab Mẫu Câu."))
+        BoolToggle(Keys.TEMPLATES_ENABLED, Prefs.D.templatesEnabled, tr("Mẫu câu"), tr("Nút ☰ trên bàn phím chèn câu soạn sẵn — quản lý ở tab Mẫu Câu. Tắt: ẩn tab Mẫu Câu; nút ☰ chỉ còn mở Công cụ văn bản (nếu bật)."))
         RowDivider()
         // Luôn hiện (tìm "Công cụ văn bản" phải tới được đây); chưa có Plus ⇒ dòng khoá.
         if (PlusGate.isUnlocked(PlusFeature.TEXT_TOOLS)) {
             BoolToggle(Keys.TEXT_TOOLS_ENABLED, Prefs.D.textToolsEnabled, tr("Công cụ văn bản"),
-                tr("Chip ⚒️ Công cụ trong lưới mẫu câu: đổi HOA/thường, bỏ dấu, dịch…"))
+                tr("Chip ⚒️ Công cụ trong lưới mẫu câu (Mẫu câu tắt: chạm ☰ mở thẳng): đổi HOA/thường, bỏ dấu, dịch…"))
         } else PlusLockedRow(tr("Công cụ văn bản"), tr("Chip ⚒️ Công cụ trong lưới mẫu câu: đổi HOA/thường, bỏ dấu, dịch…"))
     }
     // Dịch trên máy (Plus): cài đặt ở đây (cạnh Công cụ) — APK ngoài Play không tải được module ⇒ ẩn.

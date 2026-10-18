@@ -84,6 +84,14 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
     private var anim: ValueAnimator? = null
     private var plane = Plane.LETTERS
     private var templatesEnabled = true
+    /**
+     * Công cụ văn bản hiện (Plus + công tắc, không phải ô mật khẩu) — Mẫu câu tắt mà công cụ
+     * bật thì ☰ vẫn hiện, mở thẳng công cụ (TemplatesMenu). IME đặt mỗi lần vào ô.
+     */
+    var toolsEnabled = false
+        set(v) { if (field != v) { field = v; invalidate() } }
+    private fun burgerShown() =
+        TemplatesMenu.leftZone(templatesEnabled, toolsEnabled) != TemplatesMenu.LeftZone.NONE
 
     // --- nội dung bar ---
     // Pool cố định SuggestionCount.MAX ô; đang dùng [slotCount] ô ("Số từ gợi ý" — [slotSetting]).
@@ -381,7 +389,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         val cyOpen = theme.dp(KeyLayout.BAR_CY)
         val cyFloat = theme.dp(7f)
         val cy = cyFloat + (cyOpen - cyFloat) * o
-        if (templatesEnabled) {
+        if (burgerShown()) {
             val bx = theme.dp(32f) + (theme.dp(26f) - theme.dp(32f)) * o
             val active = plane == Plane.TEMPLATES && o > 0.5f
             if (active) c.drawCircle(bx, cy, theme.dp(18f), chipPaint)
@@ -539,7 +547,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         val strip = stripPx()
         if (collapsed || openness < 1f) {
             if (y > theme.dp(18f)) return T_NONE
-            if (templatesEnabled && x < theme.dp(64f)) return T_BURGER
+            if (burgerShown() && x < theme.dp(64f)) return T_BURGER
             if (x >= theme.dp(64f) && x < theme.dp(112f)) return T_EDIT
             if (x >= w - theme.dp(48f)) return T_CHEVRON
             val em = if (emojiButton) theme.dp(StripGeometry.EMOJI_W) else 0f
@@ -549,7 +557,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         }
         if (y > strip) return T_NONE          // không lấn hàng Q–P
         val zone = theme.dp(KeyLayout.STRIP_ZONE_W)
-        if (x < zone) return if (templatesEnabled) T_BURGER else T_NONE
+        if (x < zone) return if (burgerShown()) T_BURGER else T_NONE
         val tools = tools()
         if (tools && x < zone + theme.dp(STRIP_TOOL_W)) return T_EDIT
         if (x >= w - zone) return T_CHEVRON

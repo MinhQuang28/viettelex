@@ -425,6 +425,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         // APK ngoài Play (không tải được module :translate) ⇒ ẩn hẳn Dịch.
         kb.translateEnabled = kb.textToolsEnabled && PlusGate.isUnlocked(PlusFeature.TRANSLATE) &&
             com.viettelex.android.translate.TranslateFeature.offered(this)
+        st.toolsEnabled = kb.textToolsEnabled || kb.translateEnabled   // ☰ khi Mẫu câu tắt
         st.setPlane(kb.plane)
         // Giữ lâu "," = gõ giọng nói: chỉ khi máy có IME giọng nói (đọc lại khi vào ô mới —
         // user có thể bật/tắt trong Cài đặt), không ở ô mật khẩu.

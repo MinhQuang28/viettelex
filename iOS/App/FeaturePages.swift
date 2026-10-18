@@ -296,7 +296,7 @@ struct TinhNangSections: View {
             return Self.join([(true, L("Bật")), (swipeEnglish, L("Tiếng Anh")), (swipeFuto, "Neural")], none: "")
         case .goTat:
             let st = shortcutsEnabled ? (shortcutCount == 0 ? L("Gõ tắt bật") : L("Gõ tắt: %@ mục", shortcutCount)) : L("Gõ tắt tắt")
-            let tools = templatesEnabled && textToolsEnabled && PlusGate.isUnlocked(.textTools)
+            let tools = textToolsEnabled && PlusGate.isUnlocked(.textTools)
             return st + " · " + (templatesEnabled ? L("Mẫu câu bật") : L("Mẫu câu tắt"))
                 + (tools ? " · " + L("Công cụ văn bản") : "")
         case .phim:
@@ -578,16 +578,10 @@ struct GoTatPage: View {
         FeaturePageList(page: .goTat) {
             ShortcutsSection()
             Section {
-                settingToggle(L("Mẫu câu"), L("Nút ☰ trên bàn phím chèn câu soạn sẵn — quản lý ở tab Mẫu Câu. Tắt: ẩn nút ☰ và tab Mẫu Câu."), isOn: $templatesEnabled)
+                settingToggle(L("Mẫu câu"), L("Nút ☰ trên bàn phím chèn câu soạn sẵn — quản lý ở tab Mẫu Câu. Tắt: ẩn tab Mẫu Câu; nút ☰ chỉ còn mở Công cụ văn bản (nếu bật)."), isOn: $templatesEnabled)
                 if PlusGate.isUnlocked(.textTools) {
-                    // Mẫu câu tắt ⇒ chip Công cụ không có chỗ hiện: giữ công tắc (mờ) + lý do,
-                    // không giấu mất như trước.
-                    settingToggle(L("Công cụ văn bản"), L("Chip ⚒️ Công cụ trong lưới mẫu câu: đổi HOA/thường, bỏ dấu, dịch…"), isOn: $textToolsEnabled)
-                        .disabled(!templatesEnabled)
-                    if !templatesEnabled {
-                        Text(L("Bật Mẫu câu để dùng Công cụ văn bản — chip nằm trong lưới mẫu câu."))
-                            .font(.footnote).foregroundStyle(.secondary)
-                    }
+                    // Mẫu câu tắt ⇒ ☰ vẫn hiện và mở thẳng Công cụ (KeyboardView.LeftZone.tools).
+                    settingToggle(L("Công cụ văn bản"), L("Chip ⚒️ Công cụ trong lưới mẫu câu (Mẫu câu tắt: chạm ☰ mở thẳng): đổi HOA/thường, bỏ dấu, dịch…"), isOn: $textToolsEnabled)
                 }
                 if PlusFeature.translate.isAvailableOnDevice, PlusGate.isUnlocked(.translate), #available(iOS 26.0, *) {
                     NavigationLink { TranslateSettingsView() } label: {
