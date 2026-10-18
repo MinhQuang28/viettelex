@@ -241,6 +241,7 @@ struct EmojiSearchSession {
         e.quickTelex = s.quickTelex
         e.modernTone = s.modernTone
         e.liveSpellCheck = s.liveSpellCheck
+        e.eagerEnglishRestore = s.autoRestore
         e.teencode = s.teencode
         engine = e
     }

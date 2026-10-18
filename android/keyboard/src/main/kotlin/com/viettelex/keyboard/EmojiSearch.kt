@@ -237,6 +237,7 @@ class EmojiSearchSession(settings: KeyboardSettings = KeyboardSettings()) {
         freeMarking = settings.freeMarking
         simpleTelex = settings.simpleTelex
         liveSpellCheck = settings.liveSpellCheck
+        eagerEnglishRestore = settings.autoRestore
         quickTelex = settings.quickTelex
         modernTone = settings.modernTone
         teencode = settings.teencode

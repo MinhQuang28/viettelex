@@ -274,7 +274,14 @@ void TelexEngine::feedAscii(uint8_t ascii, Action& out) {
     if (liveSpellCheck && disabledAtCount_ == kNotDisabled && !prefixIsValid(newCount) &&
         elongationHeadCount(newCount, pTone_) <= 0) {
         disabledAtCount_ = rawCount_;
-        if (pTone_ != Tone::None) {
+        if (eagerRestoreApplies(newCount)) {
+            // Eager English restore: the whole word back to raw ("gôg" -> "goog").
+            disabledAtCount_ = 0;
+            rebuildParseState();
+            tonesFolded_ = false;
+            newCount = render();
+            takeSnapshots();
+        } else if (pTone_ != Tone::None) {
             pFoldTones_ = true;
             rebuildParseState();
             pFoldTones_ = false;
@@ -282,6 +289,18 @@ void TelexEngine::feedAscii(uint8_t ascii, Action& out) {
             newCount = render();
             takeSnapshots();
         }
+    }
+
+    // Eager English restore, deferred to key kFreezePrefixMinLength when the word froze
+    // earlier ("win" -> "ưin", decided at "wind").
+    if (eagerEnglishRestore && disabledAtCount_ != kNotDisabled && disabledAtCount_ > 0 &&
+        disabledAtCount_ < gen::kFreezePrefixMinLength && rawCount_ == gen::kFreezePrefixMinLength &&
+        eagerRestoreApplies(newCount)) {
+        disabledAtCount_ = 0;
+        rebuildParseState();
+        tonesFolded_ = false;
+        newCount = render();
+        takeSnapshots();
     }
 
     // Elongation unfreeze.
@@ -865,6 +884,24 @@ void TelexEngine::setCircumflex(int k) {
         letters_[k - 1].mark = Mark::None;
 }
 
+// Eager English restore gate (Swift `eagerRestoreApplies`) — only at the freeze moment.
+bool TelexEngine::eagerRestoreApplies(int n) const {
+    if (!eagerEnglishRestore || vniMode || pCancelled_ || rawCount_ < gen::kFreezePrefixMinLength ||
+        rawCount_ > gen::kFreezePrefixMaxLength)
+        return false;
+    bool differs = n != rawCount_;
+    for (int i = 0; !differs && i < n; ++i)
+        if (scratch_[i] != static_cast<char32_t>(raw_[i])) differs = true;
+    if (!differs) return false;
+    char w[kCapacity];
+    for (int i = 0; i < rawCount_; ++i) {
+        uint8_t b = raw_[i];
+        if (b >= 'A' && b <= 'Z') b |= 0x20;
+        w[i] = static_cast<char>(b);
+    }
+    return inEnglishList(gen::kEnglishFreezePrefixes, w, rawCount_);
+}
+
 void TelexEngine::recomputeFreeze() {
     if (disabledAtCount_ == 0 && upperToneKey_ && !liveSpellCheck) return;
     const int full = rawCount_;
@@ -874,8 +911,14 @@ void TelexEngine::recomputeFreeze() {
         rawCount_ = r;
         rebuildParseState();
         if (disabledAtCount_ == kNotDisabled && pCount_ > 0 && !prefixIsValid(pCount_)) {
-            (void)render();
-            if (elongationHeadCount(pCount_, pTone_) <= 0) disabledAtCount_ = r;
+            int n = render();
+            if (elongationHeadCount(pCount_, pTone_) <= 0)
+                disabledAtCount_ = eagerRestoreApplies(n) ? 0 : r;
+        } else if (eagerEnglishRestore && disabledAtCount_ != kNotDisabled && disabledAtCount_ > 0 &&
+                   disabledAtCount_ < gen::kFreezePrefixMinLength && r == gen::kFreezePrefixMinLength) {
+            rebuildFrozenAware();
+            int n = render();
+            if (eagerRestoreApplies(n)) disabledAtCount_ = 0;
         }
     }
     rawCount_ = full;

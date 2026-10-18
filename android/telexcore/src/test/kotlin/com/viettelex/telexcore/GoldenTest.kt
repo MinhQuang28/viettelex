@@ -29,6 +29,7 @@ class GoldenTest {
             'C' -> e.contextualEnglish = true
             'e' -> e.englishWordRestore = false
             'P' -> e.collisionPrefersVietnamese = true
+            'E' -> e.eagerEnglishRestore = true
         }
         return auto
     }
@@ -47,6 +48,7 @@ class GoldenTest {
             'C' -> e.contextualEnglish = !e.contextualEnglish
             'e' -> e.englishWordRestore = !e.englishWordRestore
             'P' -> e.collisionPrefersVietnamese = !e.collisionPrefersVietnamese
+            'E' -> e.eagerEnglishRestore = !e.eagerEnglishRestore
         }
         return auto
     }

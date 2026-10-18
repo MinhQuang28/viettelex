@@ -650,6 +650,11 @@ Chạy lại: `SWIPE_LANG_TUNE=1 SWIPE_LANG_CFGS='old;base' [SWIPE_TEST=1] ./gra
   ```
 - Dùng cho: gõ vuốt giai đoạn 3 (vuốt ra từ tiếng Anh xen trong câu Việt), công tắc
   "Vuốt từ tiếng Anh".
+- Dùng thêm (18/10/2026) làm NGUỒN SINH bảng `TelexCore/Sources/TelexCore/EnglishFreezePrefixes.swift`
+  (eager English restore: "goog" thay vì "gôg" giữa từ) — `swift run -c release gen-freeze-prefixes
+  ../iOS/Keyboard/Resources/enlexicon.bin Sources/TelexCore/EnglishFreezePrefixes.swift` (từ TelexCore/),
+  rồi `android/telexcore/scripts/gen-wordlists.py` + `windows/engine/tools/gen_tables.py`. Engine không
+  nạp enlexicon.bin lúc chạy: bảng ~1.000 tiền tố (~6 KB, hằng số trong binary).
 - 18/10/2026: `SUPPLEMENT` trong script (từ công nghệ / AI / tài chính / y tế + viettelex, telex: kubernetes,
   stablecoin, paracetamol…) — như từ mượn của repo, nằm NGOÀI 20.000 ⇒ bảng chỉ thêm (20.051 từ). Sinh lại cũng
   kéo theo "ll"/"ve" (đuôi rút gọn đã có trong EnglishContextWords từ trước, bảng cũ chưa sinh lại) và bỏ

@@ -31,6 +31,12 @@ class TelexEngine {
     var modernTone = false
     /** Live spell-check: stop transforming once the word can't be Vietnamese. */
     var liveSpellCheck = false
+    /**
+     * Eager English restore (Swift `eagerEnglishRestore`): at the freeze moment, a raw prefix in
+     * [EnglishFreezePrefixes] restores the whole word to raw ("goog", not "gôg"). Callers pass
+     * their effective auto-restore. Engine default OFF.
+     */
+    var eagerEnglishRestore = false
     /** Simple Telex: a standalone `w` stays literal. */
     var simpleTelex = false
     /** Teencode spelling (w→qu, z/dz→d, k before a/o/u, informal rimes). Engine default ON. */
@@ -125,6 +131,7 @@ class TelexEngine {
     /** Ghi đè toàn bộ trạng thái của [e] bằng bản này — checkpoint không cấp phát (EngineBridge.undoLastLetter). */
     fun copyInto(e: TelexEngine) {
         e.freeMarking = freeMarking; e.modernTone = modernTone; e.liveSpellCheck = liveSpellCheck
+        e.eagerEnglishRestore = eagerEnglishRestore
         e.simpleTelex = simpleTelex; e.teencode = teencode; e.quickTelex = quickTelex
         e.bracketVowels = bracketVowels; e.vniMode = vniMode; e.contextualEnglish = contextualEnglish
         e.previousWordEnglish = previousWordEnglish; e.englishWordRestore = englishWordRestore
@@ -205,7 +212,13 @@ class TelexEngine {
             elongationHeadCount(newCount, pTone) <= 0
         ) {
             disabledAtCount = rawCount
-            if (pTone != T.NONE) {
+            if (eagerRestoreApplies(newCount)) {
+                disabledAtCount = 0
+                rebuildParseState()
+                tonesFolded = false
+                newCount = render()
+                snapshotCancel()
+            } else if (pTone != T.NONE) {
                 pFoldTones = true
                 rebuildParseState()
                 pFoldTones = false
@@ -213,6 +226,18 @@ class TelexEngine {
                 newCount = render()
                 snapshotCancel()
             }
+        }
+
+        // Eager English restore, deferred to key minLength when the word froze earlier ("ưin").
+        if (eagerEnglishRestore && disabledAtCount != Int.MAX_VALUE && disabledAtCount > 0 &&
+            disabledAtCount < EnglishFreezePrefixes.minLength &&
+            rawCount == EnglishFreezePrefixes.minLength && eagerRestoreApplies(newCount)
+        ) {
+            disabledAtCount = 0
+            rebuildParseState()
+            tonesFolded = false
+            newCount = render()
+            snapshotCancel()
         }
 
         if (liveSpellCheck && disabledAtCount != Int.MAX_VALUE && !upperToneKey &&
@@ -759,7 +784,23 @@ class TelexEngine {
         return SyllableValidator.isValidPrefix(basesScratch, o, teencode)
     }
 
+    /** Eager English restore gate — only at the freeze moment (Swift `eagerRestoreApplies`). */
+    private fun eagerRestoreApplies(n: Int): Boolean {
+        if (!eagerEnglishRestore || vniMode || pCancelled ||
+            rawCount < EnglishFreezePrefixes.minLength || rawCount > EnglishFreezePrefixes.maxLength
+        ) return false
+        var differs = n != rawCount
+        if (!differs) {
+            for (i in 0 until n) if (scratch[i] != raw[i]) { differs = true; break }
+        }
+        if (!differs) return false
+        return EnglishFreezePrefixes.contains(raw, rawCount)
+    }
+
     // MARK: - Caller helpers
+
+    /** Freeze index (0 = whole word literal), null = not frozen (Swift `spellCheckFreezeAt`). */
+    val spellCheckFreezeAt: Int? get() = if (disabledAtCount == Int.MAX_VALUE) null else disabledAtCount
 
     /** TRUE while the current word has exceeded the 32-key capacity. */
     val isOverflowed: Boolean get() = overflowed
@@ -867,8 +908,16 @@ class TelexEngine {
             rawCount = r
             rebuildParseState()
             if (disabledAtCount == Int.MAX_VALUE && pCount > 0 && !prefixIsValid(pCount)) {
-                render()
-                if (elongationHeadCount(pCount, pTone) <= 0) disabledAtCount = r
+                val n = render()
+                if (elongationHeadCount(pCount, pTone) <= 0) {
+                    disabledAtCount = if (eagerRestoreApplies(n)) 0 else r
+                }
+            } else if (eagerEnglishRestore && disabledAtCount != Int.MAX_VALUE && disabledAtCount > 0 &&
+                disabledAtCount < EnglishFreezePrefixes.minLength && r == EnglishFreezePrefixes.minLength
+            ) {
+                rebuildFrozenAware()
+                val n = render()
+                if (eagerRestoreApplies(n)) disabledAtCount = 0
             }
             r++
         }

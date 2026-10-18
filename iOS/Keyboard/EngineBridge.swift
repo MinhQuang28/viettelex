@@ -312,6 +312,8 @@ final class EngineBridge {
         engine.freeMarking = settings.freeMarking
         engine.simpleTelex = settings.simpleTelex
         engine.liveSpellCheck = settings.liveSpellCheck
+        // "goog" thay vì "gôg" giữa từ — chỉ khi tự khôi phục bật (boundary giữ nguyên).
+        engine.eagerEnglishRestore = settings.autoRestore
         engine.quickTelex = settings.quickTelex
         engine.modernTone = settings.modernTone
         engine.teencode = settings.teencode
@@ -1041,6 +1043,7 @@ final class EngineBridge {
         e.freeMarking = settings.freeMarking
         e.simpleTelex = settings.simpleTelex
         e.liveSpellCheck = settings.liveSpellCheck
+        e.eagerEnglishRestore = settings.autoRestore
         e.quickTelex = settings.quickTelex
         e.modernTone = settings.modernTone
         e.teencode = settings.teencode

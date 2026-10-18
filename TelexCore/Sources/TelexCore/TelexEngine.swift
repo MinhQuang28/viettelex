@@ -60,6 +60,18 @@ public struct TelexEngine {
     /// token. Preserved across `reset()`; the caller sets it from settings.
     public var liveSpellCheck = false
 
+    /// EAGER English restore (18/10/2026, maintainer-approved). Only acts together with
+    /// `liveSpellCheck`: at the ONE moment the word freezes, if the raw keys so far are
+    /// exactly the freeze prefix of a known English word (`EnglishFreezePrefixes`,
+    /// generated from enlexicon.bin), the whole word goes back to its raw keys right
+    /// away — "goog" instead of "gôg", the rest of "google" types plainly. A raw prefix
+    /// NOT in the table keeps the historical behaviour (marks stay until the boundary),
+    /// which protects Vietnamese typos and teencode. The check runs once per word, never
+    /// per key. Engine default OFF (library contract / golden); callers set it to their
+    /// EFFECTIVE auto-restore setting — with auto-restore off the boundary keeps "gôgle",
+    /// so restoring early would change the committed text. Preserved across `reset()`.
+    public var eagerEnglishRestore = false
+
     /// Simple Telex. When true, a STANDALONE `w` (no adjacent
     /// a/o/u to horn/breve) never becomes `ư` — it stays a literal `w`, so `ư` must be
     /// typed `uw` ("cw"→cw, not cư; "cuw"→cư). `w` still breves/horns an adjacent vowel
@@ -454,7 +466,18 @@ public struct TelexEngine {
         if liveSpellCheck, disabledAtCount == Int.max, !prefixIsValid(newCount),
            elongationHeadCount(newCount, tone: pTone) <= 0 {
             disabledAtCount = rawCount
-            if pTone != .none {
+            if eagerRestoreApplies(newCount) {
+                // EAGER English restore: freeze from the FIRST key, i.e. the whole word
+                // back to raw ("gôg" → "goog"). Same rebuild the upper-tone freeze uses;
+                // a pending tone cannot float either (every key is literal now).
+                disabledAtCount = 0
+                rebuildParseState()
+                tonesFolded = false
+                newCount = render()
+                markCancelled = pCancelled
+                toneCancelAt = pToneCancelAt
+                toneCancelSpan = pToneCancelSpan
+            } else if pTone != .none {
                 // Rebuild with pFoldTones: parseStep folds every TONE key back
                 // to its literal letter (see the tone branch), so the s in
                 // "installer" comes back as 's' instead of floating as sắc.
@@ -472,6 +495,21 @@ public struct TelexEngine {
                 toneCancelAt = pToneCancelAt
                 toneCancelSpan = pToneCancelSpan
             }
+        }
+
+        // Eager English restore, deferred: the word froze BEFORE the table's minimum
+        // length ("wi"+n → "ưin" for "windows", "awe" → "ăe" for "awesome"), so the
+        // decision waits for the 4th key — still one table lookup per word.
+        if eagerEnglishRestore, disabledAtCount != Int.max, disabledAtCount > 0,
+           disabledAtCount < EnglishFreezePrefixes.minLength,
+           rawCount == EnglishFreezePrefixes.minLength, eagerRestoreApplies(newCount) {
+            disabledAtCount = 0
+            rebuildParseState()
+            tonesFolded = false
+            newCount = render()
+            markCancelled = pCancelled
+            toneCancelAt = pToneCancelAt
+            toneCancelSpan = pToneCancelSpan
         }
 
         // Elongation UNFREEZE: the FIRST extra character can't be told apart from a
@@ -1426,7 +1464,32 @@ public struct TelexEngine {
         return SyllableValidator.isValidPrefix(bases: basesScratch, count: out, teencode: teencode)
     }
 
+    /// Eager English restore gate, evaluated ONLY at the live-spell-check freeze moment
+    /// (forward typing, or its ⌫/replay twin in `recomputeFreeze`) — once per word.
+    /// `n` = letters just rendered into `scratch` for `raw[0..<rawCount]`.
+    /// Restores only when: the flag is on (caller's effective auto-restore), Telex (VNI
+    /// raw holds digits, never an English prefix), no deliberate cancel happened (a
+    /// cancel is the user's own escape — "gooogle" keeps its screen-truth), the screen
+    /// actually differs from the raw keys (else nothing to restore), and the raw keys are
+    /// exactly an English freeze prefix (table min length 4).
+    private func eagerRestoreApplies(_ n: Int) -> Bool {
+        guard eagerEnglishRestore, !vniMode, !pCancelled,
+              rawCount >= EnglishFreezePrefixes.minLength,
+              rawCount <= EnglishFreezePrefixes.maxLength else { return false }
+        var differs = n != rawCount
+        if !differs {
+            for i in 0..<n where scratch[i] != UInt32(raw[i]) { differs = true; break }
+        }
+        guard differs else { return false }
+        return raw.withUnsafeBufferPointer { EnglishFreezePrefixes.contains($0, count: rawCount) }
+    }
+
     // MARK: - Test / caller helpers
+
+    /// Raw index from which live spell-check froze the current word (0 = the whole word
+    /// is literal: eager English restore or a mixed-case upper-tone freeze), nil = not
+    /// frozen. For the gen-freeze-prefixes generator and callers' diagnostics.
+    public var spellCheckFreezeAt: Int? { disabledAtCount == Int.max ? nil : disabledAtCount }
 
     /// TRUE while the current word has exceeded the 32-key capacity. Callers need this
     /// to tell an overflow `.passthrough` (key NOT recorded — the app must render and
@@ -1609,8 +1672,20 @@ public struct TelexEngine {
                 // Same teencode-elongation escape forward typing applies. render()
                 // fills `renderLetters` for the split check; every buffer it touches is
                 // rebuilt by the caller's `rebuildFrozenAware()` + `render()` after.
-                _ = render()
-                if elongationHeadCount(pCount, tone: pTone) <= 0 { disabledAtCount = r }
+                let n = render()
+                if elongationHeadCount(pCount, tone: pTone) <= 0 {
+                    // Eager English restore decides on exactly what forward typing saw
+                    // at this key (raw[0..<r] + its render), so the replay agrees.
+                    disabledAtCount = eagerRestoreApplies(n) ? 0 : r
+                }
+            } else if eagerEnglishRestore, disabledAtCount != Int.max, disabledAtCount > 0,
+                      disabledAtCount < EnglishFreezePrefixes.minLength,
+                      r == EnglishFreezePrefixes.minLength {
+                // Deferred twin of feed(): render what forward typing showed at key 4
+                // (fold-aware, like the frozen word on screen) and decide there.
+                rebuildFrozenAware()
+                let n = render()
+                if eagerRestoreApplies(n) { disabledAtCount = 0 }
             }
             r += 1
         }

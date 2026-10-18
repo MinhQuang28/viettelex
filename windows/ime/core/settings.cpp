@@ -91,6 +91,8 @@ uint32_t Settings::engineFlags() const {
     if (vniMode) f |= VTX_VNI;
     if (contextualEnglish) f |= VTX_CONTEXTUAL_ENGLISH;
     if (collisionPrefersVietnamese) f |= VTX_COLLISION_PREFERS_VI;
+    // "goog" not "gôg" mid-word — only with auto-restore (else the boundary keeps "gôgle").
+    if (autoRestore) f |= VTX_EAGER_ENGLISH_RESTORE;
     return f;
 }
 

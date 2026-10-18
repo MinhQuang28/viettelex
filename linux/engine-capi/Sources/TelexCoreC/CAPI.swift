@@ -107,6 +107,7 @@ public func vt_engine_set_flag(_ h: OpaquePointer, _ flag: Int32, _ on: Bool) {
     case 8: b.e.contextualEnglish = on
     case 9: b.e.englishWordRestore = on
     case 10: b.e.collisionPrefersVietnamese = on
+    case 11: b.e.eagerEnglishRestore = on
     default: break
     }
 }
@@ -126,6 +127,7 @@ public func vt_engine_get_flag(_ h: OpaquePointer, _ flag: Int32) -> Bool {
     case 8: return e.contextualEnglish
     case 9: return e.englishWordRestore
     case 10: return e.collisionPrefersVietnamese
+    case 11: return e.eagerEnglishRestore
     default: return false
     }
 }

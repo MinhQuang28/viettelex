@@ -184,6 +184,7 @@ TEST(settings_defaults_match_macos) {
     CHECK(f & VTX_CONTEXTUAL_ENGLISH);
     CHECK(f & VTX_COLLISION_PREFERS_VI);
     CHECK(f & VTX_ENGLISH_WORD_RESTORE);
+    CHECK(f & VTX_EAGER_ENGLISH_RESTORE);  // follows autoRestore (default ON)
     CHECK(!(f & VTX_TEENCODE));  // app default OFF even though the engine default is ON
     CHECK(!(f & VTX_VNI));
 }

@@ -12,7 +12,8 @@
 //   flags  ops  trace  screen  composed  raw  prevEnglish
 // flags: letters; A autoRestore, F freeMarking, M modernTone, L liveSpellCheck,
 //   S simpleTelex, t teencode OFF, Q quickTelex, B bracketVowels, V vniMode,
-//   C contextualEnglish, e englishWordRestore OFF, P collisionPrefersVietnamese; "-" = none.
+//   C contextualEnglish, e englishWordRestore OFF, P collisionPrefersVietnamese,
+//   E eagerEnglishRestore; "-" = none.
 // ops: each char is fed, except  ' ' '.' ','  boundary (commitBoundary + insert char),
 //   '<' backspace, '^' reopenLastCommit, '#' reset, '!' resetContext,
 //   '%' commitText, '`X' toggle flag X mid-stream, and a leading '@' = seed(rest).
@@ -56,6 +57,7 @@ func configure(_ e: inout TelexEngine, _ flags: String) -> Bool {
         case "C": e.contextualEnglish = true
         case "e": e.englishWordRestore = false
         case "P": e.collisionPrefersVietnamese = true
+        case "E": e.eagerEnglishRestore = true
         default: break
         }
     }
@@ -76,6 +78,7 @@ func toggle(_ e: inout TelexEngine, _ c: Character, _ auto: inout Bool) {
     case "C": e.contextualEnglish.toggle()
     case "e": e.englishWordRestore.toggle()
     case "P": e.collisionPrefersVietnamese.toggle()
+    case "E": e.eagerEnglishRestore.toggle()
     default: break
     }
 }
@@ -258,6 +261,10 @@ for o in onsets {
 // MARK: - Corpus
 
 let iosDefault = "AFSLCt"
+// Eager English restore (18/10/2026): the shipped configs with E. Kept as EXTRA lines
+// (not by changing iosDefault) so the golden diff shows exactly the new behaviour.
+let iosEager = "AFSLCtE"
+let macEager = "AFLCPtE"
 let wordConfigs = [iosDefault, "A", "", "AL", "AFL", "ASL", "AMQ", "ACP", "Ae", "AFSLt", "AB", "ALt"]
 
 var words: [String] = []
@@ -278,6 +285,8 @@ for w in uniqWords {
     run("A", w + " ^s ")
     run(iosDefault, w + " <" + "a ")
     run("A", w + "%")
+    for cfg in [iosEager, macEager] { run(cfg, w + " ") }
+    run(macEager, w + "<<<" + " ")
 }
 
 // Sentences from test literals (spaces kept) under context-sensitive configs.
@@ -288,6 +297,7 @@ for s in testLiterals where s.contains(" ") {
 // Vietnamese syllables.
 for k in syllableKeys { for cfg in [iosDefault, "A", "ALM"] { run(cfg, k + " ") } }
 for k in syllableKeysMid { run(iosDefault, k + " ") }
+for k in syllableKeys { run(macEager, k + " ") }
 for k in syllableKeysLateW { for cfg in [iosDefault, "AF"] { run(cfg, k + " ") } }
 for k in syllableVNI { for cfg in ["AVL", "AVFMt"] { run(cfg, k + " ") } }
 for (i, k) in syllableKeys.enumerated() where i % 7 == 0 {
@@ -355,6 +365,38 @@ for n in 0..<40000 {
         else if r < 983 { c = "."; }
         else if r < 990 { ops.append("`"); c = flagLetters[rng.int(flagLetters.count)] }
         else { c = Character(light[rng.int(light.count)].uppercased()) }
+        ops.append(c)
+    }
+    run(flags, ops + " ")
+}
+
+// Eager English restore fuzz: own PRNG (the stream above stays byte-identical), live
+// spell-check + E always on at start, mid-word flips may include E.
+var rngE = XorShift(s: 0xE16E_2026_1018_0001)
+let flagLettersE = Array("AFMLStQBVCePE")
+let englishPool = englishLists + suiteInputs.filter(isKeyWord)
+for n in 0..<8000 {
+    var flags = "LE"
+    for f in flagLetters where f != "L" && rngE.chance(f == "A" ? 90 : (f == "V" || f == "B" ? 8 : 30)) { flags.append(f) }
+    var ops = ""
+    // Half the cases start from a real English/suite word (prefix), then fuzz.
+    if rngE.chance(50), !englishPool.isEmpty {
+        let w = englishPool[rngE.int(englishPool.count)]
+        ops += String(w.prefix(1 + rngE.int(max(1, w.count))))
+    }
+    let len = n % 50 == 0 ? 20 + rngE.int(15) : 1 + rngE.int(12)
+    for _ in 0..<len {
+        let r = rngE.int(1000)
+        var c: Character
+        if r < 520 { c = heavy[rngE.int(heavy.count)] }
+        else if r < 760 { c = light[rngE.int(light.count)] }
+        else if r < 820 { c = Character(light[rngE.int(light.count)].uppercased()) }
+        else if r < 900 { c = "<" }
+        else if r < 940 { c = " " }
+        else if r < 955 { c = "^" }
+        else if r < 965 { c = "%" }
+        else if r < 980 { ops.append("`"); c = flagLettersE[rngE.int(flagLettersE.count)] }
+        else { c = "." }
         ops.append(c)
     }
     run(flags, ops + " ")

@@ -8,7 +8,8 @@ let package = Package(
         .library(name: "TelexCore", targets: ["TelexCore"]),
         .executable(name: "gen-lessons", targets: ["GenLessons"]),
         .executable(name: "gen-english", targets: ["GenEnglish"]),
-        .executable(name: "gen-golden", targets: ["GenGolden"])
+        .executable(name: "gen-golden", targets: ["GenGolden"]),
+        .executable(name: "gen-freeze-prefixes", targets: ["GenFreezePrefixes"])
     ],
     targets: [
         .target(
@@ -28,6 +29,10 @@ let package = Package(
         ),
         .executableTarget(
             name: "GenGolden",
+            dependencies: ["TelexCore"]
+        ),
+        .executableTarget(
+            name: "GenFreezePrefixes",
             dependencies: ["TelexCore"]
         ),
         .testTarget(
