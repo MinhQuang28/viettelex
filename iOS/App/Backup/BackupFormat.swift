@@ -69,6 +69,8 @@ enum BackupSettings {
         Spec(key: "textToolsEnabled", kind: .bool(true)),   // công tắc Công cụ văn bản (Plus)
         Spec(key: "suggestInNoSuggestFields", kind: .bool(true)),
         Spec(key: "emojiSuggest", kind: .bool(true)),    // chỉ iOS dùng
+        // "Số từ gợi ý" (SuggestionCount): 0 = Tự động, 1…5 — cùng khoá Android.
+        Spec(key: SuggestionCount.key, kind: .int(SuggestionCount.auto, SuggestionCount.range)),
         Spec(key: "pasteButton", kind: .bool(true)),     // chỉ iOS dùng
         Spec(key: "smartTouch", kind: .bool(true)),
         Spec(key: "autoCorrect", kind: .bool(false)),

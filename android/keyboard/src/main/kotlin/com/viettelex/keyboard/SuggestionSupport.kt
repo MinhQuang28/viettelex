@@ -100,22 +100,23 @@ object SuggestRank {
                     p: Params = DEFAULT): List<String> = topNext(prev, prev2, limit, lm, p)?.words() ?: emptyList()
 
     /**
-     * Từ kế tiếp sau dấu cách (≤ 3, CHƯA đệm topWords). [personal] = nextWords cá nhân/seed
+     * Từ kế tiếp sau dấu cách (≤ [need], CHƯA đệm topWords). [personal] = nextWords cá nhân/seed
      * đã lọc nhạy cảm (≤ 6), [triCount] = số lượt người dùng gõ (prev2, prev → w), [filter] lọc
-     * nhạy cảm cho phần tĩnh.
+     * nhạy cảm cho phần tĩnh. [need] = số ô ("Số từ gợi ý", mặc định 3 — hành vi cũ).
      */
     fun nextFill(prev: String, prev2: String?, personal: List<String>, triCount: (String) -> Int,
                  filter: (List<String>) -> List<String> = { it }, lm: SyllableLM? = SyllableLM.shared,
-                 p: Params = DEFAULT): List<String> {
-        val tri = if (prev2 != null && p.useTrigram && lm != null) topNext(prev, prev2, 6, lm, p) else null
+                 p: Params = DEFAULT, need: Int = 3): List<String> {
+        val limit = maxOf(6, need + 3)
+        val tri = if (prev2 != null && p.useTrigram && lm != null) topNext(prev, prev2, limit, lm, p) else null
         if (tri != null && tri.trigram) {
-            val learned = personal.filter { triCount(it) >= p.learnedTriMin }.take(2)
-            return SuggestionFill.pad(learned, filter(tri.words()) + personal, 3)
+            val learned = personal.filter { triCount(it) >= p.learnedTriMin }.take(minOf(2, need))
+            return SuggestionFill.pad(learned, filter(tri.words()) + personal, need)
         }
-        val base = personal.take(3)
-        if (base.size >= 3) return base
-        val st = tri?.words() ?: bigramNext(prev, 6, lm, p)
-        return SuggestionFill.pad(base, filter(st), 3)
+        val base = personal.take(need)
+        if (base.size >= need) return base
+        val st = tri?.words() ?: bigramNext(prev, limit, lm, p)
+        return SuggestionFill.pad(base, filter(st), need)
     }
 
     /** Kết quả [topNext]: [n] id đầu (điểm giảm dần) + điểm; [trigram] = chấm bằng dòng trigram. */

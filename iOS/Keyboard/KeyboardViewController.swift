@@ -302,6 +302,7 @@ final class KeyboardViewController: UIInputViewController {
         mathResultsSetting = settings.mathResults
         mathArmed = false; mathChip = nil
         emojiSuggestSetting = settings.emojiSuggest
+        slotWant = SuggestionCount.resolved(settings.suggestionCount)
         pasteButtonSetting = settings.pasteButton
         spaceFlickSetting = settings.spaceSwipeLanguage
         keyCommandsSetting = settings.swipeKeyCommands
@@ -1167,6 +1168,9 @@ final class KeyboardViewController: UIInputViewController {
     /// "Hiện kết quả phép tính" (KeyboardSettings.mathResults).
     private var mathResultsSetting = true
     private var emojiSuggestSetting = true
+    /// Số ứng viên xin cho thanh gợi ý ("Số từ gợi ý", Tự động = 3). Bar có thể hiện ít hơn
+    /// khi chật (SuggestionCount.fit) — phần dư bỏ, không tốn thêm gì ngoài ≤ 5 ứng viên.
+    private var slotWant = SuggestionCount.autoSlots
     private var pasteButtonSetting = true
     /// Đang giữ phím cách di con trỏ (KeyboardView.onTrackpad) — xem trackpadChanged.
     private var trackpadActive = false
@@ -1625,8 +1629,8 @@ final class KeyboardViewController: UIInputViewController {
             // Tiếng Anh: từ kế tiếp cá nhân chỉ giữ từ tiếng Anh; đệm bằng từ Anh phổ biến
             let personal = lastWord.map { langModel.nextWords(after: $0, prev2: lastWord2, limit: 12) } ?? []
             let en = SensitiveWords.filter(personal.filter { SwipeEnglish.contains($0.lowercased()) },
-                                           enabled: filterSensitive).prefix(3)
-            set.nextWords = padWords(en.map { caseForContext($0) }, need: 3)
+                                           enabled: filterSensitive).prefix(slotWant)
+            set.nextWords = padWords(en.map { caseForContext($0) }, need: slotWant)
         } else if let prev = lastWord {
             // vừa space sau một từ → gợi từ KẾ TIẾP (SuggestRank.nextFill): có trigram tĩnh
             // (prev2, prev) ⇒ bộ ba người dùng đã gõ, rồi trigram, rồi cá nhân/seed; không ⇒
@@ -1635,14 +1639,14 @@ final class KeyboardViewController: UIInputViewController {
             let personal = SensitiveWords.filter(lm.nextWords(after: prev, prev2: p2, limit: 6), enabled: fs)
             let next = SuggestRank.nextFill(prev, prev2: p2, personal: personal,
                                             triCount: { w in p2.map { lm.trigramCount($0, prev, w) } ?? 0 },
-                                            filter: { SensitiveWords.filter($0, enabled: fs) })
-            set.nextWords = padWords(next.map { caseForContext(properCase($0, after: prev)) }, need: 3)
+                                            filter: { SensitiveWords.filter($0, enabled: fs) }, need: slotWant)
+            set.nextWords = padWords(next.map { caseForContext(properCase($0, after: prev)) }, need: slotWant)
         } else {
             // field trống chưa gõ gì → từ user hay mở đầu nhất
-            let top = SensitiveWords.filter(langModel.topWords(limit: 6),
+            let top = SensitiveWords.filter(langModel.topWords(limit: max(6, slotWant + 3)),
                                             enabled: filterSensitive)
-                .prefix(3).map { caseForContext(properCase($0)) }
-            set.nextWords = padWords(Array(top), need: 3)
+                .prefix(slotWant).map { caseForContext(properCase($0)) }
+            set.nextWords = padWords(Array(top), need: slotWant)
         }
         set.number = refreshNumberChip()
         set.math = refreshMathChip()
@@ -1743,6 +1747,11 @@ final class KeyboardViewController: UIInputViewController {
                 enabled: filterSensitive)
             set.word = ranked.first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
             set.word2 = ranked.dropFirst().first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
+            // "Số từ gợi ý" 4–5: ứng viên hạng 3… (ô 1 = nguyên văn, ô 2–3 = word/word2)
+            if slotWant > 3 {
+                set.moreWords = ranked.dropFirst(2).prefix(slotWant - 3)
+                    .map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
+            }
         } else if let fix {
             // Thử nghiệm: không từ nào khớp → nghi chạm trượt phím kề; đưa bản sửa
             // lên slot chính (tap để thay, không tự thay).
@@ -1771,16 +1780,19 @@ final class KeyboardViewController: UIInputViewController {
             if emojis.isEmpty { emojis = EmojiSearch.typing(prev: lastWord, composed: composed, raw: raw) }
         }
         set.emojis = emojis
-        // Không có emoji lấp slot 3 → đệm word/word2 cho đủ (literal + 2 từ).
-        if emojis.isEmpty {
-            let words = padWords([set.word, set.word2].compactMap { $0 },
-                                 need: 2, typed: composed)
+        // Không có emoji lấp ô cuối → đệm cho đủ ô (literal + slotWant−1 từ). 1 ô: không đệm —
+        // ô duy nhất hiện ứng viên thật, không có thì nguyên văn (SuggestionSlots.arrange).
+        if emojis.isEmpty, slotWant > 1 {
+            let words = padWords([set.word, set.word2].compactMap { $0 } + set.moreWords,
+                                 need: slotWant - 1, typed: composed)
             set.word = words.first
-            set.word2 = words.count > 1 ? words.last : nil
+            set.word2 = words.count > 1 ? words[1] : nil
+            set.moreWords = Array(words.dropFirst(2))
         }
         // Đang gõ đúng một chữ tắt: slot chính hiện nội dung sẽ bung (chạm = bung ngay).
         // (Nội dung nhiều dòng không lên bar — chạm sẽ chèn sai; gõ ranh giới vẫn bung.)
         if let preview = bridge.shortcutPreview, !preview.contains("\n"), set.word != preview {
+            if set.word != nil, let w2 = set.word2, !set.moreWords.isEmpty { set.moreWords.insert(w2, at: 0) }
             set.word2 = set.word ?? set.word2
             set.word = preview
         }

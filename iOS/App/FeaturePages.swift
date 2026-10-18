@@ -440,6 +440,7 @@ struct GoiYPage: View {
                 // Thanh gợi ý bật = tự học từ hay dùng (learnWords đi theo — quyết định 2026-07-24).
                 settingToggle(L("Thanh gợi ý"), L("Gợi ý từ + emoji, tự học từ bạn hay dùng (chỉ trên máy)."), isOn: $showSuggestions)
                 if showSuggestions {
+                    SuggestionCountRow()
                     settingToggle(L("Gợi ý cả khi ứng dụng tắt gợi ý"), L("Ô mà ứng dụng tắt gợi ý (vd ô chat, thanh địa chỉ) vẫn gợi ý từ — không tự sửa, không học từ gõ ở đó. Mật khẩu, ẩn danh, ô số không bị ảnh hưởng."), isOn: $suggestInNoSuggestFields)
                     settingToggle(L("Gợi ý emoji"), L("Emoji hợp với từ đang gõ (yêu → ❤️)."), isOn: $emojiSuggest)
                     settingToggle(L("Chip số"), L("Đọc số thành chữ, định dạng tiền (1tr2 → 1.200.000 ₫)."), isOn: $numberChips)
@@ -479,6 +480,50 @@ struct GoiYPage: View {
                         .font(.footnote).foregroundStyle(.green)
                 }
             } header: { Text(L("Từ đã học")) }
+        }
+    }
+}
+
+/// "Số từ gợi ý" (SuggestionCount): một hàng gọn − [giá trị] +, Tự động → 1 → … → 5
+/// (− ở 1 về Tự động). VoiceOver: một phần tử chỉnh được (vuốt lên/xuống).
+struct SuggestionCountRow: View {
+    @AppStorage(SuggestionCount.key, store: featureDefaults) private var count = SuggestionCount.auto
+
+    private var valueText: String { count <= SuggestionCount.auto ? L("Tự động") : "\(count)" }
+
+    var body: some View {
+        HStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(L("Số từ gợi ý"))
+                Text(L("Tự động: 3 từ. Máy hẹp có thể hiện ít hơn để ô đủ rộng cho dễ chạm."))
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            HStack(spacing: 0) {
+                Button { count = SuggestionCount.step(count, by: -1) } label: {
+                    Image(systemName: "minus").frame(width: 36, height: 32)
+                }
+                .disabled(count <= SuggestionCount.auto)
+                Text(valueText)
+                    .monospacedDigit()
+                    .frame(minWidth: 64)
+                Button { count = SuggestionCount.step(count, by: 1) } label: {
+                    Image(systemName: "plus").frame(width: 36, height: 32)
+                }
+                .disabled(count >= SuggestionCount.max)
+            }
+            .buttonStyle(.borderless)   // trong List: hai nút bấm riêng, không ăn cả hàng
+            .background(Color(.tertiarySystemFill), in: Capsule())
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(L("Số từ gợi ý"))
+        .accessibilityValue(valueText)
+        .accessibilityAdjustableAction { dir in
+            switch dir {
+            case .increment: count = SuggestionCount.step(count, by: 1)
+            case .decrement: count = SuggestionCount.step(count, by: -1)
+            @unknown default: break
+            }
         }
     }
 }

@@ -920,6 +920,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         var literal: String? = nil
         var word: String? = nil
         var word2: String? = nil       // ứng viên inline thứ hai (khi không có emoji)
+        /// Ứng viên inline thứ 3, 4… (chỉ khi "Số từ gợi ý" > 3 — SuggestionCount).
+        var moreWords: [String] = []
         var emojis: [String] = []
         var nextWords: [String] = []   // gợi ý khi CHƯA gõ (đầu câu / sau space)
         var paste = false               // thẻ Dán thay bar (vừa copy, xem controller)
@@ -933,7 +935,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         var actionLabel: String? = nil  // chip hành động slot đầu ("Thêm dấu" / "Hoàn tác")…
         var actionPayload: String? = nil // …và payload (addTonesToken / undoTonesToken)
         var isEmpty: Bool {
-            literal == nil && word == nil && word2 == nil && emojis.isEmpty && nextWords.isEmpty
+            literal == nil && word == nil && word2 == nil && moreWords.isEmpty && emojis.isEmpty && nextWords.isEmpty
                 && number == nil && math == nil
         }
     }
@@ -948,11 +950,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var barInkApplied: UIColor?
     private var barWired = false
 
-    /// Thanh gợi ý theo KHUNG CỐ ĐỊNH (27/09/2026): 3 ô bằng nhau, vạch ngăn ở mép ô 1|2,
-    /// 2|3, emoji chia đều ô 3. Frame chỉ tính lại khi bề rộng bar / số emoji đổi — mỗi
+    /// Thanh gợi ý theo KHUNG CỐ ĐỊNH (27/09/2026): `slotCount` ô bằng nhau (cài đặt "Số từ
+    /// gợi ý" — SuggestionCount; Tự động = 3), vạch ngăn ở mép giữa các ô, emoji chia đều ô
+    /// cuối. Pool cố định 5 ô (SuggestionCount.max) tạo một lần; ô ngoài slotCount ẩn. Frame chỉ tính lại khi bề rộng bar / số emoji đổi — mỗi
     /// phím chỉ đổi chữ. Trước: UIStackView + ô Auto Layout, setTitle đổi intrinsic size
     /// ⇒ giải constraint + layout lại cả KeyboardView mỗi phím (~1.8 ms main/phím, bench B).
     private final class SuggestionBar: UIView {
+        static let poolSize = SuggestionCount.max
         let slots: [KeyButton]
         /// Chữ slot: UILabel riêng phủ trọn nút (không setTitle) — UIButton dò lại rect
         /// title/ảnh mỗi lần đổi chữ (~¼ thời gian layout+vẽ bar, Time Profiler 27/09).
@@ -962,6 +966,14 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         private(set) var cellFrames: [CGRect] = []
         private var laidOut: CGSize = .zero
         private var emojiCount = 0
+        /// "Số từ gợi ý" (0 = Tự động) — đổi ⇒ tính lại số ô.
+        var setting = SuggestionCount.auto {
+            didSet { if setting != oldValue { relayout() } }
+        }
+        /// Số ô đang dùng = SuggestionCount.fit(setting, bề rộng bar): bar chật (ô < 44pt) ⇒ bớt ô.
+        private(set) var slotCount = SuggestionCount.autoSlots
+        /// Số ô đổi (bề rộng / cài đặt) ⇒ view vẽ lại nội dung theo số ô mới.
+        var onSlotCountChange: (() -> Void)?
         /// Chip clipboard (1–3): CHIA ĐỀU bar như Android/Gboard; 0 = 3 ô cố định. Trước đây
         /// [Dán SĐT…][Dán] nằm trong 2/3 ô, ô 3 trống ⇒ thanh gợi ý trông "ngắn 1 đoạn"
         /// (Hữu Đông 28/09/2026).
@@ -970,10 +982,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         var hitInsets: UIEdgeInsets = .zero
 
         init(makeSlot: () -> KeyButton) {
-            slots = (0..<3).map { _ in makeSlot() }
-            labels = (0..<3).map { _ in UILabel() }
+            slots = (0..<Self.poolSize).map { _ in makeSlot() }
+            labels = (0..<Self.poolSize).map { _ in UILabel() }
             emojis = (0..<3).map { _ in makeSlot() }
-            dividers = (0..<2).map { _ in UIView() }
+            dividers = (0..<(Self.poolSize - 1)).map { _ in UIView() }
             super.init(frame: .zero)
             for (b, l) in zip(slots, labels) {
                 l.textAlignment = .center
@@ -997,10 +1009,19 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             super.layoutSubviews()
             guard bounds.size != laidOut else { return }
             laidOut = bounds.size
-            let w = bounds.width / 3, h = bounds.height
-            cellFrames = (0..<3).map { CGRect(x: CGFloat($0) * w, y: 0, width: w, height: h) }
+            relayout()
+        }
+
+        /// Chỉ khi bề rộng bar / cài đặt đổi.
+        private func relayout() {
+            let n = SuggestionCount.fit(setting, barWidth: bounds.width)
+            let changed = n != slotCount
+            slotCount = n
+            let w = bounds.width / CGFloat(n), h = bounds.height
+            cellFrames = (0..<n).map { CGRect(x: CGFloat($0) * w, y: 0, width: w, height: h) }
             layoutSlots()
             layoutEmojis()
+            if changed { onSlotCountChange?() }
         }
 
         /// Chỉ chạy khi bề rộng bar / số chip đổi — mỗi phím không đụng frame.
@@ -1011,22 +1032,25 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             layoutSlots()
         }
         private func layoutSlots() {
-            guard cellFrames.count == 3 else { return }
-            let n = chipCount > 0 ? chipCount : 3
+            guard !cellFrames.isEmpty else { return }
+            let n = chipCount > 0 ? chipCount : slotCount
             let cw = bounds.width / CGFloat(n), h = bounds.height
             for (i, b) in slots.enumerated() {
-                let cell = i < n ? CGRect(x: CGFloat(i) * cw, y: 0, width: cw, height: h) : cellFrames[i]
-                b.frame = cell.insetBy(dx: 3, dy: 0)
+                let cell = i < n ? CGRect(x: CGFloat(i) * cw, y: 0, width: cw, height: h)
+                    : i < cellFrames.count ? cellFrames[i] : .zero
+                b.frame = cell == .zero ? .zero : cell.insetBy(dx: 3, dy: 0)
                 labels[i].frame = b.bounds
                 Self.fitShrink(labels[i])
             }
             for (i, d) in dividers.enumerated() {
-                let x = i + 1 < n ? CGFloat(i + 1) * cw : cellFrames[i].maxX
+                let x = i + 1 < n ? CGFloat(i + 1) * cw : i < cellFrames.count ? cellFrames[i].maxX : 0
                 d.frame = CGRect(x: x - 0.5, y: 4, width: 1, height: max(h - 8, 0))
             }
         }
         /// Số vạch ngăn dùng được ở chế độ hiện tại (chip: giữa các chip).
-        var usableDividers: Int { chipCount > 0 ? chipCount - 1 : 2 }
+        var usableDividers: Int { (chipCount > 0 ? chipCount : slotCount) - 1 }
+        /// Số ô có thể đang hiện (ô thường hoặc chip clipboard).
+        var shownCells: Int { max(slotCount, chipCount) }
 
         /// Emoji hiện chia đều ô 3 (như stack fillEqually cũ: 1 emoji = cả ô).
         func setEmojiCount(_ n: Int) {
@@ -1035,8 +1059,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             layoutEmojis()
         }
         private func layoutEmojis() {
-            guard cellFrames.count == 3, emojiCount > 0 else { return }
-            let c = cellFrames[2], ew = c.width / CGFloat(emojiCount)
+            guard let c = cellFrames.last, emojiCount > 0 else { return }
+            let ew = c.width / CGFloat(emojiCount)
             for (i, b) in emojis.enumerated() where i < emojiCount {
                 b.frame = CGRect(x: c.minX + CGFloat(i) * ew, y: 0, width: ew, height: c.height)
             }
@@ -1081,6 +1105,12 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private func buildSuggestionPoolIfNeeded() {
         guard !barWired else { return }
         barWired = true
+        // Số ô đổi (xoay máy, bar co vì nút 📋/😊, đổi cài đặt) ⇒ vẽ lại bộ gợi ý hiện tại.
+        suggestionBar.onSlotCountChange = { [weak self] in
+            guard let self, let set = self.lastShownSet else { return }
+            self.lastSuggestionSig = nil
+            self.showSuggestions(set)
+        }
         // Bar 20pt trong strip openStrip → nút nở hit-area xuống ĐÚNG phần còn lại
         // của strip (34−20−4 = 10pt), không lấn hàng Q–P bên dưới.
         barHitStrip = -1
@@ -1259,23 +1289,35 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         enum Paste: Equatable { case none, text, image }
         let dark: Bool
         let theme: KeyboardTheme
-        let s0: Slot?, s1: Slot?, s2: Slot?
+        let slots: [Slot?]
         let emojis: [String]
         let paste: Paste
     }
 
+    /// Bộ gợi ý vừa vẽ — vẽ lại khi số ô đổi (xoay máy / đổi "Số từ gợi ý").
+    private var lastShownSet: SuggestionSet?
+
+    /// "Số từ gợi ý" (SuggestionCount, 0 = Tự động) — đọc mỗi lần hiện bàn phím.
+    var suggestionCountSetting: Int {
+        get { suggestionBar.setting }
+        set { suggestionBar.setting = newValue }
+    }
+    /// Số ô thanh gợi ý đang dùng (đã trừ ô không vừa bề rộng).
+    var suggestionSlotCount: Int { suggestionBar.slotCount }
+
     func showSuggestions(_ set: SuggestionSet) {
         guard suggestionsEnabled, !barCollapsed else { return }
         buildSuggestionPoolIfNeeded()
+        lastShownSet = set
 
         // Thứ tự ưu tiên slot (hoàn tác > clipboard > Thêm dấu > chip số > chữ): SuggestionSlots.
-        var texts: [(display: String, insert: String)?] = [nil, nil, nil]
+        var texts = [(display: String, insert: String)?](repeating: nil, count: SuggestionBar.poolSize)
         var emojis: [String] = []
         var pasteCardOn = false
         var chipCount = 0
-        switch SuggestionSlots.arrange(set) {
+        switch SuggestionSlots.arrange(set, count: suggestionBar.slotCount) {
         case .slots(let s, let e):
-            texts = s.map { $0.map { ($0.label, $0.payload) } }
+            for (i, x) in s.enumerated() where i < texts.count { texts[i] = x.map { ($0.label, $0.payload) } }
             emojis = e
         case .chips(let c):
             for (i, x) in c.prefix(3).enumerated() { texts[i] = (x.label, x.payload) }
@@ -1292,15 +1334,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // Nội dung không đổi (nextWords thường ổn định giữa các phím) → bỏ qua
         // toàn bộ ghi UI: setTitle trên bar fillProportionally kéo theo một
         // lượt đo text/Auto Layout mỗi keystroke.
-        func slotSig(_ i: Int) -> BarSignature.Slot? {
-            i < texts.count ? texts[i].map { .init(display: $0.display, insert: $0.insert) } : nil
-        }
         // So bằng struct Equatable (chỉ copy tham chiếu chuỗi) — không ghép chuỗi khoá mỗi lần.
         let sig = BarSignature(
             dark: dark, theme: themeSettings.theme,
-            s0: slotSig(0),
-            s1: slotSig(1),
-            s2: slotSig(2),
+            slots: texts.map { $0.map { .init(display: $0.display, insert: $0.insert) } },
             emojis: emojis,
             paste: pasteCardOn ? (set.pasteIsImage ? .image : .text) : .none)
         if sig == lastSuggestionSig { return }
@@ -1736,6 +1773,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         numberRowFullHeight = UserDefaultsProvider.shared?.bool(forKey: KeyGeometry.numberRowFullHeightKey) ?? false
         spaceSideKey = SpaceSideKey.load(UserDefaultsProvider.shared)
         emojiKeyPlacement = EmojiKeyPlacement.load(UserDefaultsProvider.shared)
+        suggestionBar.setting = SuggestionCount.load(UserDefaultsProvider.shared)   // "Số từ gợi ý"
         // Bàn phím tách đôi (mặc định TẮT) — rebuild() cuối hàm áp nếu đổi.
         splitSetting = UserDefaultsProvider.shared?.bool(forKey: SplitLayout.settingKey) ?? false
         keyPreviewEnabled = Self.keyPreviewSetting(UserDefaultsProvider.shared)
@@ -5429,10 +5467,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     func debugSlotControl(_ i: Int) -> UIControl { slotButtons[i] }
     /// Test hook: chữ 3 slot đang hiện (nil = ẩn).
     func debugSlotTitles() -> [String?] {
-        zip(slotButtons, suggestionBar.labels).map { $0.isHidden ? nil : $1.text }
+        zip(slotButtons, suggestionBar.labels).prefix(suggestionBar.shownCells).map { $0.isHidden ? nil : $1.text }
     }
     func debugSlotPayloads() -> [String?] {
-        slotButtons.map { $0.isHidden ? nil : $0.payload }
+        slotButtons.prefix(suggestionBar.shownCells).map { $0.isHidden ? nil : $0.payload }
     }
     /// Test hook thanh gợi ý: frame (toạ độ KeyboardView) của 3 ô slot + 2 vạch ngăn,
     /// frame chữ các slot đang HIỆN (hiện thật = không ẩn và bar alpha > 0), thẻ Dán.
@@ -5440,7 +5478,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                                         visibleTitles: [CGRect], pasteCard: CGRect?) {
         layoutIfNeeded()
         let cells = suggestionBar.cellFrames.map { convert($0, from: suggestionBar) }
-        let divs = slotDividers.map { convert($0.bounds, from: $0) }
+        let divs = slotDividers.prefix(max(suggestionBar.shownCells - 1, 0)).map { convert($0.bounds, from: $0) }
         let barShown = !suggestionBar.isHidden && suggestionBar.alpha > 0
         var titles: [CGRect] = []
         let shown = Array(zip(slotButtons, suggestionBar.labels.map { $0 as UILabel? }))

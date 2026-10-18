@@ -103,18 +103,18 @@ final class PerfSizeUXFixTests: XCTestCase {
 
     func testBarSignatureEquality() {
         typealias S = KeyboardView.BarSignature
-        let a = S(dark: false, theme: .system, s0: .init(display: "việt", insert: "việt"), s1: nil, s2: nil,
+        let a = S(dark: false, theme: .system, slots: [.init(display: "việt", insert: "việt"), nil, nil],
                   emojis: ["🇻🇳"], paste: .none)
-        XCTAssertEqual(a, S(dark: false, theme: .system, s0: .init(display: "việt", insert: "việt"), s1: nil, s2: nil,
+        XCTAssertEqual(a, S(dark: false, theme: .system, slots: [.init(display: "việt", insert: "việt"), nil, nil],
                             emojis: ["🇻🇳"], paste: .none))
-        XCTAssertNotEqual(a, S(dark: true, theme: .system, s0: a.s0, s1: nil, s2: nil, emojis: ["🇻🇳"], paste: .none))
-        XCTAssertNotEqual(a, S(dark: false, theme: .system, s0: .init(display: "việt", insert: "x"), s1: nil, s2: nil,
+        XCTAssertNotEqual(a, S(dark: true, theme: .system, slots: [a.slots[0], nil, nil], emojis: ["🇻🇳"], paste: .none))
+        XCTAssertNotEqual(a, S(dark: false, theme: .system, slots: [.init(display: "việt", insert: "x"), nil, nil],
                                emojis: ["🇻🇳"], paste: .none))
-        XCTAssertNotEqual(a, S(dark: false, theme: .system, s0: a.s0, s1: nil, s2: nil, emojis: [], paste: .none))
-        XCTAssertNotEqual(a, S(dark: false, theme: .system, s0: a.s0, s1: nil, s2: nil, emojis: ["🇻🇳"], paste: .image))
+        XCTAssertNotEqual(a, S(dark: false, theme: .system, slots: [a.slots[0], nil, nil], emojis: [], paste: .none))
+        XCTAssertNotEqual(a, S(dark: false, theme: .system, slots: [a.slots[0], nil, nil], emojis: ["🇻🇳"], paste: .image))
         // Ranh giới ô: ("ab","") khác ("a","b") — chuỗi ghép cũ dựa vào ký tự phân cách.
-        XCTAssertNotEqual(S(dark: false, theme: .system, s0: .init(display: "ab", insert: ""), s1: nil, s2: nil, emojis: [], paste: .none),
-                          S(dark: false, theme: .system, s0: .init(display: "a", insert: "b"), s1: nil, s2: nil, emojis: [], paste: .none))
+        XCTAssertNotEqual(S(dark: false, theme: .system, slots: [.init(display: "ab", insert: ""), nil, nil], emojis: [], paste: .none),
+                          S(dark: false, theme: .system, slots: [.init(display: "a", insert: "b"), nil, nil], emojis: [], paste: .none))
     }
 
     // MARK: TouchLog — không dựng chuỗi khi Debug mode tắt

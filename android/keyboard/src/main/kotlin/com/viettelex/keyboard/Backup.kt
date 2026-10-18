@@ -65,6 +65,8 @@ object BackupSettings {
         Spec(Keys.SHORTCUTS_ENABLED, SettingKind.Bool(true)),
         Spec(Keys.ADD_TONES_CHIP, SettingKind.Bool(false)),
         Spec(Keys.NUMBER_CHIPS, SettingKind.Bool(true)),
+        // "Số từ gợi ý" ([SuggestionCount]): 0 = Tự động, 1…5 — cùng khoá iOS.
+        Spec(Keys.SUGGESTION_COUNT, SettingKind.IntRange(SuggestionCount.AUTO, SuggestionCount.RANGE)),
         Spec(Keys.MATH_RESULTS, SettingKind.Bool(true)),
         Spec(Keys.TEXT_TOOLS_ENABLED, SettingKind.Bool(true)),
         Spec(Keys.SUGGEST_IN_NO_SUGGEST_FIELDS, SettingKind.Bool(true)),

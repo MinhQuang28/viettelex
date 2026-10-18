@@ -23,6 +23,8 @@ data class KeyboardSettings(
     var addTonesChip: Boolean = false,
     /** Chip số trên thanh gợi ý — mặc định BẬT (chỉ đọc context ngay sau chữ số/phép tính). */
     var numberChips: Boolean = true,
+    /** "Số từ gợi ý" ([SuggestionCount]): 0 = Tự động (3 ô), 1…5. */
+    var suggestionCount: Int = SuggestionCount.AUTO,
     /** "Hiện kết quả phép tính" (12*3= → chip 36 ở slot đầu) — mặc định BẬT; chỉ đọc context ngay sau "=". */
     var mathResults: Boolean = true,
     /** Công cụ văn bản (Plus) — mặc định BẬT; hiện thật khi [textToolsActive]. Giống iOS. */
@@ -155,6 +157,7 @@ data class KeyboardSettings(
             s.filterSensitive = b(Keys.FILTER_SENSITIVE, s.filterSensitive)
             s.addTonesChip = b(Keys.ADD_TONES_CHIP, s.addTonesChip)
             s.numberChips = b(Keys.NUMBER_CHIPS, s.numberChips)
+            s.suggestionCount = SuggestionCount.parse(get(Keys.SUGGESTION_COUNT))
             s.mathResults = b(Keys.MATH_RESULTS, s.mathResults)
             s.textToolsEnabled = b(Keys.TEXT_TOOLS_ENABLED, s.textToolsEnabled)
             s.suggestInNoSuggestFields = b(Keys.SUGGEST_IN_NO_SUGGEST_FIELDS, s.suggestInNoSuggestFields)

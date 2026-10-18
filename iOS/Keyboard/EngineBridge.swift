@@ -97,6 +97,8 @@ struct KeyboardSettings {
     var suggestInNoSuggestFields = true
     /// Emoji trên thanh gợi ý khi đang gõ — mặc định BẬT; tắt ⇒ không tra bảng emoji mỗi phím.
     var emojiSuggest = true
+    /// "Số từ gợi ý" (SuggestionCount): 0 = Tự động (3 ô), 1…5. Song sinh Android.
+    var suggestionCount = SuggestionCount.auto
     /// Nút "Dán" nội dung vừa copy trên thanh gợi ý — mặc định BẬT; tắt ⇒ không hỏi
     /// UIPasteboard (XPC) ở đầu từ.
     var pasteButton = true
@@ -158,6 +160,7 @@ struct KeyboardSettings {
             ("autoCorrect", \.autoCorrect), ("autoSpaceAfterPunct", \.autoSpaceAfterPunct),
             ("swipeKeyCommands", \.swipeKeyCommands)]
         for (k, kp) in flags where d.object(forKey: k) != nil { s[keyPath: kp] = d.bool(forKey: k) }
+        s.suggestionCount = SuggestionCount.load(d)
         s.learnWords = s.showSuggestions   // bật gợi ý = bật học (quyết định 2026-07-24)
         return s
     }

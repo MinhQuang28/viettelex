@@ -277,7 +277,7 @@ thay: chip **"↩︎ Hoàn tác"** (và ⌫ ngay sau) trả bản gốc, đoạn
 
 ## Thứ tự ưu tiên slot
 
-Mọi loại chip cùng tranh 3 slot. Hàm THUẦN `SuggestionSlots.arrange` (Swift) ≡
+Mọi loại chip cùng tranh các slot (mặc định 3 — xem "Số từ gợi ý" bên dưới). Hàm THUẦN `SuggestionSlots.arrange` (Swift) ≡
 `SuggestionSlots.arrange` (Kotlin, `android/keyboard/.../SuggestionSlots.kt`) quyết định, cùng
 bảng ca kiểm `SuggestionSlotsTests` hai nền tảng. Từ cao xuống thấp:
 
@@ -293,6 +293,28 @@ bảng ca kiểm `SuggestionSlotsTests` hai nền tảng. Từ cao xuống thấ
 Ví dụ: `[Thêm dấu][1.200.000 ₫][và]`; vừa copy tin OTP: `[Dán OTP 482913][Dán]` (chip số, "Thêm
 dấu" ẩn); sau vuốt ⌫ trong lúc có chip số: iOS `[↩︎ Khôi phục][chip số][từ]`.
 
+### Số từ gợi ý (`suggestionCount`, 10/2026)
+
+Cài đặt "Số từ gợi ý" (Tính Năng → Gợi ý, hàng − / +): `0` = **Tự động** = 3 ô (hành vi cũ, cả
+iPhone/iPad, cả điện thoại/tablet Android), hoặc `1…5`. Logic thuần: `SuggestionCount`
+(`iOS/Shared/SuggestionCount.swift` ≡ `android/keyboard/.../SuggestionCount.kt`), bảng ca
+`SuggestionCountTests` hai nền tảng. Có trong sao lưu / iCloud / PrefSync (cùng khoá).
+
+- **Số ô hiện** = `SuggestionCount.fit(setting, bề rộng bar)`: không quá số chọn, mỗi ô ≥ 44pt/dp,
+  tối thiểu 1 — bar chật (máy hẹp, nút 😊 "Thanh trên", 📋, icon con trỏ Android khi bar rỗng) thì
+  hiện bớt ô; đổi bề rộng (xoay máy) vẽ lại ngay.
+- **Ứng viên**: controller/session xin `resolved` (≤ 5) — `nextFill(need:)`, `padWords(need:)`,
+  `topWords`, ứng viên đang gõ hạng 3+ vào `moreWords`. Không thêm việc mỗi phím ngoài ≤ 5 ứng viên.
+  Biến thể gõ vuốt vẫn ≤ 3 (decoder), ô dư để trống.
+- **Bố cục** (`arrange(count:)`; count = 3 y nguyên bảng trên): đang gõ — ô 0 nguyên văn, ô 1 ứng
+  viên chính, rồi word2, moreWords… trái→phải; có emoji (count ≥ 3) ⇒ ô cuối là vùng emoji (≤ 3
+  emoji khi 3 ô, ≤ 2 khi 4–5 ô); count < 3 ⇒ không emoji; count = 1 ⇒ chỉ ứng viên chính (không có
+  thì nguyên văn, không đệm từ phổ biến). Từ kế tiếp: iOS trái→phải; Android tốt nhất ở ô giữa
+  `(count−1)/2` rồi xen kẽ trái/phải (`nextOrder`: 5 ô = [2,1,3,0,4]); Android tô đậm ô
+  `primaryIndex`. Chip dẫn đầu (hoàn tác/Thêm dấu/↩︎) ô 0; chip số chèn ô 1 (count 1: ô 0), phần
+  sau dời phải; kết quả phép tính chèn ô 0. Chip clipboard / thẻ Dán / pill không theo số ô.
+- Chữ dài: iOS co chữ (≥ 0.7) rồi cắt giữa; Android cắt giữa (…) theo bề rộng ô.
+
 ## Settings (App Group `group.com.viettelex`)
 
 | Key | Mặc định | Ý nghĩa |
@@ -300,6 +322,7 @@ dấu" ẩn); sau vuốt ⌫ trong lúc có chip số: iOS `[↩︎ Khôi phục
 | `showSuggestions` | true | Bật thanh gợi ý (bàn phím 246pt ↔ 216pt) |
 | `learnWords` | true | Cho phép học từ hay dùng |
 | `filterSensitive` | true | Lọc từ tục khỏi gợi ý |
+| `suggestionCount` | 0 | "Số từ gợi ý": 0 = Tự động (3 ô), 1…5 — xem "Số từ gợi ý" ở trên |
 | `suggestInNoSuggestFields` | true | "Gợi ý cả khi ứng dụng tắt gợi ý" (#113) — xem dưới |
 | nút **Xóa từ đã học** | — | Xóa `userlm.bin` (+ `userlm.plist` cũ nếu còn); lần mở sau seed lại |
 
