@@ -81,13 +81,17 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
     var pasteText by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    /** Hỏi trước khi tải tệp của theme (phông / ảnh) còn thiếu — dán JSON không tự tải. */
+    val prompt = rememberAssetPrompt()
     BackHandler(onBack = onBack)
 
     fun persist(ns: ThemeSettings, nstore: Map<String, ThemeSpec>) {
         store = nstore
         saveCustomStore(ctx, nstore)
         onSelect(ns)
+        ThemeAssetFlow.gcAsync(ctx)        // tệp không còn theme nào dùng ⇒ xoá
     }
+    fun choose(ns: ThemeSettings) { onSelect(ns); prompt.offer(ctx, ns.effectiveKeyStyle.assets) }
     fun copy(t: ThemeEditTarget) {
         val text = ThemeJsonActions.copyText(t, s, store, appBase) ?: return
         (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.setPrimaryClip(ClipData.newPlainText("VietTelex theme", text))
@@ -116,7 +120,7 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
                 val locked = !ThemeGate.allows(t)
                 ThemeCard(s.styled(t, previewPalette(t, dark), dark), s.effectiveStyleFor(t), t.title,
                     selected = s.custom == null && s.theme == t, locked = locked, showPlus = t.isPlus && locked,
-                    onTap = { ThemePicker.select(t, s)?.let(onSelect) ?: onOpenPlus() },
+                    onTap = { ThemePicker.select(t, s)?.let(::choose) ?: onOpenPlus() },
                     menu = { close ->
                         MenuItems(ThemeEditTarget.Builtin(t), t.title, hasOverride = s.keyStyles[t.id] != null, close = close,
                             onCopy = ::copy, onEdit = ::edit,
@@ -135,7 +139,7 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
                 val locked = !ThemeGate.allowsCustom
                 ThemeCard(s.styledCustom(spec, dark), s.effectiveStyleFor(id, spec.typography), spec.name,
                     selected = s.custom?.id == id, locked = locked, showPlus = locked,
-                    onTap = { ThemePicker.select(spec, s)?.let(onSelect) ?: onOpenPlus() },
+                    onTap = { ThemePicker.select(spec, s)?.let(::choose) ?: onOpenPlus() },
                     menu = { close ->
                         MenuItems(ThemeEditTarget.Custom(id), spec.name, hasOverride = false, close = close,
                             onCopy = ::copy, onEdit = ::edit, onReset = {},
@@ -149,14 +153,25 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
             if (!ThemeGate.allowsCustom) PlusBadge()
         }
     }
+    // Tệp tải về của theme đang chọn: trạng thái + lỗi / cảnh báo (thiếu chữ Việt, tiền cảnh phủ nhiều).
+    val current = s.effectiveKeyStyle.assets
+    if (!current.isEmpty) VTSection { ThemeAssetStatusList(current) { prompt.offer(ctx, current) } }
     toast?.let { msg ->
         Text(msg, style = VTType.footnote, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(16.dp))
     }
+    ThemeAssetPromptHost(prompt, onOpenPlus)
 
     editing?.let { (target, title, text) ->
         ThemeJsonEditor(title, text, onCancel = { editing = null }) { edited ->
             val r = ThemeJsonActions.save(edited, target, s, store, appBase)
-            if (r.ok) { persist(r.settings, r.store); editing = null }
+            if (r.ok) {
+                persist(r.settings, r.store); editing = null
+                val assets = when (target) {
+                    is ThemeEditTarget.Builtin -> r.settings.effectiveStyleFor(target.theme).assets
+                    is ThemeEditTarget.Custom -> r.store[target.id]?.let { r.settings.effectiveStyleFor(target.id, it.typography).assets }
+                }
+                assets?.let { prompt.offer(ctx, it) }
+            }
             r.issues
         }
     }
@@ -166,8 +181,11 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
                 is CustomThemeStore.Added.Err -> r.issue
                 is CustomThemeStore.Added.Ok -> {
                     val added = r.store[r.id]
-                    persist(added?.let { ThemePicker.select(it, s) } ?: s, r.store)
+                    val ns = added?.let { ThemePicker.select(it, s) } ?: s
+                    persist(ns, r.store)
                     pasteText = null
+                    // Chỉ HỎI (người dùng vừa bấm Thêm) — dán / xem trước không gửi yêu cầu nào.
+                    added?.let { prompt.offer(ctx, ns.effectiveStyleFor(r.id, it.typography).assets) }
                     null
                 }
             }
@@ -285,6 +303,7 @@ private fun ThemeJsonEditor(title: String, initial: String, onCancel: () -> Unit
                 modifier = Modifier.weight(1f).fillMaxWidth().clip(RoundedCornerShape(8.dp)).background(c.card)
                     .padding(8.dp).verticalScroll(rememberScrollState()))
             IssueList(if (saveIssues.isEmpty()) outcome.issues else saveIssues)
+            outcome.spec?.assets?.let { ThemeAssetStatusList(it, onRetry = null) }
         }
     }
 }

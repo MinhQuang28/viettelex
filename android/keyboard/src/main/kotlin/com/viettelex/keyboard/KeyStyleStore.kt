@@ -49,8 +49,11 @@ object KeyStyleStore {
         st.accentColor?.let { f.add("accent" to rgb(it)) }
         st.corner?.let { f.add("corner" to SJ.Num(it)) }
         st.fontScale?.let { f.add("fontScale" to SJ.Num(it)) }
-        if (st.font != KeyLabelFont.DEFAULT) f.add("font" to SJ.Str(st.font.id))
+        val fa = st.assets.font
+        if (st.font != KeyLabelFont.DEFAULT && fa == null) f.add("font" to SJ.Str(st.font.id))
+        if (fa != null) f.add("font" to ThemeSpec.json(fa))
         if (st.weight != KeyLabelWeight.REGULAR) f.add("weight" to SJ.Str(st.weight.id))
+        ThemeSpec.appendImages(st.assets, f)
         if (!st.light.isEmpty) f.add("light" to ThemeSpec.json(st.light))
         if (!st.dark.isEmpty) f.add("dark" to ThemeSpec.json(st.dark))
         return SJ.Obj(f)

@@ -11,6 +11,15 @@ import Foundation
 //             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100}},
 //    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold"}
 //
+// Tệp tải về (Plus — ThemeAssets.swift: kế hoạch / kho / dọn; App/ThemeAssetDownloader.swift: tải + xử lý):
+//   "font": "serif" | {"name":"Nunito","url":"https://….ttf|otf","sha256":"…"?}
+//   "background": {"url":"https://…","sha256":"…"?}      ảnh nền theme (ảnh nền tự đặt của người dùng thắng)
+//   "foreground": {"url":"https://…","sha256":"…"?}      PNG/WebP trong suốt TRÊN phím, căng đúng cỡ bàn phím
+//   "keys": {"default"|"special"|"space"|"return"|"shift"|"delete"|"a"…"z":
+//            {"url","sha256"?,"slice":[t,l,b,r]? (9-slice, px ảnh gốc),"pressed":{"url","sha256"?}?}}
+// Chỉ https, không user/cổng, host có dấu chấm; ≤ 16 ảnh khác nhau, ≤ 20 tệp. JSON chỉ là CHỈ DẪN: dán /
+// đọc không bao giờ tự tải — app hỏi trước rồi mới tải; bàn phím không bao giờ dùng mạng.
+//
 // AN TOÀN (dữ liệu không tin được — dán từ clipboard): kiểm cỡ TRƯỚC khi đọc (16 KB), UTF-8 chặt (không
 // BOM), độ sâu ≤ 8, chuỗi ≤ 200 ký tự (tên ≤ 40), chỉ số nguyên ≤ 9 chữ số, khoá lặp / khoá lạ / null /
 // sai kiểu / ký tự điều khiển ⇒ LỖI (không bao giờ crash, không force-unwrap). Không có URL / ảnh / mã:
@@ -23,7 +32,7 @@ struct ThemeIssue: Error, Equatable {
     enum Code: String, CaseIterable {
         case tooLarge, encoding, syntax, depth, duplicateKey, unknownKey, missingKey, wrongType,
              badColor, badNumber, tooLong, badValue, badVersion, controlChar, clamped, lowContrast,
-             contrastTooLow, tooMany, bgKept
+             contrastTooLow, tooMany, bgKept, badUrl, tooManyFiles
     }
     var code: Code
     /// Vị trí ("light.key") hoặc chi tiết (khoá lặp, số ký tự).
@@ -52,6 +61,8 @@ struct ThemeIssue: Error, Equatable {
         case .contrastTooLow: return L("Tương phản quá thấp ở %@ (tối thiểu 2:1).", path)
         case .tooMany: return L("Đã đủ %@ giao diện tự tạo — xoá bớt trước khi dán.", path)
         case .bgKept: return L("Giao diện có sẵn này luôn có nền — đã giữ nền gốc.")
+        case .badUrl: return L("Địa chỉ tệp không hợp lệ ở %@ (chỉ https://, phông .ttf/.otf).", path)
+        case .tooManyFiles: return L("Quá nhiều tệp tải về (%@).", path)
         }
     }
 }
@@ -473,6 +484,102 @@ struct ThemeSlots: Equatable {
     }
 }
 
+// MARK: - Tệp tải về (mô hình — Android ThemeSpec.kt y hệt)
+
+/// Một tệp: URL https (đã kiểm) + sha256 (64 hex chữ thường) nếu có.
+struct ThemeAssetRef: Hashable {
+    var url: String
+    var sha256: String?
+}
+
+/// Phông tải về: tên hiển thị + tệp .ttf/.otf.
+struct ThemeFontAsset: Equatable {
+    var name: String
+    var ref: ThemeAssetRef
+}
+
+/// Skin một phím / nhóm phím: ảnh (9-slice theo `slice` = [trên, trái, dưới, phải] px ẢNH GỐC) + ảnh khi đè.
+struct ThemeKeySkin: Equatable {
+    var image: ThemeAssetRef
+    var slice: [Int]?
+    var pressed: ThemeAssetRef?
+}
+
+/// Phần "tệp tải về" của theme (font / ảnh nền / tiền cảnh / skin phím). Nằm ở ThemeSpec lẫn KeyStyle (bản vá
+/// theme có sẵn) — cùng bộ đọc (ThemeSpecParser.typography).
+struct ThemeAssetSpec: Equatable {
+    var font: ThemeFontAsset?
+    var background: ThemeAssetRef?
+    var foreground: ThemeAssetRef?
+    var keys: [String: ThemeKeySkin] = [:]
+
+    var isEmpty: Bool { font == nil && background == nil && foreground == nil && keys.isEmpty }
+    var hasImages: Bool { background != nil || foreground != nil || !keys.isEmpty }
+
+    static let groupKeys = ["default", "special"]
+    static let namedKeys = ["space", "return", "shift", "delete"]
+    static let letterKeys = (UInt8(ascii: "a")...UInt8(ascii: "z")).map { String(UnicodeScalar($0)) }
+    static let skinKeys: Set<String> = Set(groupKeys + namedKeys + letterKeys)
+    static let maxImages = 16
+    static let maxFiles = 20
+    static let maxSlice = 1024
+    static let nameMax = 40
+
+    /// `self` thắng từng trường; skin phím: có bộ nào thì thay CẢ bộ (không trộn hai bộ skin).
+    func merged(over base: ThemeAssetSpec) -> ThemeAssetSpec {
+        var o = self
+        if o.font == nil { o.font = base.font }
+        if o.background == nil { o.background = base.background }
+        if o.foreground == nil { o.foreground = base.foreground }
+        if o.keys.isEmpty { o.keys = base.keys }
+        return o
+    }
+}
+
+/// Kiểm URL tệp (thuần, Android y hệt): https://host/đường-dẫn, ASCII in được, không khoảng trắng / `\` /
+/// user@ / cổng; host chữ thường a-z 0-9 . -, có dấu chấm, không phải IP số; phông: đường dẫn kết thúc .ttf/.otf.
+enum ThemeAssetURL {
+    static let prefix = "https://"
+
+    static func isValid(_ s: String, font: Bool) -> Bool {
+        guard s.hasPrefix(prefix), s.utf8.count <= 200 else { return false }
+        for b in s.utf8 where b <= 0x20 || b >= 0x7F || b == UInt8(ascii: "\\") || b == UInt8(ascii: "\"") { return false }
+        let rest = s.utf8.dropFirst(prefix.utf8.count)
+        let hostEnd = rest.firstIndex(where: { $0 == UInt8(ascii: "/") || $0 == UInt8(ascii: "?") || $0 == UInt8(ascii: "#") })
+        let host = Array(rest[rest.startIndex..<(hostEnd ?? rest.endIndex)])
+        guard !host.isEmpty, host.count <= 253, hostEnd != nil, s.utf8[hostEnd!] == UInt8(ascii: "/") else { return false }
+        var dot = false, allNumeric = true
+        for b in host {
+            switch b {
+            case UInt8(ascii: "a")...UInt8(ascii: "z"), UInt8(ascii: "-"): allNumeric = false
+            case UInt8(ascii: "0")...UInt8(ascii: "9"): break
+            case UInt8(ascii: "."): dot = true
+            default: return false   // chữ hoa, @, :, [ …
+            }
+        }
+        guard dot, !allNumeric, host.first != UInt8(ascii: "."), host.last != UInt8(ascii: "."),
+              host.first != UInt8(ascii: "-") else { return false }
+        if font {
+            let path = s.split(whereSeparator: { $0 == "?" || $0 == "#" }).first.map(String.init) ?? s
+            let low = path.lowercased()
+            guard low.hasSuffix(".ttf") || low.hasSuffix(".otf") else { return false }
+        }
+        return true
+    }
+
+    /// Tên miền (hiện trong câu hỏi trước khi tải).
+    static func host(_ s: String) -> String {
+        let rest = s.dropFirst(prefix.count)
+        return String(rest.prefix(while: { $0 != "/" && $0 != "?" && $0 != "#" }))
+    }
+
+    /// "64 hex" (hoa / thường) ⇒ chữ thường; sai ⇒ nil.
+    static func sha256(_ s: String) -> String? {
+        guard s.utf8.count == 64, s.utf8.allSatisfy({ StrictJSONHex.digit($0) != nil }) else { return nil }
+        return s.lowercased()
+    }
+}
+
 struct ThemeSpec: Equatable {
     static let version = 1
     static let maxName = 40
@@ -486,13 +593,17 @@ struct ThemeSpec: Equatable {
     var fontScale: Int?
     var font: KeyLabelFont?
     var weight: KeyLabelWeight?
+    /// Tệp tải về (phông / ảnh nền / tiền cảnh / skin phím). Có `assets.font` ⇒ `font` = nil.
+    var assets = ThemeAssetSpec()
 
     func slots(dark d: Bool) -> ThemeSlots { d ? (dark ?? light) : light }
     var name: String { L10n.isEnglish ? (nameEn ?? nameVi) : nameVi }
 
-    /// Kiểu chữ / bo góc mặc định của theme (KeyStyle không đặt thì dùng cái này).
+    /// Kiểu chữ / bo góc / tệp tải về mặc định của theme (KeyStyle không đặt thì dùng cái này).
     var typography: KeyStyle {
-        KeyStyle(corner: corner, fontScale: fontScale, font: font ?? .standard, weight: weight ?? .regular)
+        var k = KeyStyle(corner: corner, fontScale: fontScale, font: font ?? .standard, weight: weight ?? .regular)
+        k.assets = assets
+        return k
     }
 }
 
@@ -511,7 +622,9 @@ enum ThemeSpecParser {
         var failed: Bool { issues.contains(where: \.isError) }
     }
 
-    static let rootKeys: Set<String> = ["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight"]
+    static let assetKeys: Set<String> = ["background", "foreground", "keys"]
+    static let rootKeys: Set<String> = Set(["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight"])
+        .union(assetKeys)
     static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco"])
 
     /// Đọc theme ĐẦY ĐỦ từ văn bản (dán / trình sửa). Cảnh báo tương phản kèm theo.
@@ -574,6 +687,8 @@ enum ThemeSpecParser {
         spec.fontScale = typo.fontScale
         if d["font"] != nil { spec.font = typo.font }
         if d["weight"] != nil { spec.weight = typo.weight }
+        spec.assets = typo.assets
+        if spec.assets.font != nil { spec.font = nil }
         if contrast { c.issues += contrastIssues(spec) }
         return Outcome(spec: c.failed ? nil : spec, issues: c.issues)
     }
@@ -667,8 +782,14 @@ enum ThemeSpecParser {
         switch d["font"] {
         case nil: break
         case .string(let f)?: if let v = KeyLabelFont(rawValue: f) { s.font = v } else { c.err(.badValue, "font") }
+        case .object(let m)?:
+            if let fa = fontAsset(m, &c) { s.assets.font = fa; s.font = .standard }
         default: c.err(.wrongType, "font")
         }
+        if let v = d["background"] { s.assets.background = assetRef(v, "background", font: false, &c) }
+        if let v = d["foreground"] { s.assets.foreground = assetRef(v, "foreground", font: false, &c) }
+        if let v = d["keys"] { s.assets.keys = keySkins(v, &c) }
+        for i in assetLimitIssues(s.assets) { c.issues.append(i) }
         switch d["weight"] {
         case nil: break
         case .string(let f)?: if let v = KeyLabelWeight(rawValue: f) { s.weight = v } else { c.err(.badValue, "weight") }
@@ -676,12 +797,90 @@ enum ThemeSpecParser {
         }
     }
 
+    // MARK: tệp tải về
+
+    /// {"url","sha256"?} (+ khoá thêm cho phông / skin). Sai ⇒ lỗi + nil.
+    private static func assetRef(_ v: StrictJSON, _ p: String, font: Bool, extra: Set<String> = [],
+                                 _ c: inout Ctx) -> ThemeAssetRef? {
+        guard case .object(let m) = v else { c.err(.wrongType, p); return nil }
+        for (k, _) in m where k != "url" && k != "sha256" && !extra.contains(k) { c.err(.unknownKey, p + "." + k) }
+        let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
+        var ok = true
+        var ref = ThemeAssetRef(url: "")
+        switch d["url"] {
+        case nil: c.err(.missingKey, p + ".url"); ok = false
+        case .string(let u)?:
+            if ThemeAssetURL.isValid(u, font: font) { ref.url = u } else { c.err(.badUrl, p + ".url"); ok = false }
+        default: c.err(.wrongType, p + ".url"); ok = false
+        }
+        switch d["sha256"] {
+        case nil: break
+        case .string(let h)?:
+            if let x = ThemeAssetURL.sha256(h) { ref.sha256 = x } else { c.err(.badValue, p + ".sha256"); ok = false }
+        default: c.err(.wrongType, p + ".sha256"); ok = false
+        }
+        return ok ? ref : nil
+    }
+
+    private static func fontAsset(_ m: [(String, StrictJSON)], _ c: inout Ctx) -> ThemeFontAsset? {
+        let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
+        let n = name(d["name"], "font.name", required: true, &c)
+        guard let ref = assetRef(.object(m), "font", font: true, extra: ["name"], &c), let n else { return nil }
+        return ThemeFontAsset(name: n, ref: ref)
+    }
+
+    private static func keySkins(_ v: StrictJSON, _ c: inout Ctx) -> [String: ThemeKeySkin] {
+        guard case .object(let m) = v else { c.err(.wrongType, "keys"); return [:] }
+        var out: [String: ThemeKeySkin] = [:]
+        for (k, val) in m {
+            let p = "keys." + k
+            guard ThemeAssetSpec.skinKeys.contains(k) else { c.err(.unknownKey, p); continue }
+            guard case .object(let im) = val else { c.err(.wrongType, p); continue }
+            let d = Dictionary(im, uniquingKeysWith: { a, _ in a })
+            guard let ref = assetRef(val, p, font: false, extra: ["slice", "pressed"], &c) else { continue }
+            var skin = ThemeKeySkin(image: ref)
+            var ok = true
+            switch d["slice"] {
+            case nil: break
+            case .array(let a)?:
+                var ins: [Int] = []
+                for x in a {
+                    if case .int(let n) = x { ins.append(n) } else { c.err(.wrongType, p + ".slice"); ok = false; break }
+                }
+                if ok {
+                    if ins.count == 4, ins.allSatisfy({ (0...ThemeAssetSpec.maxSlice).contains($0) }) { skin.slice = ins }
+                    else { c.err(.badValue, p + ".slice"); ok = false }
+                }
+            default: c.err(.wrongType, p + ".slice"); ok = false
+            }
+            if let pv = d["pressed"] {
+                if let pr = assetRef(pv, p + ".pressed", font: false, &c) { skin.pressed = pr } else { ok = false }
+            }
+            if ok { out[k] = skin }
+        }
+        return out
+    }
+
+    /// ≤ 16 ảnh khác nhau (theo URL), ≤ 20 tệp (ảnh + phông).
+    static func assetLimitIssues(_ a: ThemeAssetSpec) -> [ThemeIssue] {
+        let images = ThemeAssetPlan.imageURLs(a)
+        let files = images.count + (a.font == nil ? 0 : 1)
+        var out: [ThemeIssue] = []
+        if images.count > ThemeAssetSpec.maxImages {
+            out.append(ThemeIssue(code: .tooManyFiles, path: "\(images.count) > \(ThemeAssetSpec.maxImages)"))
+        } else if files > ThemeAssetSpec.maxFiles {
+            out.append(ThemeIssue(code: .tooManyFiles, path: "\(files) > \(ThemeAssetSpec.maxFiles)"))
+        }
+        return out
+    }
+
     /// Bản vá theo theme (KeyStyleStore): label / fill / accent (#RRGGBB, áp cả sáng lẫn tối), kiểu chữ,
     /// light / dark (vá từng chế độ). Khoá lạ / sai ⇒ nil (cả mục bị bỏ).
     static func override(from j: StrictJSON) -> KeyStyle? {
         guard case .object(let m) = j else { return nil }
         var c = Ctx()
-        let allowed: Set<String> = ["label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark"]
+        let allowed: Set<String> = Set(["label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark"])
+            .union(assetKeys)
         for (k, _) in m where !allowed.contains(k) { c.err(.unknownKey, k) }
         let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
         var st = KeyStyle()
@@ -739,9 +938,30 @@ extension ThemeSpec {
         m.append(("dark", dark.map(Self.json) ?? .string("same")))
         if let corner { m.append(("corner", .int(corner))) }
         if let fontScale { m.append(("fontScale", .int(fontScale))) }
-        if let font { m.append(("font", .string(font.rawValue))) }
+        if let fa = assets.font { m.append(("font", Self.json(fa))) }
+        else if let font { m.append(("font", .string(font.rawValue))) }
         if let weight { m.append(("weight", .string(weight.rawValue))) }
+        Self.appendImages(assets, to: &m)
         return .object(m)
+    }
+
+    static func json(_ r: ThemeAssetRef, extra: [(String, StrictJSON)] = []) -> StrictJSON {
+        var m: [(String, StrictJSON)] = [("url", .string(r.url))]
+        if let h = r.sha256 { m.append(("sha256", .string(h))) }
+        return .object(m + extra)
+    }
+    static func json(_ f: ThemeFontAsset) -> StrictJSON { json(f.ref, extra: [("name", .string(f.name))]) }
+    static func json(_ k: ThemeKeySkin) -> StrictJSON {
+        var extra: [(String, StrictJSON)] = []
+        if let s = k.slice { extra.append(("slice", .array(s.map { .int($0) }))) }
+        if let p = k.pressed { extra.append(("pressed", json(p))) }
+        return json(k.image, extra: extra)
+    }
+    /// background / foreground / keys (font ghi riêng — chung khoá với phông hệ thống).
+    static func appendImages(_ a: ThemeAssetSpec, to m: inout [(String, StrictJSON)]) {
+        if let b = a.background { m.append(("background", json(b))) }
+        if let f = a.foreground { m.append(("foreground", json(f))) }
+        if !a.keys.isEmpty { m.append(("keys", .object(a.keys.map { ($0.key, json($0.value)) }))) }
     }
     /// Chuỗi chuẩn (trùng Android từng ký tự).
     var canonical: String { json.canonical }
@@ -815,6 +1035,8 @@ extension ThemeSpec {
         s.fontScale = style.fontScale
         if style.font != .standard { s.font = style.font }
         if style.weight != .regular { s.weight = style.weight }
+        s.assets = style.assets
+        if s.assets.font != nil { s.font = nil }
         return s
     }
 }

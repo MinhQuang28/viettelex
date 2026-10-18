@@ -23,6 +23,8 @@ struct SaoLuuSection: View {
     @State private var showImporter = false
     @State private var exportDoc = BackupDocument(data: Data())
     @State private var notice: String?
+    /// Sau khôi phục: tệp giao diện (phông / ảnh) KHÔNG nằm trong file sao lưu — hỏi tải lại.
+    @ObservedObject private var assetCenter = ThemeAssetCenter.shared
 
     private static var fileName: String {
         let f = DateFormatter(); f.dateFormat = "yyyy-MM-dd"
@@ -55,6 +57,10 @@ struct SaoLuuSection: View {
             Button {
                 showImporter = true
             } label: { Label(L("Nhập file sao lưu…"), systemImage: "square.and.arrow.down") }
+            .alert(L("Tải tệp giao diện?"), isPresented: assetCenter.binding("restore")) {
+                Button(L("Tải")) { if let r = assetCenter.pending { assetCenter.accept(r) } }
+                Button(L("Để sau"), role: .cancel) { assetCenter.pending = nil }
+            } message: { Text(assetCenter.pending?.prompt ?? "") }
             .fileImporter(isPresented: $showImporter, allowedContentTypes: [.json, .plainText, .data]) { result in
                 guard case .success(let url) = result else { return }
                 let scoped = url.startAccessingSecurityScopedResource()
@@ -63,6 +69,7 @@ struct SaoLuuSection: View {
                 do {
                     notice = BackupStore.appGroup.apply(try BackupCodec.decode(data))
                     sync.syncNow()
+                    assetCenter.offerAfterRestore(UserDefaults(suiteName: BackupStore.appGroupID))
                 } catch let e as BackupError {
                     notice = e.message
                 } catch { notice = L("Không đọc được file.") }

@@ -19,6 +19,8 @@ struct ThemePickerView: View {
     @State private var pasteText: PasteText?
     @State private var toast: String?
     @State private var confirmDelete: String?
+    /// Tệp tải về của theme (hỏi → tải → lỗi). Dán / sửa JSON không bao giờ tự tải.
+    @ObservedObject private var assets = ThemeAssetCenter.shared
 
     struct Editing: Identifiable { let id = UUID(); let target: ThemeEditTarget; let title: String; let text: String }
     struct PasteText: Identifiable { let id = UUID(); let text: String }
@@ -78,6 +80,7 @@ struct ThemePickerView: View {
             } header: { Text(L("Giao diện của bạn")) } footer: {
                 Text(L("Dán JSON giao diện đã chép (Plus). Chỉ đọc clipboard khi bạn bấm, xem trước rồi mới thêm."))
             }
+            assetStatusSection
         }
         // Chừa chỗ thanh tab nổi — không che "Dán giao diện" / chú thích cuối trang.
         .bottomBarScrollMargin()
@@ -87,7 +90,7 @@ struct ThemePickerView: View {
         .sheet(item: $editing) { e in
             ThemeJSONEditorView(title: e.title, text: e.text) { text in
                 let r = ThemeJSONActions.save(text, to: e.target, settings: &settings, store: &store)
-                if r.ok { persist() }
+                if r.ok { persist(); offerAssets(for: e.target) }
                 return r.issues
             }
         }
@@ -98,6 +101,7 @@ struct ThemePickerView: View {
                 case .success(let id):
                     if let s = store[id], let next = ThemePicker.select(custom: s, in: settings) { settings = next }
                     persist()
+                    offerAssets(for: .custom(id))
                     return nil
                 }
             }
@@ -109,6 +113,11 @@ struct ThemePickerView: View {
             }
             Button(L("Huỷ"), role: .cancel) { confirmDelete = nil }
         }
+        .alert(L("Tải tệp giao diện?"), isPresented: assets.binding("picker")) {
+            Button(L("Tải")) { if let r = assets.pending { assets.accept(r) } }
+            Button(L("Để sau"), role: .cancel) { assets.pending = nil }
+        } message: { Text(assets.pending?.prompt ?? "") }
+        .onAppear { ThemeAssetCenter.collectGarbage(pickerDefaults) }
         .overlay(alignment: .bottom) {
             if let toast {
                 Text(toast).font(.footnote).padding(.horizontal, 14).padding(.vertical, 8)
@@ -122,6 +131,51 @@ struct ThemePickerView: View {
     private func persist() {
         CustomThemeStore.save(store, pickerDefaults)
         onChange()
+        // Dọn tệp không theme nào còn dùng (sau lưu / xoá / dán) — sau onChange (bản vá đã ghi).
+        ThemeAssetCenter.collectGarbage(pickerDefaults)
+    }
+
+    /// Tệp tải về của theme (theme tự tạo hoặc bản vá theme có sẵn).
+    private func assetSpec(_ t: ThemeEditTarget) -> ThemeAssetSpec {
+        switch t {
+        case .builtin(let b): return settings.effectiveStyle(for: b).assets
+        case .custom(let id): return store[id].map { settings.effectiveStyle(id: id, typography: $0.typography).assets } ?? .init()
+        }
+    }
+
+    /// Có tệp chưa tải ⇒ HỎI (không tải ngay).
+    private func offerAssets(for t: ThemeEditTarget) { assets.offer(assetSpec(t)) }
+
+    /// Trạng thái tệp tải về của theme đang chọn: đang tải / lỗi / cảnh báo / còn thiếu (nút tải).
+    @ViewBuilder private var assetStatusSection: some View {
+        let t: ThemeEditTarget = settings.custom.flatMap { $0.id }.map { .custom($0) } ?? .builtin(settings.theme)
+        let spec = assetSpec(t)
+        if !spec.isEmpty {
+            let errs = assets.errors(for: spec)
+            let warns = assets.storedWarnings(spec)
+            let missing = assets.missing(spec)
+            Section {
+                if assets.busy { HStack { ProgressView(); Text(L("Đang tải tệp giao diện…")) } }
+                ForEach(Array(errs.enumerated()), id: \.offset) { _, e in
+                    Label(ThemeAssetURL.host(e.0) + ": " + e.1.message, systemImage: "xmark.octagon.fill")
+                        .foregroundStyle(.red).font(.footnote)
+                }
+                ForEach(Array(Set(warns.map(\.rawValue)).sorted()), id: \.self) { w in
+                    Label(ThemeAssetWarning(rawValue: w)?.message ?? w, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).font(.footnote)
+                }
+                if !missing.isEmpty, !assets.busy {
+                    Button { offerAssets(for: t) } label: {
+                        Label(L("Tải %@ tệp còn thiếu", missing.count), systemImage: "arrow.down.circle")
+                    }
+                } else if missing.isEmpty, errs.isEmpty {
+                    Label(L("Đã có đủ tệp của giao diện này."), systemImage: "checkmark.circle.fill")
+                        .foregroundStyle(.green).font(.footnote)
+                }
+            } header: { Text(L("Tệp của giao diện")) } footer: {
+                Text(L("Phông / ảnh chỉ tải khi bạn đồng ý, lưu trên máy. Thiếu tệp thì bàn phím dùng màu và phông mặc định."))
+            }
+        }
     }
 
     /// Chưa có Plus: "Dán giao diện" mở màn Plus (có Plus thì là PasteButton của hệ thống).
@@ -187,7 +241,8 @@ struct ThemePickerView: View {
                         style: settings.effectiveStyle(id: id, typography: c.typography),
                         title: c.name, selected: selected, locked: locked, showPlus: locked,
                         menu: menu(.custom(id), title: c.name)) {
-            if let next = ThemePicker.select(custom: c, in: settings) { settings = next; onChange() } else { showPlus = true }
+            if let next = ThemePicker.select(custom: c, in: settings) { settings = next; onChange(); offerAssets(for: .custom(id)) }
+            else { showPlus = true }
         }
     }
 

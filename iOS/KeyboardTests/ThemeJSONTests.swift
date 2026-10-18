@@ -89,6 +89,12 @@ final class ThemeJSONTests: XCTestCase {
         case "deepobj": return Data((String(repeating: #"{"a":"#, count: n) + "1" + String(repeating: "}", count: n)).utf8)
         case "longname": return Data(#"{"v":1,"name":{"vi":"\#(String(repeating: "a", count: n))"},\#(slots)}"#.utf8)
         case "longkey": return Data(#"{"\#(String(repeating: "k", count: n))":1}"#.utf8)
+        case "skins", "skinspressed":
+            let letters = ThemeAssetSpec.letterKeys.prefix(n).enumerated().map { i, l in
+                let pr = p[1] == "skinspressed" ? #","pressed":{"url":"https://example.com/p\#(i).png"}"# : ""
+                return #""\#(l)":{"url":"https://example.com/k\#(i).png"\#(pr)}"#
+            }
+            return Data(#"{"v":1,"name":{"vi":"x"},\#(slots),"keys":{\#(letters.joined(separator: ","))}}"#.utf8)
         default: return Data()
         }
     }
@@ -133,6 +139,14 @@ final class ThemeJSONTests: XCTestCase {
                        hex(p.trail), hex(p.balloon), hex(p.keyBorder), deco].joined(separator: " ")
             XCTAssertEqual(got, c[3], "PAL \(c[1]) \(c[2])")
         }
+        // Kế hoạch tệp tải về: cùng JSON ⇒ cùng chuỗi kế hoạch hai nền tảng.
+        var plans = 0
+        for c in try fixtureLines() where c.first == "PLAN" {
+            let s = try XCTUnwrap(specs[c[1]], c[1])
+            XCTAssertEqual(ThemeAssetPlan.make(s.typography.assets).description, c[2], "PLAN \(c[1])")
+            plans += 1
+        }
+        XCTAssertGreaterThanOrEqual(plans, 6)
     }
 
     // MARK: fuzz — không crash, hoặc model hợp lệ hoặc lỗi

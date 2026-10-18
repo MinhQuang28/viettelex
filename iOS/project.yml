@@ -32,6 +32,8 @@ targets:
       - Keyboard/KeyboardTheme.swift
       - Keyboard/ThemeSpec.swift
       - Keyboard/BuiltinThemes.swift
+      - Keyboard/ThemeAssets.swift
+      - Keyboard/BuiltinFonts.swift
       - Keyboard/Wallpaper.swift
       - Keyboard/Shortcuts.swift
       - Shared
@@ -171,6 +173,9 @@ targets:
       - Keyboard/KeyboardTheme.swift
       - Keyboard/ThemeSpec.swift
       - Keyboard/BuiltinThemes.swift
+      - Keyboard/ThemeAssets.swift
+      - Keyboard/BuiltinFonts.swift
+      - App/ThemeAssetDownloader.swift
       - Keyboard/Wallpaper.swift
       - Keyboard/KeyCommitQueue.swift
       - Keyboard/AdjacentKeyFixer.swift

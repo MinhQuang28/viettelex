@@ -30,6 +30,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.sp
+import com.viettelex.keyboard.BuiltinFonts
 import com.viettelex.keyboard.KeyLabelFont
 import com.viettelex.keyboard.KeyLabelWeight
 import com.viettelex.keyboard.KeyStyle
@@ -46,7 +49,8 @@ private const val DEFAULT_CORNER_PERCENT = 30
  * [palette] = palette đang xem trước (màu "theo theme" hiện ở ô màu).
  */
 @Composable
-internal fun AdvancedStyleSection(style: KeyStyle, palette: ThemePalette, onChange: (KeyStyle) -> Unit, onOpenPlus: () -> Unit) {
+internal fun AdvancedStyleSection(style: KeyStyle, palette: ThemePalette, onChange: (KeyStyle) -> Unit, onOpenPlus: () -> Unit,
+                                  onFontAsset: (KeyStyle) -> Unit = onChange) {
     val c = LocalVT.current
     val allowed = ThemeGate.allowsAdvanced
     var open by rememberSaveable { mutableStateOf(false) }
@@ -97,13 +101,9 @@ internal fun AdvancedStyleSection(style: KeyStyle, palette: ThemePalette, onChan
                 style = VTType.footnote, color = c.secondary)
         }
         RowDivider()
-        OptionChips(tr("Phông chữ"), KeyLabelFont.entries.filter { it.onAndroid }, if (style.font.onAndroid) style.font else KeyLabelFont.DEFAULT,
-            { it.title }, { f -> when (f) {
-                KeyLabelFont.SERIF -> FontFamily.Serif
-                KeyLabelFont.MONO -> FontFamily.Monospace
-                KeyLabelFont.CONDENSED -> FontFamily(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.NORMAL))
-                else -> FontFamily.Default
-            } }) { onChange(style.copy(font = it)) }
+        // Lưới phông: mỗi ô chữ "Vt" bằng chính phông đó — phông hệ thống + phông tải về có sẵn (Plus).
+        FontGrid(style, onSystem = { onChange(style.copy(font = it, assets = style.assets.copy(font = null))) },
+            onAsset = { onFontAsset(style.copy(font = KeyLabelFont.DEFAULT, assets = style.assets.copy(font = it.asset))) })
         RowDivider()
         OptionChips(tr("Độ đậm"), KeyLabelWeight.entries, style.weight, { it.title }, { null },
             weight = { FontWeight(it.weight) }) { onChange(style.copy(weight = it)) }
@@ -112,6 +112,67 @@ internal fun AdvancedStyleSection(style: KeyStyle, palette: ThemePalette, onChan
             Text(tr("Đặt lại về mặc định của giao diện"), style = VTType.body, color = if (style.isDefault) c.secondary else c.red)
         }
     }
+}
+
+/** Một ô lưới phông: "Vt" bằng phông đó + tên; đang chọn tô màu nhấn. */
+@Composable
+private fun FontTile(name: String, family: FontFamily, on: Boolean, modifier: Modifier, onPick: () -> Unit) {
+    val c = LocalVT.current
+    Column(modifier
+        .background(if (on) c.accent else c.secondary.copy(alpha = 0.12f), RoundedCornerShape(10.dp))
+        .clickable(onClick = onPick)
+        .padding(vertical = 8.dp, horizontal = 4.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+        Text("Vt", fontFamily = family, fontSize = 26.sp, maxLines = 1, color = if (on) Color.White else c.label)
+        Text(name, style = VTType.caption2, maxLines = 1, color = if (on) Color.White else c.secondary)
+    }
+}
+
+/**
+ * Phông chữ: phông hệ thống (có trên Android) + 12 phông tải về có sẵn ([BuiltinFonts]). Phông tải về chưa tải
+ * vẽ "Vt" bằng phông xem trước tí hon trong assets (fontpreview/…); đã tải ⇒ phông thật trong kho.
+ */
+@Composable
+private fun FontGrid(style: KeyStyle, onSystem: (KeyLabelFont) -> Unit, onAsset: (BuiltinFonts.Entry) -> Unit) {
+    val c = LocalVT.current
+    val ctx = LocalContext.current
+    val version = ThemeAssetFlow.storeVersion
+    val systems = KeyLabelFont.entries.filter { it.onAndroid }
+    val families = remember(version) {
+        val dir = ThemeAssetFlow.dir(ctx)
+        val index = com.viettelex.keyboard.ThemeAssetStore.readIndex(dir)
+        BuiltinFonts.list.associate { e ->
+            val key = com.viettelex.keyboard.ThemeAssetFile(com.viettelex.keyboard.ThemeAssetClass.font, e.ref).key
+            val tf = index[key]?.let { runCatching { android.graphics.Typeface.createFromFile(java.io.File(dir, it.file)) }.getOrNull() }
+                ?: runCatching { android.graphics.Typeface.createFromAsset(ctx.assets, e.previewAsset) }.getOrNull()
+            e.id to (tf?.let { FontFamily(it) } ?: FontFamily.Default)
+        }
+    }
+    VTRow { Text(tr("Phông chữ"), style = VTType.body, color = c.label) }
+    val selectedAsset = style.assets.font
+    val tiles: List<Pair<String, @Composable (Modifier) -> Unit>> = systems.map { f ->
+        f.id to @Composable { m: Modifier ->
+            FontTile(f.title, systemFamily(f), selectedAsset == null && (if (style.font.onAndroid) style.font else KeyLabelFont.DEFAULT) == f, m) { onSystem(f) }
+        }
+    } + BuiltinFonts.list.map { e ->
+        e.id to @Composable { m: Modifier ->
+            FontTile(e.name, families[e.id] ?: FontFamily.Default, selectedAsset?.ref == e.ref, m) { onAsset(e) }
+        }
+    }
+    tiles.chunked(4).forEach { row ->
+        Row(Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            for ((_, tile) in row) tile(Modifier.weight(1f))
+            repeat(4 - row.size) { Box(Modifier.weight(1f)) }
+        }
+    }
+    Text(tr("Phông tải về (Plus): chữ “Vt” xem trước; chọn rồi app hỏi trước khi tải từ viettelex.com."),
+        style = VTType.footnote, color = c.secondary, modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 8.dp))
+}
+
+private fun systemFamily(f: KeyLabelFont): FontFamily = when (f) {
+    KeyLabelFont.SERIF -> FontFamily.Serif
+    KeyLabelFont.MONO -> FontFamily.Monospace
+    KeyLabelFont.CONDENSED -> FontFamily(android.graphics.Typeface.create("sans-serif-condensed", android.graphics.Typeface.NORMAL))
+    else -> FontFamily.Default
 }
 
 @Composable

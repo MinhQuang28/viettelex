@@ -59,10 +59,13 @@ data class KeyStyle(
     /** Vá từng chế độ ("Giao diện JSON" → Sửa): màu nào có thì thay màu theme đúng chế độ đó. */
     val light: ThemeSlots = ThemeSlots(),
     val dark: ThemeSlots = ThemeSlots(),
+    /** Tệp tải về (phông / ảnh nền / tiền cảnh / skin phím — ThemeAssets.kt). Rỗng = như cũ. */
+    val assets: ThemeAssetSpec = ThemeAssetSpec(),
 ) {
     val isDefault: Boolean get() = this == DEFAULT
-    /** Có đổi chữ (phông / độ đậm / cỡ) ⇒ bật đo + kẹp chữ. */
-    val customizesLabels: Boolean get() = font != KeyLabelFont.DEFAULT || weight != KeyLabelWeight.REGULAR || fontScale != null
+    /** Có đổi chữ (phông / độ đậm / cỡ / phông tải về) ⇒ bật đo + kẹp chữ. */
+    val customizesLabels: Boolean get() = font != KeyLabelFont.DEFAULT || weight != KeyLabelWeight.REGULAR || fontScale != null ||
+        assets.font != null
 
     /** Chữ cái / số / dấu câu; nhãn chức năng + icon; chữ phụ góc phím — khi đặt thanh trượt. */
     val letterScale: Float get() = (fontScale ?: 100) / 100f
@@ -152,7 +155,7 @@ data class KeyStyle(
             val (l, lostL) = edited.slots(false).patchFrom(baseLight)
             val (d, lostD) = edited.slots(true).patchFrom(baseDark)
             return KeyStyle(corner = edited.corner, fontScale = edited.fontScale, font = edited.font ?: KeyLabelFont.DEFAULT,
-                weight = edited.weight ?: KeyLabelWeight.REGULAR, light = l, dark = d) to (lostL || lostD)
+                weight = edited.weight ?: KeyLabelWeight.REGULAR, light = l, dark = d, assets = edited.assets) to (lostL || lostD)
         }
 
         fun parseColor(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it in 0..0xFFFFFF }

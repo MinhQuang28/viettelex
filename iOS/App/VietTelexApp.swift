@@ -21,6 +21,13 @@ struct VietTelexApp: App {
         // trong bộ nhớ nếu app chưa chạy.
         ThemeSettings.migrateStored(UserDefaults(suiteName: "group.com.viettelex"))
         ThemeSettings.refreshCustom(UserDefaults(suiteName: "group.com.viettelex"))   // Giao diện JSON
+        // Tệp tải về (phông / ảnh) không theme nào còn dùng (xoá trên máy khác qua iCloud…) ⇒ dọn, nền.
+        DispatchQueue.global(qos: .utility).async {
+            ThemeAssetStore.collectGarbage(dir: ThemeAssetStore.defaultDir, referenced: ThemeAssetStore.referencedKeys(
+                specs: Array(CustomThemeStore.load(UserDefaults(suiteName: "group.com.viettelex")).values),
+                styles: Array(KeyStyleStore.parse(UserDefaults(suiteName: "group.com.viettelex")?
+                    .string(forKey: KeyStyleStore.key)).values)))
+        }
         // Ảnh emoji vẽ sẵn cho bàn phím (RAM-AUDIT.md §4b): dựng nền nếu thiếu/cũ.
         EmojiAtlasBuilder.ensureFresh()
         #if DEBUG

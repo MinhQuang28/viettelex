@@ -150,6 +150,8 @@ object Keys {
     const val WALLPAPER_DIM = "wallpaperDim"
     const val WALLPAPER_BLUR = "wallpaperBlur"
     const val WALLPAPER_VERSION = "wallpaperVersion"
+    /** Long — app tải xong tệp của theme (ThemeAssets) ⇒ đổi ⇒ IME dựng lại view. Không sao lưu. */
+    const val THEME_ASSETS_STAMP = "themeAssetsStamp"
     /** Khung cắt ảnh nền "x,y,w,h" chuẩn hoá theo ảnh gốc ([WallpaperCrop]); thiếu = cắt giữa. */
     const val WALLPAPER_CROP = "wallpaperCrop"
     /** Độ trong suốt phím (nền + phím) / ký tự trên phím, 0…100. */

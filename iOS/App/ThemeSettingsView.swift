@@ -2,6 +2,7 @@
 // Keyboard/KeyboardTheme.swift (file dùng chung app + extension).
 import SwiftUI
 import PhotosUI
+import CoreText
 
 private let groupDefaults = UserDefaults(suiteName: "group.com.viettelex")
 
@@ -25,6 +26,7 @@ struct ThemeSettingsView: View {
     @State private var editor: EditorInput?
     /// "Tuỳ chỉnh nâng cao" — thu gọn mặc định.
     @State private var advancedOpen = false
+    @ObservedObject private var assetCenter = ThemeAssetCenter.shared
     // Tính Năng → Giao diện gộp luôn logo + chiều cao hàng (không thuộc "Khôi phục giao diện gốc").
     @AppStorage("showSpaceLogo", store: groupDefaults) private var showSpaceLogo = true
     /// ±pt mỗi hàng; iPhone: 0 = như bàn phím iPhone của máy (KeyGeometry.RowAdjust — app
@@ -232,6 +234,10 @@ struct ThemeSettingsView: View {
             GuideLinkSection(page: .giaoDien)
         }
         .navigationTitle(L("Giao diện"))
+        .alert(L("Tải tệp giao diện?"), isPresented: assetCenter.binding("settings")) {
+            Button(L("Tải")) { if let r = assetCenter.pending { assetCenter.accept(r) } }
+            Button(L("Để sau"), role: .cancel) { assetCenter.pending = nil }
+        } message: { Text(assetCenter.pending?.prompt ?? "") }
         .navigationBarTitleDisplayMode(.inline)
         .bottomBarScrollMargin()
         .confirmationDialog(L("Khôi phục giao diện gốc?"), isPresented: $confirmReset, titleVisibility: .visible) {
@@ -323,10 +329,17 @@ struct ThemeSettingsView: View {
             Text(L("Phím hẹp tự thu nhỏ chữ cho vừa, dấu không bị cắt."))
                 .font(.footnote).foregroundStyle(.secondary)
         }
-        Picker(L("Phông chữ"), selection: Binding(get: { settings.keyStyle.font },
-                                                 set: { settings.keyStyle.font = $0; save() })) {
-            ForEach(KeyLabelFont.allCases, id: \.self) { f in
-                Text(f.title).font(Font(KeyLabelFonts.make(f, .regular, size: 17, compact: nil))).tag(f)
+        VStack(alignment: .leading, spacing: 6) {
+            Text(L("Phông chữ"))
+            // Lưới "Vt": phông hệ thống + phông tải về (OFL, viettelex.com). Chọn phông tải về ⇒ HỎI rồi mới tải.
+            ThemeFontGrid(selectedSystem: settings.keyStyle.assets.font == nil ? settings.keyStyle.font : nil,
+                          selectedAsset: settings.keyStyle.assets.font) { choice in
+                switch choice {
+                case .system(let f): settings.keyStyle.font = f; settings.keyStyle.assets.font = nil
+                case .builtin(let e): settings.keyStyle.font = .standard; settings.keyStyle.assets.font = e.asset
+                }
+                save()
+                ThemeAssetCenter.shared.offer(settings.effectiveKeyStyle.assets, context: "settings")
             }
         }
         Picker(L("Độ đậm"), selection: Binding(get: { settings.keyStyle.weight },
@@ -604,5 +617,60 @@ struct ThemePreview: View {
             .overlay(Text(label).font(font).minimumScaleFactor(0.5).lineLimit(1)
                 .foregroundColor(Color((ink ?? palette.keyInk).ui)))
             .frame(width: max(w, 1), height: max(h, 1))
+    }
+}
+
+/// Lưới chọn phông: mỗi ô là chữ "Vt" vẽ bằng chính phông đó (không phải "Aa"). Phông tải về chưa tải dùng bản
+/// xem trước nhỏ trong app (App/FontPreviews/<id>.ttf — chỉ glyph V, t; OFL như bản đầy đủ).
+struct ThemeFontGrid: View {
+    enum Choice { case system(KeyLabelFont), builtin(BuiltinFonts.Entry) }
+    let selectedSystem: KeyLabelFont?
+    let selectedAsset: ThemeFontAsset?
+    let onPick: (Choice) -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 70), spacing: 8)]
+
+    /// Phông xem trước "Vt" (bundle app), nạp một lần.
+    static let previews: [String: UIFont] = {
+        var out: [String: UIFont] = [:]
+        for e in BuiltinFonts.list {
+            guard let u = Bundle.main.url(forResource: e.id, withExtension: "ttf"),
+                  let ds = CTFontManagerCreateFontDescriptorsFromURL(u as CFURL) as? [CTFontDescriptor],
+                  let d = ds.first else { continue }
+            out[e.id] = CTFontCreateWithFontDescriptor(d, 26, nil) as UIFont
+        }
+        return out
+    }()
+
+    var body: some View {
+        LazyVGrid(columns: columns, spacing: 8) {
+            ForEach(KeyLabelFont.allCases, id: \.self) { f in
+                tile(Font(KeyLabelFonts.make(f, .regular, size: 26, compact: nil)), title: f.title,
+                     selected: selectedSystem == f) { onPick(.system(f)) }
+            }
+            ForEach(BuiltinFonts.list, id: \.id) { e in
+                tile(Self.previews[e.id].map { Font($0) } ?? .system(size: 26), title: e.name,
+                     selected: selectedAsset?.ref == e.ref, download: true) { onPick(.builtin(e)) }
+            }
+        }
+    }
+
+    private func tile(_ font: Font, title: String, selected: Bool, download: Bool = false,
+                      tap: @escaping () -> Void) -> some View {
+        Button(action: tap) {
+            VStack(spacing: 2) {
+                Text(verbatim: "Vt").font(font).lineLimit(1).frame(height: 36)
+                Text(title).font(.caption2).lineLimit(1).minimumScaleFactor(0.7).foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, minHeight: 64)
+            .background(RoundedRectangle(cornerRadius: 8).fill(Color(.secondarySystemBackground)))
+            .overlay(RoundedRectangle(cornerRadius: 8)
+                .stroke(selected ? Color.accentColor : .clear, lineWidth: 2))
+            .overlay(alignment: .topTrailing) {
+                if download { Image(systemName: "arrow.down.circle").font(.caption2).foregroundStyle(.secondary).padding(3) }
+            }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(title + (selected ? L(", đang chọn") : ""))
     }
 }

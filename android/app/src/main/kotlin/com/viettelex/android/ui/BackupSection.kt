@@ -57,9 +57,11 @@ object BackupIO {
 }
 
 @Composable
-fun SaoLuuSection() {
+fun SaoLuuSection(onOpenPlus: () -> Unit = {}) {
     val c = LocalVT.current
     val ctx = LocalContext.current
+    /** Sao lưu chỉ mang JSON theme (không mang tệp tải về) ⇒ khôi phục xong HỎI tải lại tệp còn thiếu. */
+    val assetPrompt = rememberAssetPrompt()
     var includeLearned by rememberBoolPref(BackupPrefs.INCLUDE_LEARNED_KEY, false)
     var notice by remember { mutableStateOf<String?>(null) }
 
@@ -76,7 +78,12 @@ fun SaoLuuSection() {
         val text = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.bufferedReader().readText() } }.getOrNull()
         notice = when {
             text == null -> tr("Không đọc được file.")
-            else -> try { BackupIO.import(ctx, text) } catch (e: BackupException) { e.userMessage }
+            else -> try {
+                BackupIO.import(ctx, text).also {
+                    ThemeAssetFlow.gcAsync(ctx)
+                    assetPrompt.offer(ctx, loadThemeSettings(ctx).effectiveKeyStyle.assets)
+                }
+            } catch (e: BackupException) { e.userMessage }
         }
     }
 
@@ -96,4 +103,5 @@ fun SaoLuuSection() {
             VTRow { Text(it, style = VTType.footnote, color = c.secondary) }
         }
     }
+    ThemeAssetPromptHost(assetPrompt, onOpenPlus)
 }

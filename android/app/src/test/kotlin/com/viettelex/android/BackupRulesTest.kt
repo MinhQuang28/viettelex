@@ -44,6 +44,9 @@ class BackupRulesTest {
         assertEquals(setOf(prefs, learned), includes(transfer))
         val all = includes(cloud) + includes(transfer)
         assertFalse(all.any { Keys.TOUCHLOG_FILE in it })
+        // Tệp tải về của theme KHÔNG sao lưu (chỉ JSON theme trong prefs; khôi phục xong app hỏi tải lại).
+        val legacy = includes(parse("backup_rules.xml"))
+        assertFalse((all + legacy).any { com.viettelex.keyboard.ThemeAssetStore.DIR_NAME in it || it.endsWith(":") || it.endsWith(":.") })
     }
 
     @Test fun manifestWiresRules() {

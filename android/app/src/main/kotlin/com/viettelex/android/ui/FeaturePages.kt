@@ -276,7 +276,7 @@ fun TinhNangTab(openRequest: FeaturePage? = null, onOpened: () -> Unit = {}, onO
             FeaturePage.Phim -> PhimPage(back)
             FeaturePage.GiaoDien -> ThemePage(back, onOpenPlus)
             FeaturePage.RiengTu -> { SubPageHeader(page.title, back); PrivacySection(); GuideLinkSection(page) }
-            FeaturePage.SaoLuu -> { SubPageHeader(page.title, back); SaoLuuSection(); GuideLinkSection(page) }
+            FeaturePage.SaoLuu -> { SubPageHeader(page.title, back); SaoLuuSection(onOpenPlus); GuideLinkSection(page) }
         }
         return
     }

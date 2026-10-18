@@ -43,6 +43,7 @@ class MainActivity : ComponentActivity() {
         PlusPrefs.install(this)
         com.viettelex.android.shared.UiLang.install(this)   // ngôn ngữ giao diện (mặc định Tiếng Việt)
         migrateThemeSettings(this)   // Tuỳ chỉnh nâng cao chung cũ → theo theme; "Trắng hồng" → Hệ thống + nhấn hồng
+        ThemeAssetFlow.gcAsync(this)  // tệp tải về không còn theme nào dùng (luồng nền)
         plus = PlusController(
             // Tham chiếu YẾU: coroutine/Billing có thể giữ store lâu hơn activity (đo: Message hẹn
             // giờ trên main looper → store → lambda → MainActivity sống mãi sau khi rời app).
