@@ -238,7 +238,7 @@ enum L10n {
         "Gợi ý từ + emoji, tự học từ bạn hay dùng (chỉ trên máy).": "Word + emoji suggestions; learns the words you use (on device only).",
         "Emoji hợp với từ đang gõ (yêu → ❤️).": "Emoji matching the word you’re typing (yêu → ❤️).",
         "Đọc số thành chữ, định dạng tiền (1tr2 → 1.200.000 ₫).": "Spell out numbers, format amounts (1tr2 → 1.200.000 ₫).",
-        "Gõ phép tính rồi dấu = (12*3=) → kết quả hiện ở đầu thanh gợi ý, chạm để chèn.": "Type a sum then = (12*3=) → the result appears first in the suggestion bar; tap to insert.",
+        "Gõ phép tính (12*3, không cần dấu =) → kết quả “= 36” hiện ở đầu thanh gợi ý, chạm để chèn. Dấu = ở bàn 123: giữ phím /.": "Type a sum (12*3, no = needed) → the result “= 36” appears first in the suggestion bar; tap to insert. = on the 123 keys: hold /.",
         "Vừa copy xong thì hiện nút Dán (cần Toàn quyền).": "Show a Paste button right after you copy (needs Full Access).",
         "Gõ không dấu cả câu (hom nay troi dep), gõ dấu cách → chip “Thêm dấu” hiện ở đầu thanh gợi ý, chạm để thành “hôm nay trời đẹp”; chạm “Hoàn tác” để trả lại. Tắt mặc định cho nhẹ máy.": "Type a whole sentence without tones (hom nay troi dep), press space → an “Add tones” chip appears at the start of the suggestion bar; tap it to get “hôm nay trời đẹp”, tap “Undo” to revert. Off by default to save resources.",
         "Không chủ động gợi ý từ tục — gõ tay vẫn bình thường.": "Never suggest vulgar words — typing them yourself still works.",

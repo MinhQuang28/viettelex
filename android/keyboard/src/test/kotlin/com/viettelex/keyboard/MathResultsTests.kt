@@ -26,10 +26,36 @@ class MathResultsTests {
                     if (c[2] == "-") assertNull("chip «${c[1]}» phải null", chip)
                     else assertEquals("chip «${c[1]}»", NumberChip(c[2], "", c[2]), chip)
                 }
+                "implicit" -> {
+                    val chip = MathResults.implicitChip(c[1])
+                    if (c[2] == "-") assertNull("chip ngầm «${c[1]}» phải null", chip)
+                    else assertEquals("chip ngầm «${c[1]}»", NumberChip(c[2], "", " " + c[2]), chip)
+                }
                 else -> error("dòng fixture lạ: $c")
             }
         }
         assertTrue(n > 80)
+    }
+
+    /** Cửa chung: "…=" ⇒ chip thường (chèn sau "="); kết thúc bằng phép tính ⇒ chip ngầm. */
+    @Test fun chipAtCaret() {
+        assertEquals(NumberChip("36", "", "36"), MathResults.chipAtCaret("12*3="))
+        assertEquals(NumberChip("= 36", "", " = 36"), MathResults.chipAtCaret("12*3"))
+        assertNull(MathResults.chipAtCaret("12/10"))
+    }
+
+    /** Luật hình dạng (field report "dấu bằng để rất sâu") — song sinh iOS testLooksLikeExpression. */
+    @Test fun looksLikeExpression() {
+        for (e in listOf("12*3", "1,5+2,5", "100/4", "12 / 10", "10 : 30", "(1+2)", "7-3", "32/5"))
+            assertTrue(e, MathResults.looksLikeExpression(e))
+        for (e in listOf("12", "50%", "-5", "12/10", "1/2", "12/10/2026", "2026-10-18", "10:30", "16:9",
+                "090-123-4567", "5-10", "1990-2000", "1800-599-920", "1.2.3", "3x4"))
+            assertTrue(e, !MathResults.looksLikeExpression(e))
+    }
+
+    @Test fun implicitLongContext() {
+        assertEquals("= 36", MathResults.implicitChip("chữ ".repeat(500) + "12*3")?.display)
+        assertNull(MathResults.implicitChip("1+".repeat(200) + "1"))
     }
 
     /** Chip số không còn nhận "…=" (tránh 2 chip cùng một kết quả). */

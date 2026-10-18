@@ -807,8 +807,13 @@ class KeyboardSession(
             is Key.Letter -> numberSpaces
             else -> 99
         }
-        // Kết quả phép tính: chỉ ngay sau "=".
-        mathArmed = mathOn && key is Key.Text && key.text == "="
+        // Kết quả phép tính: ngay sau "=", hoặc chip ngầm khi phím vừa ra chữ số / ")" / "%" hay ⌫
+        // (biểu thức có thể kết thúc ở con trỏ). Phím khác / công tắc tắt ⇒ không đọc context.
+        mathArmed = mathOn && when (key) {
+            is Key.Text -> key.text.lastOrNull()?.let { it in '0'..'9' || it in "=)%" } == true
+            Key.Backspace -> true
+            else -> false
+        }
         lastInsertWasSpace = key == Key.Space || key == Key.DoubleSpacePeriod
         lastKeyWasEmailTrigger = key is Key.Text && (key.text == "@" || key.text == ".")
         initialCapsPending = false
@@ -1233,12 +1238,15 @@ class KeyboardSession(
         return numberChip?.display
     }
 
-    /** Chip kết quả phép tính — chỉ đọc context khi phím vừa gõ là "="; đọc lại mỗi lượt (con trỏ dời ⇒ mất). */
+    /**
+     * Chip kết quả phép tính — chỉ đọc context khi phím vừa gõ là "=" (chip thường) hoặc chữ số / ")" /
+     * "%" / ⌫ (chip ngầm "= 36"); đọc lại mỗi lượt (con trỏ dời ⇒ mất).
+     */
     private fun refreshMathChip(proxy: TextProxy): String? {
         mathChip = null
         if (!mathArmed) return null
         val before = proxy.contextBeforeInput() ?: return null
-        mathChip = MathResults.chip(before)
+        mathChip = MathResults.chipAtCaret(before)
         return mathChip?.display
     }
 
@@ -1581,7 +1589,7 @@ class KeyboardSession(
     private fun acceptMathChip(proxy: TextProxy) {
         val c = mathChip ?: return
         mathChip = null; mathArmed = false
-        if (MathResults.chip(proxy.contextBeforeInput() ?: "") != c) {
+        if (MathResults.chipAtCaret(proxy.contextBeforeInput() ?: "") != c) {
             TouchLog.write("failsafe: math chip context mismatch → skip"); return
         }
         proxy.insertText(c.insert)

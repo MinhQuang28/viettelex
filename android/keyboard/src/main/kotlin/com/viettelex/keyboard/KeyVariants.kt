@@ -29,7 +29,8 @@ object KeyVariants {
         "7" to listOf("7", "⅞"),
         "0" to listOf("0", "°"),
         "-" to listOf("-", "–", "—", "•"),
-        "/" to listOf("/", "\\"),
+        // "=" ngay cạnh "/" — bàn 123 không có phím "=" (song sinh iOS, field report 18/10/2026).
+        "/" to listOf("/", "=", "\\"),
         // Android: ₫ là phím gốc (Gboard đặt $ ở đây) — giữ ra các tiền tệ khác; "$" ô 0 = chọn
         // sẵn (#113: giữ rồi nhả tại chỗ ⇒ "$", chạm vẫn "₫").
         "₫" to listOf("\$", "₫", "€", "£", "¥", "₩", "₹", "¢"),
