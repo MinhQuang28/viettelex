@@ -1,0 +1,74 @@
+// Sinh bởi Scripts/gen-builtin-themes.py từ themes/builtin-themes.json — KHÔNG sửa tay.
+// Theme có sẵn (trừ Hệ thống / Kính — vẽ theo nền tảng) dạng JSON, đọc một lần (BuiltinThemes.specs).
+enum BuiltinThemesData {
+    static let json = ##"""
+{
+  "v": 1,
+  "themes": [
+    {
+      "v": 1, "id": "oled", "name": {"vi": "Tối OLED", "en": "OLED Dark"},
+      "light": {"bg": "#000000", "key": "#1C1C1E", "special": "#3A3A3C", "ink": "#FFFFFF",
+                "accent": "#0A84FF", "balloon": "#2C2C2E", "trail": "#99FFFFFF"},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "contrast", "name": {"vi": "Tương phản cao", "en": "High Contrast"},
+      "light": {"bg": "#000000", "key": "#141414", "special": "#4D4D4D", "ink": "#FFFFFF",
+                "accent": "#FFD60A", "border": "#D8FFFFFF", "trail": "#FFD60A"},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "peach", "name": {"vi": "Hồng đào", "en": "Peach"},
+      "light": {"bg": "#FBE3E1", "key": "#FFF8F7", "special": "#F1C4BF", "ink": "#4A2226", "accent": "#C2505A"},
+      "dark": {"bg": "#2A1A1C", "key": "#45292D", "special": "#5C3A3F", "ink": "#FBE3E1", "accent": "#C2505A"}
+    },
+    {
+      "v": 1, "id": "mint", "name": {"vi": "Bạc hà", "en": "Mint"},
+      "light": {"bg": "#D9F2E7", "key": "#F6FFFA", "special": "#AFDDC9", "ink": "#173B30", "accent": "#1F7A5C"},
+      "dark": {"bg": "#10241D", "key": "#1D3B30", "special": "#2A5244", "ink": "#D9F2E7", "accent": "#1F7A5C"}
+    },
+    {
+      "v": 1, "id": "sky", "name": {"vi": "Trời xanh", "en": "Sky"},
+      "light": {"bg": "#DAE9F8", "key": "#F6FAFF", "special": "#B3CFEE", "ink": "#14304C", "accent": "#2C6BB8"},
+      "dark": {"bg": "#111E2E", "key": "#1E324A", "special": "#2B4566", "ink": "#DAE9F8", "accent": "#2C6BB8"}
+    },
+    {
+      "v": 1, "id": "lavender", "name": {"vi": "Oải hương", "en": "Lavender"},
+      "light": {"bg": "#E8E2F6", "key": "#FBF9FF", "special": "#CBBFEA", "ink": "#2C2345", "accent": "#6A48C4"},
+      "dark": {"bg": "#1C1830", "key": "#2E2848", "special": "#403862", "ink": "#E8E2F6", "accent": "#6A48C4"}
+    },
+    {
+      "v": 1, "id": "blackHeart", "name": {"vi": "Tim đen", "en": "Black Heart"},
+      "light": {"bg": "#000000", "key": "#1A1A1A", "special": "#333333", "ink": "#FFFFFF", "accent": "#E63E7A",
+                "deco": {"motif": "hearts", "color": "#8CFF6FA3"}},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "greenFloral", "name": {"vi": "Hoa xanh", "en": "Green Blossom"},
+      "light": {"bg": "#EEF6EF", "key": "#FFFFFF", "special": "#DCEEDF", "ink": "#256B42", "accent": "#2E8B57",
+                "border": "#4CAF6E", "deco": {"motif": "flowers", "color": "#596DBE8A"}},
+      "dark": {"bg": "#0F1D15", "key": "#16291E", "special": "#21392A", "ink": "#9EE0B6", "accent": "#2E8B57",
+               "border": "#CC4CAF6E", "deco": {"motif": "flowers", "color": "#474CAF6E"}}
+    },
+    {
+      "v": 1, "id": "sage", "name": {"vi": "Xanh lá", "en": "Sage"},
+      "light": {"bg": "#E4EBE2", "key": "#FBFCFA", "special": "#93AB8C", "ink": "#24331F", "accent": "#5E7F55",
+                "fn": "#A9BFA3"},
+      "dark": {"bg": "#161C15", "key": "#2A3328", "special": "#3A4A36", "ink": "#E4EDE1", "accent": "#5E7F55",
+               "fn": "#4A5E45"}
+    },
+    {
+      "v": 1, "id": "neon", "name": {"vi": "Neon", "en": "Neon"},
+      "light": {"bg": "#05080A", "key": "#0E2A2E", "special": "#15393E", "ink": "#5FF5E8", "accent": "#00BFB2",
+                "border": "#B200E5D4"},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "pink", "name": {"vi": "Hồng", "en": "Pink"}, "corner": 70,
+      "light": {"bg": "#FCDDE8", "key": "#FFF5F9", "special": "#F6B8CE", "ink": "#5A1F38", "accent": "#D94680"},
+      "dark": {"bg": "#2B1520", "key": "#472335", "special": "#5E2F46", "ink": "#FCDDE8", "accent": "#D94680"}
+    }
+  ]
+}
+"""##
+}

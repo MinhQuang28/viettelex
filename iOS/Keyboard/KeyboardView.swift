@@ -1831,7 +1831,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         decorGaps = gaps; decorWidth = size.width
         CATransaction.begin(); CATransaction.setDisableActions(true)
         decorLayer.frame = CGRect(origin: .zero, size: size)
-        decorLayer.path = d.path(KeyboardDecoration.placements(width: Double(size.width), gaps: gaps))
+        decorLayer.path = d.path(KeyboardDecoration.placements(width: Double(size.width), gaps: gaps, density: d.density))
         CATransaction.commit()
     }
     #if DEBUG
@@ -1851,7 +1851,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
     /// Test: khung (toạ độ view) của từng motif đang vẽ + khung mọi phím đang hiện.
     var debugDecorationBoxes: (motifs: [CGRect], keys: [CGRect]) {
-        let motifs = KeyboardDecoration.placements(width: Double(decorWidth), gaps: decorGaps ?? [])
+        let motifs = KeyboardDecoration.placements(width: Double(decorWidth), gaps: decorGaps ?? [], density: palette.decoration?.density ?? 100)
             .map { CGRect(x: $0.x - $0.size / 2, y: $0.y - $0.size / 2, width: $0.size, height: $0.size) }
         var keys: [CGRect] = []
         func walk(_ v: UIView) {

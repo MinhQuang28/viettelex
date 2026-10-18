@@ -42,6 +42,8 @@ final class BackupStore: SyncLocal {
                 out[spec.key] = .string(v.map { allowed.contains($0) } == true ? v! : def)
             case .styleMap:
                 out[spec.key] = .string((raw as? String).flatMap(KeyStyleStore.normalize) ?? KeyStyleStore.empty)
+            case .themeMap:
+                out[spec.key] = .string((raw as? String).flatMap(CustomThemeStore.normalize) ?? "{}")
             }
         }
         return out

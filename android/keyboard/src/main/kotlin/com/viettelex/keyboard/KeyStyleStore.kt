@@ -1,13 +1,12 @@
 package com.viettelex.keyboard
 
 /**
- * Lưu "Tuỳ chỉnh nâng cao" theo theme: MỘT pref [KEY] = chuỗi JSON gọn, khoá sắp xếp — y hệt iOS
- * KeyStyleStore (iOS/Keyboard/KeyboardTheme.swift); sao lưu / đồng bộ chuyển nguyên chuỗi giữa hai
- * nền tảng:
- *   {"pink":{"accent":14239104,"corner":70},"system":{"fill":1056816,"font":"mono","label":16723285}}
- * Trường (tuỳ chọn, thiếu = mặc định): label / fill / accent = 0xRRGGBB (thập phân), corner 0…100,
- * fontScale 80…150, font = [KeyLabelFont.id], weight = [KeyLabelWeight.id]. Theme chưa chỉnh không có
- * mục; trống = "{}". Giá trị sai bị bỏ / kẹp như khoá cũ.
+ * Lưu "Tuỳ chỉnh nâng cao" (= bản vá "Giao diện JSON") theo theme: MỘT pref [KEY] = chuỗi JSON chuẩn —
+ * y hệt iOS KeyStyleStore (iOS/Keyboard/KeyboardTheme.swift); sao lưu chuyển nguyên chuỗi:
+ *   {"pink":{"accent":"#D6336C","corner":70},"system":{"dark":{"key":"#202020"},"fill":"#102030"}}
+ * Trường (tuỳ chọn): label / fill / accent = "#RRGGBB" (áp cả sáng lẫn tối, chữ tự đọc được), corner
+ * 0…100, fontScale 80…150, font, weight, light / dark = vá màu từng chế độ (khoá như theme JSON).
+ * Theme chưa chỉnh không có mục; trống = "{}".
  */
 object KeyStyleStore {
     const val KEY = Keys.KEY_STYLES
@@ -23,60 +22,47 @@ object KeyStyleStore {
     fun validId(s: String): Boolean = s.isNotEmpty() && s.length <= 40 &&
         s.all { it in '0'..'9' || it in 'A'..'Z' || it in 'a'..'z' || it == '_' || it == '-' }
 
-    private fun intOf(v: Any?): Int? = when (v) {
-        is Long -> v.takeIf { it in -1_000_000_000L..1_000_000_000L }?.toInt()
-        is Int -> v
-        is Double -> v.takeIf { it.isFinite() && it == Math.rint(it) && Math.abs(it) < 1e9 }?.toInt()
-        else -> null
-    }
+    /** Cả kho bản vá: tối đa ~ (50 theme tự tạo + 13 có sẵn) × vài KB. */
+    private val LIMITS = StrictJson.Limits(maxBytes = 512 * 1024, maxMembers = 128)
 
-    private fun parseObject(raw: String?): Map<*, *>? {
-        if (raw == null) return null
-        return try { MiniJson.parse(raw) as? Map<*, *> } catch (e: IllegalArgumentException) { null }
-    }
-
+    /**
+     * Đọc CHẶT ([ThemeSpecParser.override]): mục có khoá lạ / màu sai ⇒ bỏ cả mục (theme vẽ như chưa
+     * chỉnh); chuỗi hỏng ⇒ rỗng. Không bao giờ ném ra ngoài.
+     */
     fun parse(raw: String?): Map<String, KeyStyle> {
         if (raw == null || raw == EMPTY) return emptyMap()
-        val obj = parseObject(raw) ?: return emptyMap()
+        val m = (StrictJson.parse(raw, LIMITS) as? StrictJson.Result.Ok)?.v as? SJ.Obj ?: return emptyMap()
         val out = LinkedHashMap<String, KeyStyle>()
-        for ((id, v) in obj) {
-            if (id !is String || !validId(id) || v !is Map<*, *>) continue
-            val st = KeyStyle(
-                labelColor = KeyStyle.parseColor(intOf(v["label"])),
-                fillColor = KeyStyle.parseColor(intOf(v["fill"])),
-                accentColor = KeyStyle.parseColor(intOf(v["accent"])),
-                corner = KeyStyle.parseCorner(intOf(v["corner"])),
-                fontScale = KeyStyle.parseFontScale(intOf(v["fontScale"])),
-                font = KeyLabelFont.of(v["font"] as? String),
-                weight = KeyLabelWeight.of(v["weight"] as? String),
-            )
+        for ((id, v) in m.m) {
+            if (!validId(id)) continue
+            val st = ThemeSpecParser.override(v) ?: continue
             if (!st.isDefault) out[id] = st
         }
         return out
     }
 
-    /** Chuỗi CHUẨN (khoá sắp xếp, không khoảng trắng) — trùng từng ký tự với iOS. */
-    fun serialize(m: Map<String, KeyStyle>): String {
-        val parts = ArrayList<String>()
-        for (id in m.keys.sorted()) {
-            val st = m[id] ?: continue
-            if (!validId(id) || st.isDefault) continue
-            val f = ArrayList<String>()
-            st.accentColor?.let { f.add("\"accent\":$it") }
-            st.corner?.let { f.add("\"corner\":$it") }
-            st.fillColor?.let { f.add("\"fill\":$it") }
-            if (st.font != KeyLabelFont.DEFAULT) f.add("\"font\":\"${st.font.id}\"")
-            st.fontScale?.let { f.add("\"fontScale\":$it") }
-            st.labelColor?.let { f.add("\"label\":$it") }
-            if (st.weight != KeyLabelWeight.REGULAR) f.add("\"weight\":\"${st.weight.id}\"")
-            parts.add("\"$id\":{" + f.joinToString(",") + "}")
-        }
-        return "{" + parts.joinToString(",") + "}"
+    fun json(st: KeyStyle): SJ {
+        val f = ArrayList<Pair<String, SJ>>()
+        fun rgb(v: Int) = SJ.Str(ThemeColorCode.format((0xFF shl 24) or (v and 0xFFFFFF)))
+        st.labelColor?.let { f.add("label" to rgb(it)) }
+        st.fillColor?.let { f.add("fill" to rgb(it)) }
+        st.accentColor?.let { f.add("accent" to rgb(it)) }
+        st.corner?.let { f.add("corner" to SJ.Num(it)) }
+        st.fontScale?.let { f.add("fontScale" to SJ.Num(it)) }
+        if (st.font != KeyLabelFont.DEFAULT) f.add("font" to SJ.Str(st.font.id))
+        if (st.weight != KeyLabelWeight.REGULAR) f.add("weight" to SJ.Str(st.weight.id))
+        if (!st.light.isEmpty) f.add("light" to ThemeSpec.json(st.light))
+        if (!st.dark.isEmpty) f.add("dark" to ThemeSpec.json(st.dark))
+        return SJ.Obj(f)
     }
 
-    /** Chuẩn hoá chuỗi từ file sao lưu / đồng bộ; null = không phải object JSON (bỏ qua). */
-    fun normalize(raw: String): String? = parseObject(raw)?.let { serialize(parse(raw)) }
+    /** Chuỗi CHUẨN ([SJ.canonical]: khoá sắp xếp, không khoảng trắng, màu "#RRGGBB") — trùng iOS. */
+    fun serialize(m: Map<String, KeyStyle>): String =
+        SJ.Obj(m.filter { (id, st) -> validId(id) && !st.isDefault }.map { (id, st) -> id to json(st) }).canonical
 
+    /** Chuẩn hoá chuỗi từ file sao lưu / đồng bộ; null = không phải object JSON (bỏ qua). */
+    fun normalize(raw: String): String? =
+        if ((StrictJson.parse(raw, LIMITS) as? StrictJson.Result.Ok)?.v is SJ.Obj) serialize(parse(raw)) else null
     fun hasLegacy(get: (String) -> Any?): Boolean = LEGACY_KEYS.any { get(it) != null }
 
     /** Bộ chung cũ; null = không có khoá cũ nào. */

@@ -56,6 +56,9 @@ data class KeyStyle(
     val fontScale: Int? = null,
     val font: KeyLabelFont = KeyLabelFont.DEFAULT,
     val weight: KeyLabelWeight = KeyLabelWeight.REGULAR,
+    /** Vá từng chế độ ("Giao diện JSON" → Sửa): màu nào có thì thay màu theme đúng chế độ đó. */
+    val light: ThemeSlots = ThemeSlots(),
+    val dark: ThemeSlots = ThemeSlots(),
 ) {
     val isDefault: Boolean get() = this == DEFAULT
     /** Có đổi chữ (phông / độ đậm / cỡ) ⇒ bật đo + kẹp chữ. */
@@ -101,6 +104,30 @@ data class KeyStyle(
      * vuốt, glyph màu nhấn của theme ([ThemePalette.functionInk]). Chữ trên nền nhấn giữ màu theme nếu
      * ≥ 3:1, không thì đen/trắng ([KeyboardTransparency.readable]). Áp SAU [applyColors]. null ⇒ y như cũ.
      */
+    /**
+     * Bản vá theo chế độ — áp TRƯỚC [applyColors] / [applyAccent]; y hệt iOS KeyStyle.applyPatch (+ popup theo
+     * balloon, chip theo special như theme JSON). Viền trong suốt = bỏ viền; motif "none" = bỏ hoạ tiết.
+     */
+    fun applyPatch(p: ThemePalette, dark: Boolean): ThemePalette {
+        val s = if (dark) this.dark else light
+        if (s.isEmpty) return p
+        val c = ThemeColor
+        var q = p
+        s.bg?.let { q = q.copy(bg = it, bgBottom = null) }
+        s.key?.let { q = q.copy(keyFill = it, balloon = it, popup = it) }
+        s.special?.let { q = q.copy(specialFill = it, chip = it) }
+        s.ink?.let { q = q.copy(ink = it, isDark = c.luminance(it) > 0.5) }
+        s.accent?.let { q = q.copy(action = it, trail = c.withAlpha(it, 0.6f), actionInk = ThemeSpec.autoAccentInk(it), accentShift = true) }
+        s.accentInk?.let { q = q.copy(actionInk = it) }
+        s.border?.let { q = q.copy(keyBorder = if ((it ushr 24) == 0) null else it) }
+        s.fn?.let { q = q.copy(functionFill = it) }
+        s.fnInk?.let { q = q.copy(functionInk = it) }
+        s.balloon?.let { q = q.copy(balloon = it, popup = it) }
+        s.trail?.let { q = q.copy(trail = it) }
+        s.deco?.let { d -> q = q.copy(decoration = d.motif?.let { ThemeDecoration(it, d.color, d.density) }) }
+        return q
+    }
+
     fun applyAccent(p: ThemePalette): ThemePalette {
         val a = accentColor ?: return p
         val c = ThemeColor
@@ -119,6 +146,14 @@ data class KeyStyle(
 
         /** Chữ/icon trên nền nhấn: giữ [themeInk] nếu ≥ 3:1, không thì đen/trắng tương phản hơn. */
         fun accentInk(themeInk: Int, accent: Int): Int = KeyboardTransparency.readable(themeInk, accent)
+
+        /** Theme đầy đủ người dùng sửa → bản vá so với màu gốc + kiểu chữ — y hệt iOS KeyStyle.fromEdited. */
+        fun fromEdited(edited: ThemeSpec, baseLight: ThemeSlots, baseDark: ThemeSlots): Pair<KeyStyle, Boolean> {
+            val (l, lostL) = edited.slots(false).patchFrom(baseLight)
+            val (d, lostD) = edited.slots(true).patchFrom(baseDark)
+            return KeyStyle(corner = edited.corner, fontScale = edited.fontScale, font = edited.font ?: KeyLabelFont.DEFAULT,
+                weight = edited.weight ?: KeyLabelWeight.REGULAR, light = l, dark = d) to (lostL || lostD)
+        }
 
         fun parseColor(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it in 0..0xFFFFFF }
         fun parseCorner(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it >= 0 }?.coerceAtMost(100)

@@ -20,6 +20,7 @@ struct VietTelexApp: App {
         // màu nhấn hồng. Một lần, lặp lại vô hại (ThemeSettings.migrateStored) — bàn phím tự chuyển
         // trong bộ nhớ nếu app chưa chạy.
         ThemeSettings.migrateStored(UserDefaults(suiteName: "group.com.viettelex"))
+        ThemeSettings.refreshCustom(UserDefaults(suiteName: "group.com.viettelex"))   // Giao diện JSON
         // Ảnh emoji vẽ sẵn cho bàn phím (RAM-AUDIT.md §4b): dựng nền nếu thiếu/cũ.
         EmojiAtlasBuilder.ensureFresh()
         #if DEBUG

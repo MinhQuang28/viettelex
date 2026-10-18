@@ -1,0 +1,990 @@
+import Foundation
+
+// "Giao diện JSON": đặc tả theme dạng JSON có phiên bản — theme có sẵn (themes/builtin-themes.json),
+// theme tự tạo (dán / sửa), tuỳ chỉnh theo theme (KeyStyle.light/.dark). Android giữ Y HỆT
+// (android/keyboard/.../ThemeSpec.kt): cùng luật đọc, cùng chuỗi chuẩn, cùng bảng lỗi — fixture chung
+// KeyboardTests/Fixtures/theme-json-cases.txt chạy ở cả hai bên.
+//
+//   {"v":1, "id":"peach", "name":{"vi":"Hồng đào","en":"Peach"},
+//    "light":{"bg":"#FBE3E1","key":"#FFF8F7","special":"#F1C4BF","ink":"#4A2226","accent":"#C2505A",
+//             "accentInk":"#FFFFFF","border":"#4CAF6E","fn":"#A9BFA3","fnInk":"#C2255C",
+//             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100}},
+//    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold"}
+//
+// AN TOÀN (dữ liệu không tin được — dán từ clipboard): kiểm cỡ TRƯỚC khi đọc (16 KB), UTF-8 chặt (không
+// BOM), độ sâu ≤ 8, chuỗi ≤ 200 ký tự (tên ≤ 40), chỉ số nguyên ≤ 9 chữ số, khoá lặp / khoá lạ / null /
+// sai kiểu / ký tự điều khiển ⇒ LỖI (không bao giờ crash, không force-unwrap). Không có URL / ảnh / mã:
+// chỉ màu, số, và vài giá trị liệt kê (motif, phông, độ đậm). Bàn phím chỉ đọc bản app đã chuẩn hoá và
+// vẫn kiểm lại — hỏng thì về theme có sẵn / Hệ thống.
+
+// MARK: - Lỗi / cảnh báo
+
+struct ThemeIssue: Error, Equatable {
+    enum Code: String, CaseIterable {
+        case tooLarge, encoding, syntax, depth, duplicateKey, unknownKey, missingKey, wrongType,
+             badColor, badNumber, tooLong, badValue, badVersion, controlChar, clamped, lowContrast,
+             contrastTooLow, tooMany, bgKept
+    }
+    var code: Code
+    /// Vị trí ("light.key") hoặc chi tiết (khoá lặp, số ký tự).
+    var path: String = ""
+    var isError: Bool { code != .clamped && code != .lowContrast && code != .bgKept }
+
+    /// Thông báo theo ngôn ngữ giao diện (L10n) — tiếng Việt + tiếng Anh.
+    var message: String {
+        switch code {
+        case .tooLarge: return L("Quá lớn (tối đa 16 KB).")
+        case .encoding: return L("Không phải văn bản UTF-8 hợp lệ.")
+        case .syntax: return L("JSON sai cú pháp (ký tự %@).", path)
+        case .depth: return L("JSON lồng quá sâu.")
+        case .duplicateKey: return L("Khoá bị lặp: %@", path)
+        case .unknownKey: return L("Khoá không hỗ trợ: %@", path)
+        case .missingKey: return L("Thiếu khoá bắt buộc: %@", path)
+        case .wrongType: return L("Sai kiểu giá trị: %@", path)
+        case .badColor: return L("Màu không hợp lệ ở %@ (dùng #RRGGBB hoặc #AARRGGBB).", path)
+        case .badNumber: return L("Số không hợp lệ ở %@ (chỉ số nguyên).", path)
+        case .tooLong: return L("Chuỗi quá dài ở %@.", path)
+        case .badValue: return L("Giá trị không hỗ trợ ở %@.", path)
+        case .badVersion: return L("Phiên bản định dạng không hỗ trợ (cần \"v\": 1).")
+        case .controlChar: return L("Có ký tự điều khiển trong chuỗi.")
+        case .clamped: return L("Đã đưa %@ về khoảng cho phép.", path)
+        case .lowContrast: return L("Tương phản thấp ở %@ (nên ≥ 3:1).", path)
+        case .contrastTooLow: return L("Tương phản quá thấp ở %@ (tối thiểu 2:1).", path)
+        case .tooMany: return L("Đã đủ %@ giao diện tự tạo — xoá bớt trước khi dán.", path)
+        case .bgKept: return L("Giao diện có sẵn này luôn có nền — đã giữ nền gốc.")
+        }
+    }
+}
+
+// MARK: - JSON chặt
+
+/// Cây JSON đã đọc (object giữ thứ tự để báo lỗi ổn định). Số: chỉ nguyên.
+indirect enum StrictJSON: Equatable {
+    case object([(String, StrictJSON)]), array([StrictJSON]), string(String), int(Int), bool(Bool), null
+
+    static func == (a: StrictJSON, b: StrictJSON) -> Bool {
+        switch (a, b) {
+        case let (.object(x), .object(y)): return x.count == y.count && zip(x, y).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 }
+        case let (.array(x), .array(y)): return x == y
+        case let (.string(x), .string(y)): return x == y
+        case let (.int(x), .int(y)): return x == y
+        case let (.bool(x), .bool(y)): return x == y
+        case (.null, .null): return true
+        default: return false
+        }
+    }
+
+    struct Limits {
+        var maxBytes = 16 * 1024
+        var maxDepth = 8
+        var maxString = 200
+        var maxMembers = 64
+    }
+    struct Failure: Error { let issue: ThemeIssue }
+
+    /// Đọc BYTES (UTF-8 chặt, không BOM). Cỡ kiểm TRƯỚC khi giải mã.
+    static func parse(_ data: Data, limits: Limits = Limits()) -> Result<StrictJSON, ThemeIssue> {
+        guard data.count <= limits.maxBytes else { return .failure(ThemeIssue(code: .tooLarge)) }
+        if data.starts(with: [0xEF, 0xBB, 0xBF]) { return .failure(ThemeIssue(code: .encoding, path: "BOM")) }
+        guard let s = String(data: data, encoding: .utf8) else { return .failure(ThemeIssue(code: .encoding)) }
+        return parseText(s, limits: limits)
+    }
+
+    /// Đọc CHUỖI (clipboard / App Group). Cỡ = số byte UTF-8, kiểm trước khi duyệt.
+    static func parse(_ s: String, limits: Limits = Limits()) -> Result<StrictJSON, ThemeIssue> {
+        guard s.utf8.count <= limits.maxBytes else { return .failure(ThemeIssue(code: .tooLarge)) }
+        if s.unicodeScalars.first == "\u{FEFF}" { return .failure(ThemeIssue(code: .encoding, path: "BOM")) }
+        return parseText(s, limits: limits)
+    }
+
+    private static func parseText(_ s: String, limits: Limits) -> Result<StrictJSON, ThemeIssue> {
+        var p = Parser(scalars: Array(s.unicodeScalars), limits: limits)
+        do {
+            p.ws()
+            let v = try p.value(depth: 1)
+            p.ws()
+            guard p.i == p.s.count else { throw Failure(issue: ThemeIssue(code: .syntax, path: String(p.i))) }
+            return .success(v)
+        } catch let f as Failure {
+            return .failure(f.issue)
+        } catch {
+            return .failure(ThemeIssue(code: .syntax))
+        }
+    }
+
+    private struct Parser {
+        let s: [Unicode.Scalar]
+        let limits: Limits
+        var i = 0
+        init(scalars: [Unicode.Scalar], limits: Limits) { s = scalars; self.limits = limits }
+
+        func fail(_ c: ThemeIssue.Code, _ path: String = "") -> Failure { Failure(issue: ThemeIssue(code: c, path: path)) }
+        var syntax: Failure { fail(.syntax, String(i)) }
+        func peek() -> Unicode.Scalar? { i < s.count ? s[i] : nil }
+
+        mutating func ws() {
+            while let c = peek(), c == " " || c == "\t" || c == "\n" || c == "\r" { i += 1 }
+        }
+        mutating func expect(_ c: Unicode.Scalar) throws {
+            guard peek() == c else { throw syntax }
+            i += 1
+        }
+
+        /// `depth` = số object/array đang mở bao quanh (chỉ đếm vùng chứa; vượt ⇒ lỗi trước khi đệ quy
+        /// tiếp — không tràn ngăn xếp).
+        mutating func value(depth: Int) throws -> StrictJSON {
+            guard let c = peek() else { throw syntax }
+            if c == "{" || c == "[" { guard depth <= limits.maxDepth else { throw fail(.depth) } }
+            switch c {
+            case "{": return try object(depth: depth)
+            case "[": return try array(depth: depth)
+            case "\"": return .string(try string())
+            case "t": try literal("true"); return .bool(true)
+            case "f": try literal("false"); return .bool(false)
+            case "n": try literal("null"); return .null
+            case "-", "0"..."9": return .int(try number())
+            default: throw syntax
+            }
+        }
+
+        mutating func literal(_ w: String) throws {
+            for ch in w.unicodeScalars { try expect(ch) }
+        }
+
+        mutating func number() throws -> Int {
+            let start = i
+            var neg = false
+            if peek() == "-" { neg = true; i += 1 }
+            var digits = 0, v = 0
+            let first = i
+            while let c = peek(), ("0"..."9").contains(c) {
+                digits += 1
+                guard digits <= 9 else { throw fail(.badNumber, String(start)) }
+                v = v * 10 + Int(c.value - 48)
+                i += 1
+            }
+            guard digits > 0 else { throw syntax }
+            if digits > 1, s[first] == "0" { throw syntax }       // số 0 đứng đầu
+            if let c = peek(), c == "." || c == "e" || c == "E" { throw fail(.badNumber, String(start)) }
+            return neg ? -v : v
+        }
+
+        mutating func hex4() throws -> UInt32 {
+            var v: UInt32 = 0
+            for _ in 0..<4 {
+                guard let c = peek(), let d = Self.hexDigit(c) else { throw syntax }
+                v = v << 4 | d
+                i += 1
+            }
+            return v
+        }
+        static func hexDigit(_ c: Unicode.Scalar) -> UInt32? {
+            switch c {
+            case "0"..."9": return c.value - 48
+            case "a"..."f": return c.value - 87
+            case "A"..."F": return c.value - 55
+            default: return nil
+            }
+        }
+
+        mutating func string() throws -> String {
+            try expect("\"")
+            var out = String.UnicodeScalarView()
+            var n = 0
+            while true {
+                guard let c = peek() else { throw syntax }
+                i += 1
+                var scalar: Unicode.Scalar
+                if c == "\"" { break }
+                if c == "\\" {
+                    guard let e = peek() else { throw syntax }
+                    i += 1
+                    switch e {
+                    case "\"": scalar = "\""
+                    case "\\": scalar = "\\"
+                    case "/": scalar = "/"
+                    case "b", "f", "n", "r", "t": throw fail(.controlChar)
+                    case "u":
+                        let u = try hex4()
+                        if (0xD800...0xDBFF).contains(u) {
+                            guard peek() == "\\" else { throw fail(.encoding) }
+                            i += 1
+                            guard peek() == "u" else { throw fail(.encoding) }
+                            i += 1
+                            let lo = try hex4()
+                            guard (0xDC00...0xDFFF).contains(lo),
+                                  let sc = Unicode.Scalar(0x10000 + ((u - 0xD800) << 10) + (lo - 0xDC00)) else { throw fail(.encoding) }
+                            scalar = sc
+                        } else {
+                            guard let sc = Unicode.Scalar(u) else { throw fail(.encoding) }   // nửa sau lẻ
+                            scalar = sc
+                        }
+                    default: throw syntax
+                    }
+                } else {
+                    scalar = c
+                }
+                if scalar.value < 0x20 || scalar.value == 0x7F { throw fail(.controlChar) }
+                n += 1
+                guard n <= limits.maxString else { throw fail(.tooLong, String(i)) }
+                out.append(scalar)
+            }
+            return String(out)
+        }
+
+        mutating func object(depth: Int) throws -> StrictJSON {
+            try expect("{")
+            var members: [(String, StrictJSON)] = []
+            var seen = Set<String>()
+            ws()
+            if peek() == "}" { i += 1; return .object([]) }
+            while true {
+                ws()
+                guard peek() == "\"" else { throw syntax }
+                let k = try string()
+                guard seen.insert(k).inserted else { throw fail(.duplicateKey, k) }
+                ws()
+                try expect(":")
+                ws()
+                members.append((k, try value(depth: depth + 1)))
+                guard members.count <= limits.maxMembers else { throw fail(.tooLarge) }
+                ws()
+                if peek() == "," { i += 1; continue }
+                try expect("}")
+                return .object(members)
+            }
+        }
+
+        mutating func array(depth: Int) throws -> StrictJSON {
+            try expect("[")
+            var items: [StrictJSON] = []
+            ws()
+            if peek() == "]" { i += 1; return .array([]) }
+            while true {
+                ws()
+                items.append(try value(depth: depth + 1))
+                guard items.count <= limits.maxMembers else { throw fail(.tooLarge) }
+                ws()
+                if peek() == "," { i += 1; continue }
+                try expect("]")
+                return .array(items)
+            }
+        }
+    }
+
+    /// Chuỗi CHUẨN: khoá sắp xếp, không khoảng trắng; chỉ escape `"` và `\` (ký tự điều khiển đã bị
+    /// từ chối lúc đọc). Android viết y hệt ⇒ so sánh / đồng bộ theo chuỗi.
+    var canonical: String {
+        var out = ""
+        write(&out)
+        return out
+    }
+    private func write(_ o: inout String) {
+        switch self {
+        case .object(let m):
+            o += "{"
+            for (n, (k, v)) in m.sorted(by: { $0.0 < $1.0 }).enumerated() {
+                if n > 0 { o += "," }
+                Self.str(k, &o); o += ":"; v.write(&o)
+            }
+            o += "}"
+        case .array(let a):
+            o += "["
+            for (n, v) in a.enumerated() { if n > 0 { o += "," }; v.write(&o) }
+            o += "]"
+        case .string(let s): Self.str(s, &o)
+        case .int(let v): o += String(v)
+        case .bool(let b): o += b ? "true" : "false"
+        case .null: o += "null"
+        }
+    }
+    /// Bản dễ đọc (thụt 2, khoá sắp xếp) — "Chép JSON" và trình sửa.
+    var pretty: String {
+        var out = ""
+        writePretty(&out, 0)
+        return out
+    }
+    private func writePretty(_ o: inout String, _ depth: Int) {
+        let pad = String(repeating: "  ", count: depth + 1), end = String(repeating: "  ", count: depth)
+        switch self {
+        case .object(let m) where !m.isEmpty:
+            o += "{\n"
+            for (n, (k, v)) in m.sorted(by: { $0.0 < $1.0 }).enumerated() {
+                if n > 0 { o += ",\n" }
+                o += pad; Self.str(k, &o); o += ": "; v.writePretty(&o, depth + 1)
+            }
+            o += "\n" + end + "}"
+        case .array(let a) where !a.isEmpty:
+            o += "[\n"
+            for (n, v) in a.enumerated() { if n > 0 { o += ",\n" }; o += pad; v.writePretty(&o, depth + 1) }
+            o += "\n" + end + "]"
+        default: write(&o)
+        }
+    }
+    private static func str(_ s: String, _ o: inout String) {
+        o += "\""
+        for c in s.unicodeScalars {
+            switch c {
+            case "\"": o += "\\\""
+            case "\\": o += "\\\\"
+            default:
+                if c.value < 0x20 { o += String(format: "\\u%04x", c.value) } else { o.unicodeScalars.append(c) }
+            }
+        }
+        o += "\""
+    }
+}
+
+// MARK: - Màu
+
+enum ThemeColorCode {
+    /// "#RRGGBB" (đục) hoặc "#AARRGGBB" → ARGB; sai ⇒ nil.
+    static func parse(_ s: String) -> UInt32? {
+        let u = Array(s.utf8)
+        guard (u.count == 7 || u.count == 9), u.first == UInt8(ascii: "#") else { return nil }
+        var v: UInt32 = 0
+        for b in u.dropFirst() {
+            guard let d = StrictJSONHex.digit(b) else { return nil }
+            v = v << 4 | d
+        }
+        return u.count == 7 ? (0xFF00_0000 | v) : v
+    }
+    /// Đục ⇒ "#RRGGBB", có alpha ⇒ "#AARRGGBB" — chữ hoa.
+    static func format(_ v: UInt32) -> String {
+        v >> 24 == 0xFF ? String(format: "#%06X", v & 0xFFFFFF) : String(format: "#%08X", v)
+    }
+    static func rgba(_ v: UInt32) -> RGBA { RGBA(hex: v & 0xFFFFFF, alpha: Double(v >> 24) / 255) }
+    /// RGBA → ARGB (alpha cắt cụt như Android withAlpha, có dung sai làm tròn).
+    static func argb(_ c: RGBA) -> UInt32 {
+        func ch(_ x: Double) -> UInt32 { UInt32(max(0, min(255, (x * 255).rounded()))) }
+        let a = UInt32(max(0, min(255, (c.a * 255 + 1e-6).rounded(.down))))
+        return a << 24 | ch(c.r) << 16 | ch(c.g) << 8 | ch(c.b)
+    }
+}
+
+private enum StrictJSONHex {
+    static func digit(_ b: UInt8) -> UInt32? {
+        switch b {
+        case 48...57: return UInt32(b - 48)
+        case 97...102: return UInt32(b - 87)
+        case 65...70: return UInt32(b - 55)
+        default: return nil
+        }
+    }
+}
+
+// MARK: - Mô hình
+
+struct ThemeDeco: Equatable {
+    /// nil = "none" (không hoạ tiết — dùng để bỏ hoạ tiết theme có sẵn).
+    var motif: KeyboardDecoration.Motif?
+    var color: UInt32 = 0
+    /// Mật độ % (bước ngang = stepX × 100 / density), kẹp 50…200.
+    var density = 100
+    static let densityRange = 50...200
+}
+
+/// Màu một chế độ (sáng / tối). Theme đầy đủ bắt buộc key / special / ink / accent; bản vá (KeyStyle)
+/// mọi trường tuỳ chọn. bg nil = nền trong suốt / theo hệ thống.
+struct ThemeSlots: Equatable {
+    var bg: UInt32?, key: UInt32?, special: UInt32?, ink: UInt32?, accent: UInt32?
+    var accentInk: UInt32?, border: UInt32?, fn: UInt32?, fnInk: UInt32?, balloon: UInt32?, trail: UInt32?
+    var deco: ThemeDeco?
+
+    var isEmpty: Bool { self == ThemeSlots() }
+    static let colorKeys = ["accent", "accentInk", "balloon", "bg", "border", "fn", "fnInk", "ink", "key", "special", "trail"]
+    static let requiredKeys = ["key", "special", "ink", "accent"]
+
+    subscript(color k: String) -> UInt32? {
+        get {
+            switch k {
+            case "bg": return bg
+            case "key": return key
+            case "special": return special
+            case "ink": return ink
+            case "accent": return accent
+            case "accentInk": return accentInk
+            case "border": return border
+            case "fn": return fn
+            case "fnInk": return fnInk
+            case "balloon": return balloon
+            case "trail": return trail
+            default: return nil
+            }
+        }
+        set {
+            switch k {
+            case "bg": bg = newValue
+            case "key": key = newValue
+            case "special": special = newValue
+            case "ink": ink = newValue
+            case "accent": accent = newValue
+            case "accentInk": accentInk = newValue
+            case "border": border = newValue
+            case "fn": fn = newValue
+            case "fnInk": fnInk = newValue
+            case "balloon": balloon = newValue
+            case "trail": trail = newValue
+            default: break
+            }
+        }
+    }
+
+    /// Đè `patch` lên (trường có trong patch thắng).
+    func merged(with patch: ThemeSlots) -> ThemeSlots {
+        var o = self
+        for k in Self.colorKeys where patch[color: k] != nil { o[color: k] = patch[color: k] }
+        if let d = patch.deco { o.deco = d }
+        return o
+    }
+
+    /// Bản vá biến `base` thành `self` (trường khác nhau). Bỏ trường tuỳ chọn (viền, hoạ tiết, phím chức
+    /// năng) = vá bằng giá trị tương đương (viền trong suốt, motif "none", fn = key, fnInk = ink).
+    /// Bỏ nền (bg) của theme có nền không biểu diễn được ⇒ giữ nền (trả cờ `lostBg`).
+    func patch(from base: ThemeSlots) -> (patch: ThemeSlots, lostBg: Bool) {
+        var p = ThemeSlots()
+        var lostBg = false
+        for k in Self.colorKeys {
+            let mine = self[color: k], theirs = base[color: k]
+            guard mine != theirs else { continue }
+            if let mine { p[color: k] = mine; continue }
+            switch k {
+            case "border": p.border = 0
+            case "fn": p.fn = key ?? base.key
+            case "fnInk": p.fnInk = ink ?? base.ink
+            case "bg": lostBg = true
+            default: break   // accentInk / balloon / trail bỏ = tự tính lại; base có ⇒ giữ base (chấp nhận)
+            }
+        }
+        if deco != base.deco { p.deco = deco ?? ThemeDeco(motif: nil) }
+        return (p, lostBg)
+    }
+}
+
+struct ThemeSpec: Equatable {
+    static let version = 1
+    static let maxName = 40
+    var id: String?
+    var nameVi: String
+    var nameEn: String?
+    var light: ThemeSlots
+    /// nil = "same" (giống sáng).
+    var dark: ThemeSlots?
+    var corner: Int?
+    var fontScale: Int?
+    var font: KeyLabelFont?
+    var weight: KeyLabelWeight?
+
+    func slots(dark d: Bool) -> ThemeSlots { d ? (dark ?? light) : light }
+    var name: String { L10n.isEnglish ? (nameEn ?? nameVi) : nameVi }
+
+    /// Kiểu chữ / bo góc mặc định của theme (KeyStyle không đặt thì dùng cái này).
+    var typography: KeyStyle {
+        KeyStyle(corner: corner, fontScale: fontScale, font: font ?? .standard, weight: weight ?? .regular)
+    }
+}
+
+// MARK: - Đọc / kiểm
+
+enum ThemeSpecParser {
+    struct Outcome {
+        var spec: ThemeSpec?
+        var issues: [ThemeIssue]
+        var errors: [ThemeIssue] { issues.filter(\.isError) }
+    }
+
+    private struct Ctx {
+        var issues: [ThemeIssue] = []
+        mutating func err(_ c: ThemeIssue.Code, _ p: String) { issues.append(ThemeIssue(code: c, path: p)) }
+        var failed: Bool { issues.contains(where: \.isError) }
+    }
+
+    static let rootKeys: Set<String> = ["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight"]
+    static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco"])
+
+    /// Đọc theme ĐẦY ĐỦ từ văn bản (dán / trình sửa). Cảnh báo tương phản kèm theo.
+    static func parse(_ text: String) -> Outcome {
+        switch StrictJSON.parse(text) {
+        case .failure(let e): return Outcome(spec: nil, issues: [e])
+        case .success(let j): return spec(from: j, contrast: true)
+        }
+    }
+    static func parse(_ data: Data) -> Outcome {
+        switch StrictJSON.parse(data) {
+        case .failure(let e): return Outcome(spec: nil, issues: [e])
+        case .success(let j): return spec(from: j, contrast: true)
+        }
+    }
+
+    static func spec(from j: StrictJSON, contrast: Bool) -> Outcome {
+        var c = Ctx()
+        guard case .object(let m) = j else { return Outcome(spec: nil, issues: [ThemeIssue(code: .wrongType, path: "$")]) }
+        let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
+        for (k, _) in m where !rootKeys.contains(k) { c.err(.unknownKey, k) }
+        switch d["v"] {
+        case .int(1)?: break
+        case nil: c.err(.missingKey, "v")
+        case .int?: c.err(.badVersion, "v")
+        default: c.err(.wrongType, "v")
+        }
+        var id: String?
+        if let v = d["id"] {
+            if case .string(let s) = v {
+                if KeyStyleStore.validId(s) { id = s } else { c.err(.badValue, "id") }
+            } else { c.err(.wrongType, "id") }
+        }
+        var vi = "", en: String?
+        switch d["name"] {
+        case nil: c.err(.missingKey, "name")
+        case .object(let nm)?:
+            for (k, _) in nm where k != "vi" && k != "en" { c.err(.unknownKey, "name." + k) }
+            let nd = Dictionary(nm, uniquingKeysWith: { a, _ in a })
+            vi = name(nd["vi"], "name.vi", required: true, &c) ?? ""
+            en = name(nd["en"], "name.en", required: false, &c)
+        default: c.err(.wrongType, "name")
+        }
+        var light = ThemeSlots()
+        switch d["light"] {
+        case nil: c.err(.missingKey, "light")
+        case let v?: light = slots(v, "light", full: true, &c)
+        }
+        var dark: ThemeSlots?
+        switch d["dark"] {
+        case nil, .string("same")?: dark = nil
+        case .string?: c.err(.badValue, "dark")
+        case let v?: dark = slots(v, "dark", full: true, &c)
+        }
+        var typo = KeyStyle()
+        typography(d, &typo, &c)
+        guard !c.failed else { return Outcome(spec: nil, issues: c.issues) }
+        var spec = ThemeSpec(id: id, nameVi: vi, nameEn: en, light: light, dark: dark == light ? nil : dark)
+        spec.corner = typo.corner
+        spec.fontScale = typo.fontScale
+        if d["font"] != nil { spec.font = typo.font }
+        if d["weight"] != nil { spec.weight = typo.weight }
+        if contrast { c.issues += contrastIssues(spec) }
+        return Outcome(spec: c.failed ? nil : spec, issues: c.issues)
+    }
+
+    private static func name(_ v: StrictJSON?, _ p: String, required: Bool, _ c: inout Ctx) -> String? {
+        guard let v else { if required { c.err(.missingKey, p) }; return nil }
+        guard case .string(let s) = v else { c.err(.wrongType, p); return nil }
+        let t = s.trimmingCharacters(in: .whitespaces)
+        if t.isEmpty { c.err(.badValue, p); return nil }
+        if t.unicodeScalars.count > ThemeSpec.maxName { c.err(.tooLong, p); return nil }
+        return t
+    }
+
+    /// Màu một chế độ. `full` = theme đầy đủ (bắt buộc key/special/ink/accent).
+    static func slots(_ v: StrictJSON, _ p: String, full: Bool) -> (ThemeSlots, [ThemeIssue]) {
+        var c = Ctx()
+        let s = slots(v, p, full: full, &c)
+        return (s, c.issues)
+    }
+
+    private static func slots(_ v: StrictJSON, _ p: String, full: Bool, _ c: inout Ctx) -> ThemeSlots {
+        guard case .object(let m) = v else { c.err(.wrongType, p); return ThemeSlots() }
+        var s = ThemeSlots()
+        for (k, val) in m {
+            let path = p + "." + k
+            if k == "deco" { s.deco = deco(val, path, &c); continue }
+            guard slotKeys.contains(k) else { c.err(.unknownKey, path); continue }
+            guard case .string(let str) = val else { c.err(.wrongType, path); continue }
+            guard let col = ThemeColorCode.parse(str) else { c.err(.badColor, path); continue }
+            s[color: k] = col
+        }
+        if full {
+            for k in ThemeSlots.requiredKeys where s[color: k] == nil && !m.contains(where: { $0.0 == k }) {
+                c.err(.missingKey, p + "." + k)
+            }
+        }
+        return s
+    }
+
+    private static func deco(_ v: StrictJSON, _ p: String, _ c: inout Ctx) -> ThemeDeco? {
+        guard case .object(let m) = v else { c.err(.wrongType, p); return nil }
+        let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
+        for (k, _) in m where !["motif", "color", "density"].contains(k) { c.err(.unknownKey, p + "." + k) }
+        var out = ThemeDeco(motif: nil)
+        switch d["motif"] {
+        case .string("none")?: out.motif = nil
+        case .string(let s)?:
+            guard let mo = KeyboardDecoration.Motif(rawValue: s) else { c.err(.badValue, p + ".motif"); return nil }
+            out.motif = mo
+        case nil: c.err(.missingKey, p + ".motif"); return nil
+        default: c.err(.wrongType, p + ".motif"); return nil
+        }
+        if out.motif != nil {
+            switch d["color"] {
+            case .string(let s)?:
+                guard let col = ThemeColorCode.parse(s) else { c.err(.badColor, p + ".color"); return nil }
+                out.color = col
+            case nil: c.err(.missingKey, p + ".color"); return nil
+            default: c.err(.wrongType, p + ".color"); return nil
+            }
+        } else if d["color"] != nil {
+            if case .string(let s)? = d["color"], ThemeColorCode.parse(s) != nil {} else { c.err(.badColor, p + ".color") }
+        }
+        switch d["density"] {
+        case nil: break
+        case .int(let n)?:
+            let r = ThemeDeco.densityRange
+            if !r.contains(n) { c.err(.clamped, p + ".density") }
+            out.density = min(max(n, r.lowerBound), r.upperBound)
+        default: c.err(.wrongType, p + ".density")
+        }
+        return out
+    }
+
+    /// corner / fontScale / font / weight (theme đầy đủ lẫn bản vá).
+    private static func typography(_ d: [String: StrictJSON], _ s: inout KeyStyle, _ c: inout Ctx) {
+        switch d["corner"] {
+        case nil: break
+        case .int(let n)?:
+            if !(0...100).contains(n) { c.err(.clamped, "corner") }
+            s.corner = min(max(n, 0), 100)
+        default: c.err(.wrongType, "corner")
+        }
+        switch d["fontScale"] {
+        case nil: break
+        case .int(let n)?:
+            if !(KeyStyle.fontScaleMin...KeyStyle.fontScaleMax).contains(n) { c.err(.clamped, "fontScale") }
+            s.fontScale = min(max(n, KeyStyle.fontScaleMin), KeyStyle.fontScaleMax)
+        default: c.err(.wrongType, "fontScale")
+        }
+        switch d["font"] {
+        case nil: break
+        case .string(let f)?: if let v = KeyLabelFont(rawValue: f) { s.font = v } else { c.err(.badValue, "font") }
+        default: c.err(.wrongType, "font")
+        }
+        switch d["weight"] {
+        case nil: break
+        case .string(let f)?: if let v = KeyLabelWeight(rawValue: f) { s.weight = v } else { c.err(.badValue, "weight") }
+        default: c.err(.wrongType, "weight")
+        }
+    }
+
+    /// Bản vá theo theme (KeyStyleStore): label / fill / accent (#RRGGBB, áp cả sáng lẫn tối), kiểu chữ,
+    /// light / dark (vá từng chế độ). Khoá lạ / sai ⇒ nil (cả mục bị bỏ).
+    static func override(from j: StrictJSON) -> KeyStyle? {
+        guard case .object(let m) = j else { return nil }
+        var c = Ctx()
+        let allowed: Set<String> = ["label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark"]
+        for (k, _) in m where !allowed.contains(k) { c.err(.unknownKey, k) }
+        let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
+        var st = KeyStyle()
+        func rgb(_ k: String) -> UInt32? {
+            guard let v = d[k] else { return nil }
+            guard case .string(let s) = v, let col = ThemeColorCode.parse(s), col >> 24 == 0xFF else {
+                c.err(.badColor, k); return nil
+            }
+            return col & 0xFFFFFF
+        }
+        st.labelColor = rgb("label")
+        st.fillColor = rgb("fill")
+        st.accentColor = rgb("accent")
+        typography(d, &st, &c)
+        if let l = d["light"] { st.light = slots(l, "light", full: false, &c) }
+        if let k = d["dark"] { st.dark = slots(k, "dark", full: false, &c) }
+        return c.failed ? nil : st
+    }
+
+    // MARK: tương phản
+
+    /// Chữ/phím, chữ/phím chức năng, chữ/nhấn mỗi chế độ: < 2:1 lỗi, < 3:1 cảnh báo.
+    static func contrastIssues(_ spec: ThemeSpec) -> [ThemeIssue] {
+        var out: [ThemeIssue] = []
+        let modes: [(String, Bool)] = spec.dark == nil ? [("light", false)] : [("light", false), ("dark", true)]
+        for (name, dark) in modes {
+            let p = spec.palette(dark: dark)
+            let sys = KeyboardTransparency.systemBackdrop(dark: dark)
+            let behind = p.background?.over(sys) ?? sys
+            let pairs: [(String, RGBA, RGBA)] = [
+                ("ink/key", p.ink, p.keyFill.over(behind)),
+                ("fnInk/fn", p.fnInk, p.fnFill.over(behind)),
+                ("accentInk/accent", p.accentInk, p.accent.over(behind)),
+            ]
+            for (what, fg, bg) in pairs {
+                let r = RGBA.contrast(fg.over(bg), bg)
+                if r < 2 { out.append(ThemeIssue(code: .contrastTooLow, path: "\(name) \(what)")) }
+                else if r < 3 { out.append(ThemeIssue(code: .lowContrast, path: "\(name) \(what)")) }
+            }
+        }
+        return out
+    }
+}
+
+// MARK: - Ghi chuẩn
+
+extension ThemeSpec {
+    var json: StrictJSON {
+        var m: [(String, StrictJSON)] = [("v", .int(Self.version))]
+        if let id { m.append(("id", .string(id))) }
+        var nm: [(String, StrictJSON)] = [("vi", .string(nameVi))]
+        if let nameEn { nm.append(("en", .string(nameEn))) }
+        m.append(("name", .object(nm)))
+        m.append(("light", Self.json(light)))
+        m.append(("dark", dark.map(Self.json) ?? .string("same")))
+        if let corner { m.append(("corner", .int(corner))) }
+        if let fontScale { m.append(("fontScale", .int(fontScale))) }
+        if let font { m.append(("font", .string(font.rawValue))) }
+        if let weight { m.append(("weight", .string(weight.rawValue))) }
+        return .object(m)
+    }
+    /// Chuỗi chuẩn (trùng Android từng ký tự).
+    var canonical: String { json.canonical }
+
+    static func json(_ s: ThemeSlots) -> StrictJSON {
+        var m: [(String, StrictJSON)] = []
+        for k in ThemeSlots.colorKeys { if let v = s[color: k] { m.append((k, .string(ThemeColorCode.format(v)))) } }
+        if let d = s.deco {
+            var dm: [(String, StrictJSON)] = [("motif", .string(d.motif?.rawValue ?? "none"))]
+            if d.motif != nil {
+                dm.append(("color", .string(ThemeColorCode.format(d.color))))
+                if d.density != 100 { dm.append(("density", .int(d.density))) }
+            }
+            m.append(("deco", .object(dm)))
+        }
+        return .object(m)
+    }
+}
+
+// MARK: - Spec ⇄ palette
+
+extension ThemeSpec {
+    /// Chữ trên nền nhấn tự tính: trắng nếu đọc được (≥ 3:1), không thì đen/trắng tương phản hơn.
+    static func autoAccentInk(_ accent: RGBA) -> RGBA { KeyboardTransparency.readable(.white, on: accent) }
+
+    /// Palette một chế độ (trước ảnh nền / độ trong suốt). Mặc định: balloon = key, trail = nhấn 60%,
+    /// accentInk tự tính. Thiếu màu bắt buộc (không xảy ra với spec đã kiểm) ⇒ xám an toàn.
+    func palette(dark d: Bool) -> KeyboardPalette {
+        Self.palette(slots(dark: d))
+    }
+
+    static func palette(_ s: ThemeSlots) -> KeyboardPalette {
+        let c = ThemeColorCode.rgba
+        let key = c(s.key ?? 0xFFFF_FFFF), ink = c(s.ink ?? 0xFF00_0000)
+        let accent = c(s.accent ?? 0xFF00_7AFF)
+        var p = KeyboardPalette(background: s.bg.map(c), keyFill: key, specialFill: c(s.special ?? 0xFFCCCCCC), ink: ink,
+                                trail: s.trail.map(c) ?? accent.alpha(0.6), barInk: ink,
+                                balloon: s.balloon.map(c) ?? key, accent: accent,
+                                accentInk: s.accentInk.map(c) ?? autoAccentInk(accent),
+                                keyBorder: s.border.map(c), isDark: ink.luminance > 0.5)
+        p.functionFill = s.fn.map(c)
+        p.functionInk = s.fnInk.map(c)
+        if let dc = s.deco, let m = dc.motif {
+            p.decoration = KeyboardDecoration(motif: m, color: c(dc.color), density: dc.density)
+        }
+        return p
+    }
+
+    /// Ngược lại: palette (đã giải) → màu một chế độ; bỏ trường bằng mặc định tự tính.
+    static func slots(from p: KeyboardPalette) -> ThemeSlots {
+        let a = ThemeColorCode.argb
+        var s = ThemeSlots()
+        s.bg = p.background.map(a)
+        s.key = a(p.keyFill); s.special = a(p.specialFill); s.ink = a(p.ink); s.accent = a(p.accent)
+        if a(p.accentInk) != a(autoAccentInk(p.accent)) { s.accentInk = a(p.accentInk) }
+        s.border = p.keyBorder.map(a)
+        s.fn = p.functionFill.map(a)
+        s.fnInk = p.functionInk.map(a)
+        if a(p.balloon) != a(p.keyFill) { s.balloon = a(p.balloon) }
+        if a(p.trail) != a(p.accent.alpha(0.6)) { s.trail = a(p.trail) }
+        if let d = p.decoration { s.deco = ThemeDeco(motif: d.motif, color: a(d.color), density: d.density) }
+        return s
+    }
+
+    /// Theme đầy đủ từ palette sáng/tối đã giải + kiểu chữ ("Chép JSON").
+    static func export(id: String?, nameVi: String, nameEn: String?, light: KeyboardPalette, dark: KeyboardPalette,
+                       style: KeyStyle) -> ThemeSpec {
+        let l = slots(from: light), d = slots(from: dark)
+        var s = ThemeSpec(id: id, nameVi: nameVi, nameEn: nameEn, light: l, dark: d == l ? nil : d)
+        s.corner = style.corner
+        s.fontScale = style.fontScale
+        if style.font != .standard { s.font = style.font }
+        if style.weight != .regular { s.weight = style.weight }
+        return s
+    }
+}
+
+// MARK: - Theme có sẵn
+
+enum BuiltinThemes {
+    /// Đọc MỘT lần (static let — lười, an toàn luồng). Hỏng (không xảy ra — test khoá) ⇒ rỗng ⇒ theme
+    /// đó vẽ như Hệ thống.
+    static let specs: [String: ThemeSpec] = parse(BuiltinThemesData.json)
+
+    static func parse(_ text: String) -> [String: ThemeSpec] {
+        var lim = StrictJSON.Limits()
+        lim.maxBytes = 64 * 1024
+        guard case .success(.object(let root)) = StrictJSON.parse(text, limits: lim),
+              let themes = root.first(where: { $0.0 == "themes" })?.1, case .array(let arr) = themes else { return [:] }
+        var out: [String: ThemeSpec] = [:]
+        for t in arr {
+            if let s = ThemeSpecParser.spec(from: t, contrast: false).spec, let id = s.id { out[id] = s }
+        }
+        return out
+    }
+}
+
+// MARK: - Theme tự tạo
+
+/// Theme tự tạo / dán (Plus): App Group `customThemes` = chuỗi chuẩn {"id": spec, …} (sao lưu + iCloud);
+/// `activeThemeSpec` = chuỗi chuẩn của theme ĐANG CHỌN (chỉ bàn phím đọc — không phải đọc cả kho).
+enum CustomThemeStore {
+    static let key = "customThemes"
+    static let activeKey = "activeThemeSpec"
+    static let maxThemes = 50
+    static let maxBytes = 16 * 1024
+    /// Cả kho: 50 theme × ≤ 16 KB.
+    static let maxStoreBytes = maxThemes * maxBytes + 1024
+
+    static func parse(_ raw: String?) -> [String: ThemeSpec] {
+        guard let raw, !raw.isEmpty else { return [:] }
+        var lim = StrictJSON.Limits()
+        lim.maxBytes = maxStoreBytes
+        lim.maxDepth = 9
+        guard case .success(.object(let m)) = StrictJSON.parse(raw, limits: lim) else { return [:] }
+        var out: [String: ThemeSpec] = [:]
+        for (id, v) in m where KeyStyleStore.validId(id) && KeyboardTheme(rawValue: id) == nil && out.count < maxThemes {
+            guard var s = ThemeSpecParser.spec(from: v, contrast: false).spec else { continue }
+            s.id = id
+            out[id] = s
+        }
+        return out
+    }
+
+    static func serialize(_ m: [String: ThemeSpec]) -> String {
+        StrictJSON.object(m.map { id, s in var t = s; t.id = id; return (id, t.json) }).canonical
+    }
+
+    static func normalize(_ raw: String) -> String? {
+        var lim = StrictJSON.Limits()
+        lim.maxBytes = maxStoreBytes
+        lim.maxDepth = 9
+        guard case .success(.object) = StrictJSON.parse(raw, limits: lim) else { return nil }
+        return serialize(parse(raw))
+    }
+
+    static func load(_ d: UserDefaults?) -> [String: ThemeSpec] { parse(d?.string(forKey: key)) }
+    static func save(_ m: [String: ThemeSpec], _ d: UserDefaults?) { d?.set(serialize(m), forKey: key) }
+
+    /// Id không trùng theme có sẵn / theme tự tạo: giữ `want` nếu trống, không thì "-2", "-3"… (Android y hệt).
+    static func uniqueId(_ want: String?, taken: Set<String>) -> String {
+        let base = String((want.flatMap { KeyStyleStore.validId($0) ? $0 : nil } ?? "custom").prefix(36))
+        func free(_ s: String) -> Bool { !taken.contains(s) && KeyboardTheme(rawValue: s) == nil }
+        if free(base) { return base }
+        var n = 2
+        while !free("\(base)-\(n)") { n += 1 }
+        return "\(base)-\(n)"
+    }
+
+    /// Thêm theme (dán). Đủ 50 ⇒ lỗi `tooMany`.
+    static func add(_ spec: ThemeSpec, to m: [String: ThemeSpec]) -> Result<(id: String, store: [String: ThemeSpec]), ThemeIssue> {
+        guard m.count < maxThemes else { return .failure(ThemeIssue(code: .tooMany, path: String(maxThemes))) }
+        let id = uniqueId(spec.id, taken: Set(m.keys))
+        var s = spec
+        s.id = id
+        var out = m
+        out[id] = s
+        return .success((id, out))
+    }
+
+    /// Bàn phím: theme đang chọn (đã chuẩn hoá bởi app) — kiểm lại; hỏng ⇒ nil (về Hệ thống). Nhớ chuỗi
+    /// lần trước ⇒ cùng chuỗi không đọc lại.
+    static func active(_ raw: String?, id: String) -> ThemeSpec? {
+        guard let raw else { return nil }
+        if let c = cache, c.raw == raw { return c.spec?.id == id ? c.spec : nil }
+        var spec = ThemeSpecParser.parse(raw).spec
+        if spec?.id == nil { spec?.id = id }
+        cache = (raw, spec)
+        #if DEBUG
+        if spec == nil { NSLog("VTTheme: activeThemeSpec hỏng — về Hệ thống") }
+        #endif
+        return spec?.id == id ? spec : nil
+    }
+    nonisolated(unsafe) private static var cache: (raw: String, spec: ThemeSpec?)?
+}
+
+// MARK: - Hành động thẻ "Chọn giao diện" (thuần — app gọi, test được; Android ThemeJsonActions y hệt)
+
+enum ThemeEditTarget: Equatable {
+    case builtin(KeyboardTheme)
+    case custom(String)
+}
+
+enum ThemeJSONActions {
+    /// "Chép JSON" (miễn phí): theme thực thấy gồm tuỳ chỉnh, dạng dễ đọc.
+    static func copyText(_ t: ThemeEditTarget, settings s: ThemeSettings, store: [String: ThemeSpec]) -> String? {
+        switch t {
+        case .builtin(let b): return s.exportSpec(for: b).json.pretty
+        case .custom(let id): return store[id].map { s.exportSpec(custom: $0).json.pretty }
+        }
+    }
+
+    /// Lưu văn bản đã sửa. Theme có sẵn ⇒ bản vá (KeyStyle) so với theme gốc; theme tự tạo ⇒ thay đặc tả
+    /// (giữ id), bỏ tuỳ chỉnh rời. Lỗi ⇒ không đổi gì, trả danh sách lỗi. Thành công ⇒ cảnh báo (nếu có).
+    static func save(_ text: String, to t: ThemeEditTarget, settings s: inout ThemeSettings,
+                     store: inout [String: ThemeSpec]) -> (ok: Bool, issues: [ThemeIssue]) {
+        let out = ThemeSpecParser.parse(text)
+        guard let spec = out.spec else { return (false, out.issues) }
+        var warnings = out.issues
+        switch t {
+        case .builtin(let b):
+            let bl = b.spec?.light ?? ThemeSpec.slots(from: b.palette(systemDark: false))
+            let bd = b.spec?.slots(dark: true) ?? ThemeSpec.slots(from: b.palette(systemDark: true))
+            let r = KeyStyle.fromEdited(spec, baseLight: bl, baseDark: bd)
+            var st = r.style
+            // Kiểu chữ trùng mặc định theme ⇒ không lưu (theme đổi mặc định về sau vẫn theo).
+            if st.corner == b.spec?.corner { st.corner = nil }
+            if st.fontScale == b.spec?.fontScale { st.fontScale = nil }
+            if let f = b.spec?.font, st.font == f { st.font = .standard }
+            if let w = b.spec?.weight, st.weight == w { st.weight = .regular }
+            s.setStyle(st, for: b)
+            if r.lostBg { warnings.append(ThemeIssue(code: .bgKept, path: "bg")) }
+        case .custom(let id):
+            guard store[id] != nil else { return (false, [ThemeIssue(code: .missingKey, path: id)]) }
+            var n = spec
+            n.id = id
+            store[id] = n
+            s.keyStyles[id] = nil
+            if s.custom?.id == id { s.custom = n }
+        }
+        return (true, warnings)
+    }
+
+    /// "Đặt lại mặc định" (theme có sẵn): bỏ mọi tuỳ chỉnh của theme đó.
+    static func reset(_ b: KeyboardTheme, settings s: inout ThemeSettings) { s.setStyle(KeyStyle(), for: b) }
+
+    /// "Xoá" (theme tự tạo): bỏ khỏi kho + tuỳ chỉnh; đang chọn ⇒ về Hệ thống.
+    static func delete(_ id: String, settings s: inout ThemeSettings, store: inout [String: ThemeSpec]) {
+        store[id] = nil
+        s.keyStyles[id] = nil
+        if s.custom?.id == id { s.select(.system) }
+    }
+
+    /// "Dán giao diện": CHỈ khi người dùng bấm (không tự đọc clipboard). Trả kết quả kiểm để XEM TRƯỚC;
+    /// `commitPaste` mới ghi.
+    static func preview(_ text: String) -> ThemeSpecParser.Outcome { ThemeSpecParser.parse(text) }
+
+    static func commitPaste(_ spec: ThemeSpec, store: inout [String: ThemeSpec]) -> Result<String, ThemeIssue> {
+        switch CustomThemeStore.add(spec, to: store) {
+        case .failure(let e): return .failure(e)
+        case .success(let r): store = r.store; return .success(r.id)
+        }
+    }
+}
+
+extension ThemeSettings {
+    /// App (khởi động): theme tự tạo đang chọn đồng bộ lại với kho (sửa / xoá trên máy khác qua iCloud);
+    /// mất khỏi kho ⇒ về Hệ thống. Không chọn theme tự tạo ⇒ không làm gì.
+    static func refreshCustom(_ d: UserDefaults?) {
+        guard let d, let raw = d.string(forKey: themeKey), KeyboardTheme(rawValue: raw) == nil,
+              raw != KeyStyleStore.removedPureWhite else { return }
+        var s = load(d)
+        let fresh = CustomThemeStore.load(d)[raw]
+        guard fresh != s.custom else { return }
+        if let fresh { s.select(custom: fresh) } else { s.select(.system) }
+        s.save(d)
+    }
+}

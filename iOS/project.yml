@@ -30,6 +30,8 @@ targets:
       - App
       # Token theme + pipeline ảnh nền dùng chung với extension.
       - Keyboard/KeyboardTheme.swift
+      - Keyboard/ThemeSpec.swift
+      - Keyboard/BuiltinThemes.swift
       - Keyboard/Wallpaper.swift
       - Keyboard/Shortcuts.swift
       - Shared
@@ -167,6 +169,8 @@ targets:
       - Keyboard/EmojiSearchBar.swift
       - Keyboard/AppearancePolicy.swift
       - Keyboard/KeyboardTheme.swift
+      - Keyboard/ThemeSpec.swift
+      - Keyboard/BuiltinThemes.swift
       - Keyboard/Wallpaper.swift
       - Keyboard/KeyCommitQueue.swift
       - Keyboard/AdjacentKeyFixer.swift

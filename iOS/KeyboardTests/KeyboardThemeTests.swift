@@ -741,10 +741,14 @@ final class KeyStyleTests: XCTestCase {
         XCTAssertEqual(KeyStyleStore.parse(KeyStyleStore.serialize(["mint": Self.custom]))["mint"], Self.custom)
         XCTAssertEqual(KeyStyleStore.serialize(["mint": KeyStyle()]), "{}")   // mặc định ⇒ không có mục
         // Rác / ngoài phạm vi (cùng luật khoá cũ).
-        let g = KeyStyleStore.parse(#"{"mint":{"label":16777216,"fill":-7,"corner":300,"fontScale":30,"font":"comic-sans","weight":"ultra","accent":true}}"#)["mint"]
-        XCTAssertNil(g?.labelColor); XCTAssertNil(g?.fillColor); XCTAssertNil(g?.accentColor)
+        // Đọc CHẶT: mục có màu sai / khoá lạ / giá trị lạ bị bỏ CẢ MỤC (theme vẽ như chưa chỉnh).
+        XCTAssertNil(KeyStyleStore.parse(##"{"mint":{"label":"#1000000"}}"##)["mint"])
+        XCTAssertNil(KeyStyleStore.parse(##"{"mint":{"label":"#FF2D55","what":1}}"##)["mint"])
+        XCTAssertNil(KeyStyleStore.parse(#"{"mint":{"font":"comic-sans"}}"#)["mint"])
+        XCTAssertNil(KeyStyleStore.parse(#"{"mint":{"accent":true}}"#)["mint"])
+        // Số ngoài khoảng ⇒ kẹp.
+        let g = KeyStyleStore.parse(#"{"mint":{"corner":300,"fontScale":30}}"#)["mint"]
         XCTAssertEqual(g?.corner, 100); XCTAssertEqual(g?.fontScale, 80)
-        XCTAssertEqual(g?.font, .standard); XCTAssertEqual(g?.weight, .regular)
         XCTAssertEqual(KeyStyleStore.parse(#"{"mint":{"fontScale":999}}"#)["mint"]?.fontScale, 150)
         XCTAssertEqual(KeyStyleStore.parse("not json"), [:])
         XCTAssertEqual(KeyStyleStore.parse(#"{"bad id!":{"corner":5},"ok":[1]}"#), [:])
@@ -880,8 +884,7 @@ final class ThemeSetTests: XCTestCase {
     /// AARRGGBB, alpha cắt cụt (Android withAlpha cũng cắt cụt).
     private static func hex(_ c: RGBA?) -> String {
         guard let c else { return "-" }
-        func b(_ v: Double) -> Int { Int((v * 255).rounded()) }
-        return String(format: "%02X%02X%02X%02X", Int(c.a * 255), b(c.r), b(c.g), b(c.b))
+        return String(format: "%08X", ThemeColorCode.argb(c))
     }
 
     func testPalettesMatchSharedFixtureWithAndroid() throws {

@@ -26,6 +26,8 @@ enum BackupSettingKind: Equatable {
     case string(String, [String])
     /// Chuỗi JSON "Tuỳ chỉnh nâng cao" theo theme (KeyStyleStore) — chuẩn hoá khi đọc/ghi, mặc định "{}".
     case styleMap
+    /// Chuỗi JSON kho theme tự tạo (CustomThemeStore) — chuẩn hoá (kiểm chặt) khi đọc/ghi, mặc định "{}".
+    case themeMap
 }
 
 /// Setting được sao lưu/đồng bộ. KHÔNG gồm: debugTouchLog, trạng thái nội bộ
@@ -91,6 +93,8 @@ enum BackupSettings {
         // khoá + định dạng với Android. Khoá chung cũ (keyLabelColor…) không còn sao lưu: file cũ có
         // chúng ⇒ bỏ qua như key lạ. "rounded" (chỉ iOS) vẫn giữ khi qua Android.
         Spec(key: KeyStyleStore.key, kind: .styleMap),
+        // "Giao diện JSON" — theme tự tạo / dán (Plus): {"id": đặc tả, …}, cùng định dạng Android.
+        Spec(key: CustomThemeStore.key, kind: .themeMap),
         // "Nền theo hệ thống" từng theme có nền riêng (chỉ iOS dùng) — systemBackdropOled…
         Spec(key: "systemBackdropOled", kind: .bool(false)),
         Spec(key: "systemBackdropContrast", kind: .bool(false)),
@@ -130,6 +134,7 @@ enum SettingValue: Equatable {
         case .int(_, let r): return Int(s).map { .int(min(max($0, r.lowerBound), r.upperBound)) }
         case .string(_, let allowed): return allowed.contains(s) ? .string(s) : nil
         case .styleMap: return KeyStyleStore.normalize(s).map(SettingValue.string)
+        case .themeMap: return CustomThemeStore.normalize(s).map(SettingValue.string)
         }
     }
 }
@@ -243,6 +248,8 @@ enum BackupCodec {
                     if let t = raw as? String, allowed.contains(t) { out[k] = .string(t) }
                 case .styleMap:
                     if let t = raw as? String, let n = KeyStyleStore.normalize(t) { out[k] = .string(n) }
+                case .themeMap:
+                    if let t = raw as? String, let n = CustomThemeStore.normalize(t) { out[k] = .string(n) }
                 }
             }
             p.settings = out

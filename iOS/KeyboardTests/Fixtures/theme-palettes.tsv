@@ -1,5 +1,6 @@
 # Bảng màu theme bàn phím dùng chung iOS + Android (KeyboardThemeTests hai bên đọc file này).
-# Sửa màu ở iOS/Keyboard/KeyboardTheme.swift + android/keyboard/.../KeyboardTheme.kt + file này.
+# Nguồn màu: themes/builtin-themes.json (Scripts/gen-builtin-themes.py nhúng vào iOS + Android); file này là
+# mốc hồi quy: JSON đọc ra phải đúng bảng dưới (đổi màu theme = sửa JSON + bảng này).
 # Màu: AARRGGBB (alpha cắt cụt a*255); '-' = không có. fn = nền phím chức năng + phím cách riêng;
 # fnInk = chữ/icon phím chức năng riêng; deco = hoạ tiết nền motif:màu. Hệ thống / Kính khác nhau theo
 # nền tảng (backdrop) nên không có ở đây.

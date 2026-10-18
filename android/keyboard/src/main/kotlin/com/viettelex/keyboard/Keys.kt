@@ -171,6 +171,10 @@ object Keys {
      * đổi): String JSON chuẩn [KeyStyleStore], cùng khoá + định dạng iOS.
      */
     const val KEY_STYLES = "keyStyles"
+    /** "Giao diện JSON": kho theme tự tạo — String JSON chuẩn {"id": đặc tả, …} ([CustomThemeStore]), cùng iOS. */
+    const val CUSTOM_THEMES = "customThemes"
+    /** Đặc tả chuẩn của theme tự tạo ĐANG CHỌN ("" = không) — IME chỉ đọc khoá này. Không sao lưu. */
+    const val ACTIVE_THEME_SPEC = "activeThemeSpec"
     /** Lịch sử clipboard (mặc định TẮT — riêng tư). */
     const val CLIPBOARD_HISTORY = "clipboardHistory"
     /** "Giữ lịch sử clipboard": "1h" (mặc định) / "24h" / "7d" — [ClipboardTTL]. */

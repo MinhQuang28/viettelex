@@ -1,0 +1,841 @@
+package com.viettelex.keyboard
+
+import java.nio.ByteBuffer
+import java.nio.charset.CharacterCodingException
+import java.nio.charset.CodingErrorAction
+
+/*
+ * "Giao diện JSON": đặc tả theme dạng JSON có phiên bản — theme có sẵn (themes/builtin-themes.json),
+ * theme tự tạo (dán / sửa), tuỳ chỉnh theo theme (KeyStyle.light/.dark). Y HỆT iOS
+ * (iOS/Keyboard/ThemeSpec.swift): cùng luật đọc, cùng chuỗi chuẩn, cùng bảng lỗi — fixture chung
+ * iOS/KeyboardTests/Fixtures/theme-json-cases.txt chạy ở cả hai bên.
+ *
+ * AN TOÀN (dữ liệu không tin được — dán từ clipboard): kiểm cỡ TRƯỚC khi đọc (16 KB), UTF-8 chặt (không
+ * BOM), độ sâu ≤ 8, chuỗi ≤ 200 ký tự (tên ≤ 40), chỉ số nguyên ≤ 9 chữ số, khoá lặp / khoá lạ / null /
+ * sai kiểu / ký tự điều khiển ⇒ LỖI (không bao giờ ném ra ngoài, không `!!`). Không URL / ảnh / mã: chỉ
+ * màu, số và vài giá trị liệt kê. IME chỉ đọc bản app đã chuẩn hoá và vẫn kiểm lại — hỏng thì về
+ * theme có sẵn / Hệ thống.
+ */
+
+// ---- Lỗi / cảnh báo
+
+data class ThemeIssue(val code: Code, val path: String = "") {
+    enum class Code {
+        tooLarge, encoding, syntax, depth, duplicateKey, unknownKey, missingKey, wrongType,
+        badColor, badNumber, tooLong, badValue, badVersion, controlChar, clamped, lowContrast,
+        contrastTooLow, tooMany, bgKept
+    }
+    val isError: Boolean get() = code != Code.clamped && code != Code.lowContrast && code != Code.bgKept
+
+    /** Thông báo theo ngôn ngữ giao diện (L10n) — tiếng Việt + tiếng Anh. */
+    val message: String get() = when (code) {
+        Code.tooLarge -> tr("Quá lớn (tối đa 16 KB).")
+        Code.encoding -> tr("Không phải văn bản UTF-8 hợp lệ.")
+        Code.syntax -> tr("JSON sai cú pháp (ký tự %s).", path)
+        Code.depth -> tr("JSON lồng quá sâu.")
+        Code.duplicateKey -> tr("Khoá bị lặp: %s", path)
+        Code.unknownKey -> tr("Khoá không hỗ trợ: %s", path)
+        Code.missingKey -> tr("Thiếu khoá bắt buộc: %s", path)
+        Code.wrongType -> tr("Sai kiểu giá trị: %s", path)
+        Code.badColor -> tr("Màu không hợp lệ ở %s (dùng #RRGGBB hoặc #AARRGGBB).", path)
+        Code.badNumber -> tr("Số không hợp lệ ở %s (chỉ số nguyên).", path)
+        Code.tooLong -> tr("Chuỗi quá dài ở %s.", path)
+        Code.badValue -> tr("Giá trị không hỗ trợ ở %s.", path)
+        Code.badVersion -> tr("Phiên bản định dạng không hỗ trợ (cần \"v\": 1).")
+        Code.controlChar -> tr("Có ký tự điều khiển trong chuỗi.")
+        Code.clamped -> tr("Đã đưa %s về khoảng cho phép.", path)
+        Code.lowContrast -> tr("Tương phản thấp ở %s (nên ≥ 3:1).", path)
+        Code.contrastTooLow -> tr("Tương phản quá thấp ở %s (tối thiểu 2:1).", path)
+        Code.tooMany -> tr("Đã đủ %s giao diện tự tạo — xoá bớt trước khi dán.", path)
+        Code.bgKept -> tr("Giao diện có sẵn này luôn có nền — đã giữ nền gốc.")
+    }
+}
+
+// ---- JSON chặt
+
+/** Cây JSON đã đọc (object giữ thứ tự). Số: chỉ nguyên. */
+sealed class SJ {
+    data class Obj(val m: List<Pair<String, SJ>>) : SJ() {
+        operator fun get(k: String): SJ? = m.firstOrNull { it.first == k }?.second
+    }
+    data class Arr(val a: List<SJ>) : SJ()
+    data class Str(val s: String) : SJ()
+    data class Num(val v: Int) : SJ()
+    data class Bool(val b: Boolean) : SJ()
+    object Null : SJ()
+
+    /** Chuỗi CHUẨN: khoá sắp xếp, không khoảng trắng; chỉ escape `"` và `\` — trùng iOS từng ký tự. */
+    val canonical: String get() = StringBuilder().also { write(it) }.toString()
+    private fun write(o: StringBuilder) {
+        when (this) {
+            is Obj -> { o.append('{'); m.sortedBy { it.first }.forEachIndexed { i, (k, v) -> if (i > 0) o.append(','); str(k, o); o.append(':'); v.write(o) }; o.append('}') }
+            is Arr -> { o.append('['); a.forEachIndexed { i, v -> if (i > 0) o.append(','); v.write(o) }; o.append(']') }
+            is Str -> str(s, o)
+            is Num -> o.append(v)
+            is Bool -> o.append(if (b) "true" else "false")
+            Null -> o.append("null")
+        }
+    }
+
+    /** Bản dễ đọc (thụt 2, khoá sắp xếp) — "Chép JSON" và trình sửa. */
+    val pretty: String get() = StringBuilder().also { writePretty(it, 0) }.toString()
+    private fun writePretty(o: StringBuilder, depth: Int) {
+        val pad = "  ".repeat(depth + 1); val end = "  ".repeat(depth)
+        when {
+            this is Obj && m.isNotEmpty() -> {
+                o.append("{\n")
+                m.sortedBy { it.first }.forEachIndexed { i, (k, v) -> if (i > 0) o.append(",\n"); o.append(pad); str(k, o); o.append(": "); v.writePretty(o, depth + 1) }
+                o.append('\n').append(end).append('}')
+            }
+            this is Arr && a.isNotEmpty() -> {
+                o.append("[\n")
+                a.forEachIndexed { i, v -> if (i > 0) o.append(",\n"); o.append(pad); v.writePretty(o, depth + 1) }
+                o.append('\n').append(end).append(']')
+            }
+            else -> write(o)
+        }
+    }
+
+    companion object {
+        private fun str(s: String, o: StringBuilder) {
+            o.append('"')
+            for (c in s) when {
+                c == '"' -> o.append("\\\"")
+                c == '\\' -> o.append("\\\\")
+                c.code < 0x20 -> o.append(String.format("\\u%04x", c.code))
+                else -> o.append(c)
+            }
+            o.append('"')
+        }
+    }
+}
+
+object StrictJson {
+    data class Limits(val maxBytes: Int = 16 * 1024, val maxDepth: Int = 8, val maxString: Int = 200, val maxMembers: Int = 64)
+
+    sealed class Result {
+        data class Ok(val v: SJ) : Result()
+        data class Err(val issue: ThemeIssue) : Result()
+    }
+
+    private class Fail(val issue: ThemeIssue) : Exception() {
+        override fun fillInStackTrace(): Throwable = this   // rẻ — chỉ dùng điều khiển luồng
+    }
+
+    /** Đọc BYTES (UTF-8 chặt, không BOM). Cỡ kiểm TRƯỚC khi giải mã. */
+    fun parse(bytes: ByteArray, limits: Limits = Limits()): Result {
+        if (bytes.size > limits.maxBytes) return Result.Err(ThemeIssue(ThemeIssue.Code.tooLarge))
+        if (bytes.size >= 3 && bytes[0] == 0xEF.toByte() && bytes[1] == 0xBB.toByte() && bytes[2] == 0xBF.toByte())
+            return Result.Err(ThemeIssue(ThemeIssue.Code.encoding, "BOM"))
+        val text = try {
+            Charsets.UTF_8.newDecoder().onMalformedInput(CodingErrorAction.REPORT)
+                .onUnmappableCharacter(CodingErrorAction.REPORT).decode(ByteBuffer.wrap(bytes)).toString()
+        } catch (e: CharacterCodingException) { return Result.Err(ThemeIssue(ThemeIssue.Code.encoding)) }
+        return parseText(text, limits)
+    }
+
+    /** Đọc CHUỖI (clipboard / prefs). Cỡ = số byte UTF-8, kiểm trước khi duyệt. */
+    fun parse(s: String, limits: Limits = Limits()): Result {
+        if (utf8Size(s, limits.maxBytes + 1) > limits.maxBytes) return Result.Err(ThemeIssue(ThemeIssue.Code.tooLarge))
+        if (s.isNotEmpty() && s[0] == '﻿') return Result.Err(ThemeIssue(ThemeIssue.Code.encoding, "BOM"))
+        return parseText(s, limits)
+    }
+
+    /** Số byte UTF-8 (dừng sớm khi vượt `cap`) — không cấp phát mảng byte. */
+    private fun utf8Size(s: String, cap: Int): Int {
+        var n = 0; var i = 0
+        while (i < s.length && n <= cap) {
+            val c = s[i]
+            n += when {
+                c.code < 0x80 -> 1
+                c.code < 0x800 -> 2
+                Character.isHighSurrogate(c) && i + 1 < s.length && Character.isLowSurrogate(s[i + 1]) -> { i++; 4 }
+                else -> 3
+            }
+            i++
+        }
+        return n
+    }
+
+    private fun parseText(text: String, limits: Limits): Result {
+        // Mảng code point; nửa surrogate lẻ (chuỗi Java hỏng) ⇒ lỗi mã hoá.
+        val cps = IntArray(text.length)
+        var n = 0; var i = 0
+        while (i < text.length) {
+            val c = text[i]
+            if (Character.isHighSurrogate(c)) {
+                if (i + 1 >= text.length || !Character.isLowSurrogate(text[i + 1])) return Result.Err(ThemeIssue(ThemeIssue.Code.encoding))
+                cps[n++] = Character.toCodePoint(c, text[i + 1]); i += 2; continue
+            }
+            if (Character.isLowSurrogate(c)) return Result.Err(ThemeIssue(ThemeIssue.Code.encoding))
+            cps[n++] = c.code; i++
+        }
+        val p = P(cps, n, limits)
+        return try {
+            p.ws()
+            val v = p.value(1)
+            p.ws()
+            if (p.i != n) throw Fail(ThemeIssue(ThemeIssue.Code.syntax, p.i.toString()))
+            Result.Ok(v)
+        } catch (f: Fail) {
+            Result.Err(f.issue)
+        } catch (e: RuntimeException) {
+            Result.Err(ThemeIssue(ThemeIssue.Code.syntax))
+        }
+    }
+
+    private class P(val s: IntArray, val n: Int, val limits: Limits) {
+        var i = 0
+        fun fail(c: ThemeIssue.Code, path: String = "") = Fail(ThemeIssue(c, path))
+        val syntax: Fail get() = fail(ThemeIssue.Code.syntax, i.toString())
+        fun peek(): Int = if (i < n) s[i] else -1
+        fun ws() { while (i < n && (s[i] == ' '.code || s[i] == '\t'.code || s[i] == '\n'.code || s[i] == '\r'.code)) i++ }
+        fun expect(c: Char) { if (peek() != c.code) throw syntax; i++ }
+
+        /** `depth` = số object/array đang mở (vượt ⇒ lỗi trước khi đệ quy tiếp — không tràn ngăn xếp). */
+        fun value(depth: Int): SJ {
+            val c = peek()
+            if (c == -1) throw syntax
+            if ((c == '{'.code || c == '['.code) && depth > limits.maxDepth) throw fail(ThemeIssue.Code.depth)
+            return when (c) {
+                '{'.code -> obj(depth)
+                '['.code -> arr(depth)
+                '"'.code -> SJ.Str(string())
+                't'.code -> { literal("true"); SJ.Bool(true) }
+                'f'.code -> { literal("false"); SJ.Bool(false) }
+                'n'.code -> { literal("null"); SJ.Null }
+                '-'.code, in '0'.code..'9'.code -> SJ.Num(number())
+                else -> throw syntax
+            }
+        }
+
+        fun literal(w: String) { for (ch in w) expect(ch) }
+
+        fun number(): Int {
+            val start = i
+            var neg = false
+            if (peek() == '-'.code) { neg = true; i++ }
+            var digits = 0; var v = 0
+            val first = i
+            while (peek() in '0'.code..'9'.code) {
+                digits++
+                if (digits > 9) throw fail(ThemeIssue.Code.badNumber, start.toString())
+                v = v * 10 + (s[i] - '0'.code)
+                i++
+            }
+            if (digits == 0) throw syntax
+            if (digits > 1 && s[first] == '0'.code) throw syntax
+            val c = peek()
+            if (c == '.'.code || c == 'e'.code || c == 'E'.code) throw fail(ThemeIssue.Code.badNumber, start.toString())
+            return if (neg) -v else v
+        }
+
+        fun hex4(): Int {
+            var v = 0
+            repeat(4) {
+                val d = hexDigit(peek())
+                if (d < 0) throw syntax
+                v = (v shl 4) or d; i++
+            }
+            return v
+        }
+        fun hexDigit(c: Int): Int = when (c) {
+            in '0'.code..'9'.code -> c - '0'.code
+            in 'a'.code..'f'.code -> c - 'a'.code + 10
+            in 'A'.code..'F'.code -> c - 'A'.code + 10
+            else -> -1
+        }
+
+        fun string(): String {
+            expect('"')
+            val out = StringBuilder()
+            var count = 0
+            while (true) {
+                val c = peek()
+                if (c == -1) throw syntax
+                i++
+                if (c == '"'.code) break
+                val cp: Int = if (c == '\\'.code) {
+                    val e = peek()
+                    if (e == -1) throw syntax
+                    i++
+                    when (e) {
+                        '"'.code -> '"'.code
+                        '\\'.code -> '\\'.code
+                        '/'.code -> '/'.code
+                        'b'.code, 'f'.code, 'n'.code, 'r'.code, 't'.code -> throw fail(ThemeIssue.Code.controlChar)
+                        'u'.code -> {
+                            val u = hex4()
+                            if (u in 0xD800..0xDBFF) {
+                                if (peek() != '\\'.code) throw fail(ThemeIssue.Code.encoding)
+                                i++
+                                if (peek() != 'u'.code) throw fail(ThemeIssue.Code.encoding)
+                                i++
+                                val lo = hex4()
+                                if (lo !in 0xDC00..0xDFFF) throw fail(ThemeIssue.Code.encoding)
+                                0x10000 + ((u - 0xD800) shl 10) + (lo - 0xDC00)
+                            } else if (u in 0xDC00..0xDFFF) throw fail(ThemeIssue.Code.encoding)
+                            else u
+                        }
+                        else -> throw syntax
+                    }
+                } else c
+                if (cp < 0x20 || cp == 0x7F) throw fail(ThemeIssue.Code.controlChar)
+                count++
+                if (count > limits.maxString) throw fail(ThemeIssue.Code.tooLong, i.toString())
+                out.appendCodePoint(cp)
+            }
+            return out.toString()
+        }
+
+        fun obj(depth: Int): SJ {
+            expect('{')
+            val members = ArrayList<Pair<String, SJ>>()
+            val seen = HashSet<String>()
+            ws()
+            if (peek() == '}'.code) { i++; return SJ.Obj(members) }
+            while (true) {
+                ws()
+                if (peek() != '"'.code) throw syntax
+                val k = string()
+                if (!seen.add(k)) throw fail(ThemeIssue.Code.duplicateKey, k)
+                ws(); expect(':'); ws()
+                members.add(k to value(depth + 1))
+                if (members.size > limits.maxMembers) throw fail(ThemeIssue.Code.tooLarge)
+                ws()
+                if (peek() == ','.code) { i++; continue }
+                expect('}')
+                return SJ.Obj(members)
+            }
+        }
+
+        fun arr(depth: Int): SJ {
+            expect('[')
+            val items = ArrayList<SJ>()
+            ws()
+            if (peek() == ']'.code) { i++; return SJ.Arr(items) }
+            while (true) {
+                ws()
+                items.add(value(depth + 1))
+                if (items.size > limits.maxMembers) throw fail(ThemeIssue.Code.tooLarge)
+                ws()
+                if (peek() == ','.code) { i++; continue }
+                expect(']')
+                return SJ.Arr(items)
+            }
+        }
+    }
+}
+
+// ---- Màu
+
+object ThemeColorCode {
+    /** "#RRGGBB" (đục) hoặc "#AARRGGBB" → ARGB; sai ⇒ null. */
+    fun parse(s: String): Int? {
+        if ((s.length != 7 && s.length != 9) || s[0] != '#') return null
+        var v = 0L
+        for (k in 1 until s.length) {
+            val c = s[k]
+            val d = when (c) { in '0'..'9' -> c - '0'; in 'a'..'f' -> c - 'a' + 10; in 'A'..'F' -> c - 'A' + 10; else -> return null }
+            v = (v shl 4) or d.toLong()
+        }
+        return if (s.length == 7) (0xFF000000L or v).toInt() else v.toInt()
+    }
+    /** Đục ⇒ "#RRGGBB", có alpha ⇒ "#AARRGGBB" — chữ hoa. */
+    fun format(v: Int): String = if ((v ushr 24) == 0xFF) String.format("#%06X", v and 0xFFFFFF) else String.format("#%08X", v)
+}
+
+// ---- Mô hình
+
+/** motif null = "none" (bỏ hoạ tiết). density % (bước ngang = STEP_X × 100 / density), kẹp 50…200. */
+data class ThemeDeco(val motif: String?, val color: Int = 0, val density: Int = 100) {
+    companion object { val DENSITY_RANGE = 50..200; val MOTIFS = setOf(ThemeDecoration.HEARTS, ThemeDecoration.FLOWERS) }
+}
+
+/** Màu một chế độ (ARGB). Theme đầy đủ bắt buộc key / special / ink / accent; bản vá mọi trường tuỳ chọn. bg null = theo hệ thống. */
+data class ThemeSlots(
+    val bg: Int? = null, val key: Int? = null, val special: Int? = null, val ink: Int? = null, val accent: Int? = null,
+    val accentInk: Int? = null, val border: Int? = null, val fn: Int? = null, val fnInk: Int? = null,
+    val balloon: Int? = null, val trail: Int? = null, val deco: ThemeDeco? = null,
+) {
+    val isEmpty: Boolean get() = this == ThemeSlots()
+
+    fun color(k: String): Int? = when (k) {
+        "bg" -> bg; "key" -> key; "special" -> special; "ink" -> ink; "accent" -> accent; "accentInk" -> accentInk
+        "border" -> border; "fn" -> fn; "fnInk" -> fnInk; "balloon" -> balloon; "trail" -> trail; else -> null
+    }
+    fun with(k: String, v: Int?): ThemeSlots = when (k) {
+        "bg" -> copy(bg = v); "key" -> copy(key = v); "special" -> copy(special = v); "ink" -> copy(ink = v)
+        "accent" -> copy(accent = v); "accentInk" -> copy(accentInk = v); "border" -> copy(border = v); "fn" -> copy(fn = v)
+        "fnInk" -> copy(fnInk = v); "balloon" -> copy(balloon = v); "trail" -> copy(trail = v); else -> this
+    }
+
+    /** Bản vá biến `base` thành `this` — y hệt iOS ThemeSlots.patch(from:). */
+    fun patchFrom(base: ThemeSlots): Pair<ThemeSlots, Boolean> {
+        var p = ThemeSlots()
+        var lostBg = false
+        for (k in COLOR_KEYS) {
+            val mine = color(k); val theirs = base.color(k)
+            if (mine == theirs) continue
+            if (mine != null) { p = p.with(k, mine); continue }
+            when (k) {
+                "border" -> p = p.copy(border = 0)
+                "fn" -> p = p.copy(fn = key ?: base.key)
+                "fnInk" -> p = p.copy(fnInk = ink ?: base.ink)
+                "bg" -> lostBg = true
+            }
+        }
+        if (deco != base.deco) p = p.copy(deco = deco ?: ThemeDeco(null))
+        return p to lostBg
+    }
+
+    companion object {
+        val COLOR_KEYS = listOf("accent", "accentInk", "balloon", "bg", "border", "fn", "fnInk", "ink", "key", "special", "trail")
+        val REQUIRED = listOf("key", "special", "ink", "accent")
+    }
+}
+
+data class ThemeSpec(
+    val id: String? = null,
+    val nameVi: String,
+    val nameEn: String? = null,
+    val light: ThemeSlots,
+    /** null = "same". */
+    val dark: ThemeSlots? = null,
+    val corner: Int? = null,
+    val fontScale: Int? = null,
+    val font: KeyLabelFont? = null,
+    val weight: KeyLabelWeight? = null,
+) {
+    fun slots(dark: Boolean): ThemeSlots = if (dark) (this.dark ?: light) else light
+    val name: String get() = if (L10n.isEnglish) (nameEn ?: nameVi) else nameVi
+    /** Kiểu chữ / bo góc mặc định của theme. */
+    val typography: KeyStyle get() = KeyStyle(corner = corner, fontScale = fontScale, font = font ?: KeyLabelFont.DEFAULT,
+        weight = weight ?: KeyLabelWeight.REGULAR)
+
+    fun palette(dark: Boolean): ThemePalette = palette(slots(dark), dark)
+
+    val json: SJ get() {
+        val m = ArrayList<Pair<String, SJ>>()
+        m.add("v" to SJ.Num(VERSION))
+        id?.let { m.add("id" to SJ.Str(it)) }
+        val nm = ArrayList<Pair<String, SJ>>()
+        nm.add("vi" to SJ.Str(nameVi))
+        nameEn?.let { nm.add("en" to SJ.Str(it)) }
+        m.add("name" to SJ.Obj(nm))
+        m.add("light" to json(light))
+        m.add("dark" to (dark?.let { json(it) } ?: SJ.Str("same")))
+        corner?.let { m.add("corner" to SJ.Num(it)) }
+        fontScale?.let { m.add("fontScale" to SJ.Num(it)) }
+        font?.let { m.add("font" to SJ.Str(it.id)) }
+        weight?.let { m.add("weight" to SJ.Str(it.id)) }
+        return SJ.Obj(m)
+    }
+    /** Chuỗi chuẩn (trùng iOS từng ký tự). */
+    val canonical: String get() = json.canonical
+
+    companion object {
+        const val VERSION = 1
+        const val MAX_NAME = 40
+
+        fun json(s: ThemeSlots): SJ {
+            val m = ArrayList<Pair<String, SJ>>()
+            for (k in ThemeSlots.COLOR_KEYS) s.color(k)?.let { m.add(k to SJ.Str(ThemeColorCode.format(it))) }
+            s.deco?.let { d ->
+                val dm = ArrayList<Pair<String, SJ>>()
+                dm.add("motif" to SJ.Str(d.motif ?: "none"))
+                if (d.motif != null) {
+                    dm.add("color" to SJ.Str(ThemeColorCode.format(d.color)))
+                    if (d.density != 100) dm.add("density" to SJ.Num(d.density))
+                }
+                m.add("deco" to SJ.Obj(dm))
+            }
+            return SJ.Obj(m)
+        }
+
+        /** Chữ trên nền nhấn tự tính: trắng nếu đọc được (≥ 3:1), không thì đen/trắng tương phản hơn. */
+        fun autoAccentInk(accent: Int): Int = KeyboardTransparency.readable(ThemeColor.WHITE, accent)
+
+        /** Palette một chế độ — y hệt iOS ThemeSpec.palette (+ popup = balloon, chip = special như theme cũ). */
+        fun palette(s: ThemeSlots, dark: Boolean): ThemePalette {
+            val c = ThemeColor
+            val key = s.key ?: c.WHITE
+            val ink = s.ink ?: c.BLACK
+            val accent = s.accent ?: c.rgb(0x007AFF)
+            val special = s.special ?: c.rgb(0xCCCCCC)
+            val balloon = s.balloon ?: key
+            return ThemePalette(bg = s.bg ?: KeyboardTransparency.systemBackdrop(dark), keyFill = key, specialFill = special,
+                ink = ink, trail = s.trail ?: c.withAlpha(accent, 0.6f), balloon = balloon, popup = balloon, action = accent,
+                actionInk = s.accentInk ?: autoAccentInk(accent), chip = special, keyBorder = s.border,
+                isDark = c.luminance(ink) > 0.5, functionFill = s.fn, functionInk = s.fnInk,
+                decoration = s.deco?.let { d -> d.motif?.let { ThemeDecoration(it, d.color, d.density) } })
+        }
+
+        /** Palette (đã giải) → màu một chế độ; bỏ trường bằng mặc định tự tính. */
+        fun slots(p: ThemePalette): ThemeSlots {
+            val c = ThemeColor
+            return ThemeSlots(bg = p.bg, key = p.keyFill, special = p.specialFill, ink = p.ink, accent = p.action,
+                accentInk = p.actionInk.takeIf { it != autoAccentInk(p.action) }, border = p.keyBorder,
+                fn = p.functionFill, fnInk = p.functionInk, balloon = p.balloon.takeIf { it != p.keyFill },
+                trail = p.trail.takeIf { it != c.withAlpha(p.action, 0.6f) },
+                deco = p.decoration?.let { ThemeDeco(it.motif, it.color, it.density) })
+        }
+
+        /** Theme đầy đủ từ palette sáng/tối đã giải + kiểu chữ ("Chép JSON"). */
+        fun export(id: String?, nameVi: String, nameEn: String?, light: ThemePalette, dark: ThemePalette, style: KeyStyle): ThemeSpec {
+            val l = slots(light); val d = slots(dark)
+            return ThemeSpec(id, nameVi, nameEn, l, if (d == l) null else d, style.corner, style.fontScale,
+                style.font.takeIf { it != KeyLabelFont.DEFAULT }, style.weight.takeIf { it != KeyLabelWeight.REGULAR })
+        }
+    }
+}
+
+// ---- Đọc / kiểm
+
+object ThemeSpecParser {
+    data class Outcome(val spec: ThemeSpec?, val issues: List<ThemeIssue>) {
+        val errors: List<ThemeIssue> get() = issues.filter { it.isError }
+    }
+
+    private class Ctx {
+        val issues = ArrayList<ThemeIssue>()
+        fun err(c: ThemeIssue.Code, p: String) { issues.add(ThemeIssue(c, p)) }
+        val failed: Boolean get() = issues.any { it.isError }
+    }
+
+    private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight")
+    private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco").toSet()
+
+    fun parse(text: String): Outcome = when (val r = StrictJson.parse(text)) {
+        is StrictJson.Result.Err -> Outcome(null, listOf(r.issue))
+        is StrictJson.Result.Ok -> spec(r.v, contrast = true)
+    }
+    fun parse(bytes: ByteArray): Outcome = when (val r = StrictJson.parse(bytes)) {
+        is StrictJson.Result.Err -> Outcome(null, listOf(r.issue))
+        is StrictJson.Result.Ok -> spec(r.v, contrast = true)
+    }
+
+    fun spec(j: SJ, contrast: Boolean): Outcome {
+        if (j !is SJ.Obj) return Outcome(null, listOf(ThemeIssue(ThemeIssue.Code.wrongType, "$")))
+        val c = Ctx()
+        for ((k, _) in j.m) if (k !in ROOT_KEYS) c.err(ThemeIssue.Code.unknownKey, k)
+        when (val v = j["v"]) {
+            null -> c.err(ThemeIssue.Code.missingKey, "v")
+            is SJ.Num -> if (v.v != 1) c.err(ThemeIssue.Code.badVersion, "v")
+            else -> c.err(ThemeIssue.Code.wrongType, "v")
+        }
+        var id: String? = null
+        j["id"]?.let { v ->
+            if (v is SJ.Str) { if (KeyStyleStore.validId(v.s)) id = v.s else c.err(ThemeIssue.Code.badValue, "id") }
+            else c.err(ThemeIssue.Code.wrongType, "id")
+        }
+        var vi = ""; var en: String? = null
+        when (val nm = j["name"]) {
+            null -> c.err(ThemeIssue.Code.missingKey, "name")
+            is SJ.Obj -> {
+                for ((k, _) in nm.m) if (k != "vi" && k != "en") c.err(ThemeIssue.Code.unknownKey, "name.$k")
+                vi = name(nm["vi"], "name.vi", true, c) ?: ""
+                en = name(nm["en"], "name.en", false, c)
+            }
+            else -> c.err(ThemeIssue.Code.wrongType, "name")
+        }
+        var light = ThemeSlots()
+        when (val v = j["light"]) {
+            null -> c.err(ThemeIssue.Code.missingKey, "light")
+            else -> light = slots(v, "light", true, c)
+        }
+        var dark: ThemeSlots? = null
+        when (val v = j["dark"]) {
+            null -> {}
+            is SJ.Str -> if (v.s != "same") c.err(ThemeIssue.Code.badValue, "dark")
+            else -> dark = slots(v, "dark", true, c)
+        }
+        val typo = typography(j, KeyStyle(), c)
+        if (c.failed) return Outcome(null, c.issues)
+        val spec = ThemeSpec(id, vi, en, light, if (dark == light) null else dark, typo.corner, typo.fontScale,
+            if (j["font"] != null) typo.font else null, if (j["weight"] != null) typo.weight else null)
+        if (contrast) c.issues.addAll(contrastIssues(spec))
+        return Outcome(if (c.failed) null else spec, c.issues)
+    }
+
+    private fun name(v: SJ?, p: String, required: Boolean, c: Ctx): String? {
+        if (v == null) { if (required) c.err(ThemeIssue.Code.missingKey, p); return null }
+        if (v !is SJ.Str) { c.err(ThemeIssue.Code.wrongType, p); return null }
+        val t = v.s.trim()
+        if (t.isEmpty()) { c.err(ThemeIssue.Code.badValue, p); return null }
+        if (t.codePointCount(0, t.length) > ThemeSpec.MAX_NAME) { c.err(ThemeIssue.Code.tooLong, p); return null }
+        return t
+    }
+
+    private fun slots(v: SJ, p: String, full: Boolean, c: Ctx): ThemeSlots {
+        if (v !is SJ.Obj) { c.err(ThemeIssue.Code.wrongType, p); return ThemeSlots() }
+        var s = ThemeSlots()
+        for ((k, value) in v.m) {
+            val path = "$p.$k"
+            if (k == "deco") { s = s.copy(deco = deco(value, path, c)); continue }
+            if (k !in SLOT_KEYS) { c.err(ThemeIssue.Code.unknownKey, path); continue }
+            if (value !is SJ.Str) { c.err(ThemeIssue.Code.wrongType, path); continue }
+            val col = ThemeColorCode.parse(value.s)
+            if (col == null) { c.err(ThemeIssue.Code.badColor, path); continue }
+            s = s.with(k, col)
+        }
+        if (full) for (k in ThemeSlots.REQUIRED) if (s.color(k) == null && v[k] == null) c.err(ThemeIssue.Code.missingKey, "$p.$k")
+        return s
+    }
+
+    private fun deco(v: SJ, p: String, c: Ctx): ThemeDeco? {
+        if (v !is SJ.Obj) { c.err(ThemeIssue.Code.wrongType, p); return null }
+        for ((k, _) in v.m) if (k !in setOf("motif", "color", "density")) c.err(ThemeIssue.Code.unknownKey, "$p.$k")
+        var motif: String? = null
+        when (val m = v["motif"]) {
+            null -> { c.err(ThemeIssue.Code.missingKey, "$p.motif"); return null }
+            is SJ.Str -> when {
+                m.s == "none" -> motif = null
+                m.s in ThemeDeco.MOTIFS -> motif = m.s
+                else -> { c.err(ThemeIssue.Code.badValue, "$p.motif"); return null }
+            }
+            else -> { c.err(ThemeIssue.Code.wrongType, "$p.motif"); return null }
+        }
+        var color = 0
+        val cv = v["color"]
+        if (motif != null) {
+            when (cv) {
+                null -> { c.err(ThemeIssue.Code.missingKey, "$p.color"); return null }
+                is SJ.Str -> color = ThemeColorCode.parse(cv.s) ?: run { c.err(ThemeIssue.Code.badColor, "$p.color"); return null }
+                else -> { c.err(ThemeIssue.Code.wrongType, "$p.color"); return null }
+            }
+        } else if (cv != null && (cv !is SJ.Str || ThemeColorCode.parse(cv.s) == null)) c.err(ThemeIssue.Code.badColor, "$p.color")
+        var density = 100
+        when (val dv = v["density"]) {
+            null -> {}
+            is SJ.Num -> {
+                if (dv.v !in ThemeDeco.DENSITY_RANGE) c.err(ThemeIssue.Code.clamped, "$p.density")
+                density = dv.v.coerceIn(ThemeDeco.DENSITY_RANGE)
+            }
+            else -> c.err(ThemeIssue.Code.wrongType, "$p.density")
+        }
+        return ThemeDeco(motif, color, density)
+    }
+
+    private fun typography(d: SJ.Obj, base: KeyStyle, c: Ctx): KeyStyle {
+        var s = base
+        when (val v = d["corner"]) {
+            null -> {}
+            is SJ.Num -> { if (v.v !in 0..100) c.err(ThemeIssue.Code.clamped, "corner"); s = s.copy(corner = v.v.coerceIn(0, 100)) }
+            else -> c.err(ThemeIssue.Code.wrongType, "corner")
+        }
+        when (val v = d["fontScale"]) {
+            null -> {}
+            is SJ.Num -> {
+                if (v.v !in KeyStyle.FONT_SCALE_MIN..KeyStyle.FONT_SCALE_MAX) c.err(ThemeIssue.Code.clamped, "fontScale")
+                s = s.copy(fontScale = v.v.coerceIn(KeyStyle.FONT_SCALE_MIN, KeyStyle.FONT_SCALE_MAX))
+            }
+            else -> c.err(ThemeIssue.Code.wrongType, "fontScale")
+        }
+        when (val v = d["font"]) {
+            null -> {}
+            is SJ.Str -> KeyLabelFont.entries.firstOrNull { it.id == v.s }?.let { s = s.copy(font = it) } ?: c.err(ThemeIssue.Code.badValue, "font")
+            else -> c.err(ThemeIssue.Code.wrongType, "font")
+        }
+        when (val v = d["weight"]) {
+            null -> {}
+            is SJ.Str -> KeyLabelWeight.entries.firstOrNull { it.id == v.s }?.let { s = s.copy(weight = it) } ?: c.err(ThemeIssue.Code.badValue, "weight")
+            else -> c.err(ThemeIssue.Code.wrongType, "weight")
+        }
+        return s
+    }
+
+    /** Bản vá theo theme (KeyStyleStore) — khoá lạ / sai ⇒ null (cả mục bị bỏ). */
+    fun override(j: SJ): KeyStyle? {
+        if (j !is SJ.Obj) return null
+        val c = Ctx()
+        val allowed = setOf("label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark")
+        for ((k, _) in j.m) if (k !in allowed) c.err(ThemeIssue.Code.unknownKey, k)
+        fun rgb(k: String): Int? {
+            val v = j[k] ?: return null
+            val col = (v as? SJ.Str)?.let { ThemeColorCode.parse(it.s) }
+            if (col == null || (col ushr 24) != 0xFF) { c.err(ThemeIssue.Code.badColor, k); return null }
+            return col and 0xFFFFFF
+        }
+        var st = KeyStyle(labelColor = rgb("label"), fillColor = rgb("fill"), accentColor = rgb("accent"))
+        st = typography(j, st, c)
+        j["light"]?.let { st = st.copy(light = slots(it, "light", false, c)) }
+        j["dark"]?.let { st = st.copy(dark = slots(it, "dark", false, c)) }
+        return if (c.failed) null else st
+    }
+
+    /** Chữ/phím, chữ/phím chức năng, chữ/nhấn mỗi chế độ: < 2:1 lỗi, < 3:1 cảnh báo. */
+    fun contrastIssues(spec: ThemeSpec): List<ThemeIssue> {
+        val out = ArrayList<ThemeIssue>()
+        val modes = if (spec.dark == null) listOf("light" to false) else listOf("light" to false, "dark" to true)
+        val c = ThemeColor
+        for ((name, dark) in modes) {
+            val s = spec.slots(dark)
+            val p = spec.palette(dark)
+            val sys = KeyboardTransparency.systemBackdrop(dark)
+            val behind = s.bg?.let { c.over(it, sys) } ?: sys
+            val pairs = listOf(
+                Triple("ink/key", p.ink, c.over(p.keyFill, behind)),
+                Triple("fnInk/fn", p.fnInk, c.over(p.functionFill ?: p.keyFill, behind)),
+                Triple("accentInk/accent", p.actionInk, c.over(p.action, behind)),
+            )
+            for ((what, fg, bg) in pairs) {
+                val r = c.contrast(c.over(fg, bg), bg)
+                if (r < 2) out.add(ThemeIssue(ThemeIssue.Code.contrastTooLow, "$name $what"))
+                else if (r < 3) out.add(ThemeIssue(ThemeIssue.Code.lowContrast, "$name $what"))
+            }
+        }
+        return out
+    }
+}
+
+// ---- Theme có sẵn
+
+object BuiltinThemes {
+    /** Đọc MỘT lần (lazy, an toàn luồng). Hỏng (không xảy ra — test khoá) ⇒ rỗng ⇒ theme vẽ như Hệ thống. */
+    val specs: Map<String, ThemeSpec> by lazy { parse(BuiltinThemesData.JSON) }
+
+    fun parse(text: String): Map<String, ThemeSpec> {
+        val r = StrictJson.parse(text, StrictJson.Limits(maxBytes = 64 * 1024))
+        val root = (r as? StrictJson.Result.Ok)?.v as? SJ.Obj ?: return emptyMap()
+        val arr = root["themes"] as? SJ.Arr ?: return emptyMap()
+        val out = LinkedHashMap<String, ThemeSpec>()
+        for (t in arr.a) {
+            val s = ThemeSpecParser.spec(t, contrast = false).spec ?: continue
+            s.id?.let { out[it] = s }
+        }
+        return out
+    }
+}
+
+// ---- Theme tự tạo
+
+/**
+ * Theme tự tạo / dán (Plus): pref [KEY] = chuỗi chuẩn {"id": spec, …} (sao lưu); [ACTIVE_KEY] = chuỗi chuẩn
+ * của theme ĐANG CHỌN (IME chỉ đọc khoá này — không đọc cả kho). Y hệt iOS CustomThemeStore.
+ */
+object CustomThemeStore {
+    const val KEY = Keys.CUSTOM_THEMES
+    const val ACTIVE_KEY = Keys.ACTIVE_THEME_SPEC
+    const val MAX_THEMES = 50
+    const val MAX_BYTES = 16 * 1024
+    const val MAX_STORE_BYTES = MAX_THEMES * MAX_BYTES + 1024
+    private val LIMITS = StrictJson.Limits(maxBytes = MAX_STORE_BYTES, maxDepth = 9)
+
+    fun parse(raw: String?): Map<String, ThemeSpec> {
+        if (raw.isNullOrEmpty()) return emptyMap()
+        val m = (StrictJson.parse(raw, LIMITS) as? StrictJson.Result.Ok)?.v as? SJ.Obj ?: return emptyMap()
+        val out = LinkedHashMap<String, ThemeSpec>()
+        for ((id, v) in m.m) {
+            if (!KeyStyleStore.validId(id) || KeyboardTheme.entries.any { it.id == id } || out.size >= MAX_THEMES) continue
+            val s = ThemeSpecParser.spec(v, contrast = false).spec ?: continue
+            out[id] = s.copy(id = id)
+        }
+        return out
+    }
+
+    fun serialize(m: Map<String, ThemeSpec>): String = SJ.Obj(m.map { (id, s) -> id to s.copy(id = id).json }).canonical
+
+    fun normalize(raw: String): String? =
+        if ((StrictJson.parse(raw, LIMITS) as? StrictJson.Result.Ok)?.v is SJ.Obj) serialize(parse(raw)) else null
+
+    /** Id không trùng theme có sẵn / theme tự tạo: giữ `want` nếu trống, không thì "-2", "-3"… (iOS y hệt). */
+    fun uniqueId(want: String?, taken: Set<String>): String {
+        val base = (want?.takeIf { KeyStyleStore.validId(it) } ?: "custom").take(36)
+        fun free(s: String) = s !in taken && KeyboardTheme.entries.none { it.id == s }
+        if (free(base)) return base
+        var n = 2
+        while (!free("$base-$n")) n++
+        return "$base-$n"
+    }
+
+    sealed class Added {
+        data class Ok(val id: String, val store: Map<String, ThemeSpec>) : Added()
+        data class Err(val issue: ThemeIssue) : Added()
+    }
+
+    fun add(spec: ThemeSpec, m: Map<String, ThemeSpec>): Added {
+        if (m.size >= MAX_THEMES) return Added.Err(ThemeIssue(ThemeIssue.Code.tooMany, MAX_THEMES.toString()))
+        val id = uniqueId(spec.id, m.keys)
+        return Added.Ok(id, LinkedHashMap(m).apply { put(id, spec.copy(id = id)) })
+    }
+
+    @Volatile private var cache: Pair<String, ThemeSpec?>? = null
+
+    /** IME: theme đang chọn (đã chuẩn hoá bởi app) — kiểm lại; hỏng ⇒ null (về Hệ thống). Cùng chuỗi ⇒ dùng lại. */
+    fun active(raw: String?, id: String): ThemeSpec? {
+        if (raw.isNullOrEmpty()) return null
+        val c = cache
+        val spec = if (c != null && c.first == raw) c.second else {
+            val s = ThemeSpecParser.parse(raw).spec?.let { if (it.id == null) it.copy(id = id) else it }
+            cache = raw to s
+            s
+        }
+        return spec?.takeIf { it.id == id }
+    }
+}
+
+// ---- Hành động thẻ "Chọn giao diện" (thuần — app gọi, test JVM; iOS ThemeJSONActions y hệt)
+
+sealed class ThemeEditTarget {
+    data class Builtin(val theme: KeyboardTheme) : ThemeEditTarget()
+    data class Custom(val id: String) : ThemeEditTarget()
+}
+
+object ThemeJsonActions {
+    /**
+     * Palette gốc của theme có sẵn: [KeyboardTheme.palette] hoặc (SYSTEM — màu resource) do app cấp.
+     */
+    fun interface Base { fun palette(t: KeyboardTheme, dark: Boolean): ThemePalette }
+
+    /** "Chép JSON" (miễn phí): theme thực thấy gồm tuỳ chỉnh, dạng dễ đọc. */
+    fun copyText(t: ThemeEditTarget, s: ThemeSettings, store: Map<String, ThemeSpec>, base: Base): String? = when (t) {
+        is ThemeEditTarget.Builtin -> s.exportSpec(t.theme, base.palette(t.theme, false), base.palette(t.theme, true)).json.pretty
+        is ThemeEditTarget.Custom -> store[t.id]?.let { s.exportSpec(it).json.pretty }
+    }
+
+    class Saved(val ok: Boolean, val issues: List<ThemeIssue>, val settings: ThemeSettings, val store: Map<String, ThemeSpec>)
+
+    /** Lưu văn bản đã sửa — y hệt iOS ThemeJSONActions.save. */
+    fun save(text: String, t: ThemeEditTarget, s: ThemeSettings, store: Map<String, ThemeSpec>, base: Base): Saved {
+        val out = ThemeSpecParser.parse(text)
+        val spec = out.spec ?: return Saved(false, out.issues, s, store)
+        val warnings = ArrayList(out.issues)
+        return when (t) {
+            is ThemeEditTarget.Builtin -> {
+                val b = t.theme
+                val bl = b.spec?.light ?: ThemeSpec.slots(base.palette(b, false))
+                val bd = b.spec?.slots(true) ?: ThemeSpec.slots(base.palette(b, true))
+                val (style, lostBg) = KeyStyle.fromEdited(spec, bl, bd)
+                var st = style
+                if (st.corner == b.spec?.corner) st = st.copy(corner = null)
+                if (st.fontScale == b.spec?.fontScale) st = st.copy(fontScale = null)
+                b.spec?.font?.let { if (st.font == it) st = st.copy(font = KeyLabelFont.DEFAULT) }
+                b.spec?.weight?.let { if (st.weight == it) st = st.copy(weight = KeyLabelWeight.REGULAR) }
+                if (lostBg) warnings.add(ThemeIssue(ThemeIssue.Code.bgKept, "bg"))
+                Saved(true, warnings, s.withKeyStyle(st, b), store)
+            }
+            is ThemeEditTarget.Custom -> {
+                if (store[t.id] == null) return Saved(false, listOf(ThemeIssue(ThemeIssue.Code.missingKey, t.id)), s, store)
+                val n = spec.copy(id = t.id)
+                val ns = s.copy(keyStyles = s.keyStyles - t.id).let { if (it.custom?.id == t.id) it.copy(custom = n) else it }
+                Saved(true, warnings, ns, LinkedHashMap(store).apply { put(t.id, n) })
+            }
+        }
+    }
+
+    /** "Đặt lại mặc định" (theme có sẵn): bỏ mọi tuỳ chỉnh của theme đó. */
+    fun reset(b: KeyboardTheme, s: ThemeSettings): ThemeSettings = s.withKeyStyle(KeyStyle.DEFAULT, b)
+
+    /** "Xoá" (theme tự tạo): bỏ khỏi kho + tuỳ chỉnh; đang chọn ⇒ về Hệ thống. */
+    fun delete(id: String, s: ThemeSettings, store: Map<String, ThemeSpec>): Pair<ThemeSettings, Map<String, ThemeSpec>> {
+        var ns = s.copy(keyStyles = s.keyStyles - id)
+        if (ns.custom?.id == id) ns = ns.copy(theme = KeyboardTheme.SYSTEM, custom = null)
+        return ns to (store - id)
+    }
+
+    /** "Dán giao diện": CHỈ khi người dùng bấm. Trả kết quả kiểm để XEM TRƯỚC; [commitPaste] mới ghi. */
+    fun preview(text: String): ThemeSpecParser.Outcome = ThemeSpecParser.parse(text)
+
+    fun commitPaste(spec: ThemeSpec, store: Map<String, ThemeSpec>): CustomThemeStore.Added = CustomThemeStore.add(spec, store)
+}

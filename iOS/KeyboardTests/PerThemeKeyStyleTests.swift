@@ -29,7 +29,7 @@ final class PerThemeKeyStyleTests: XCTestCase {
     }
 
     /// Chuỗi chuẩn — Android KeyStyleStoreTests.GOLDEN phải trùng (sao lưu đi qua lại).
-    static let golden = #"{"pink":{"accent":14037868,"corner":70},"system":{"fill":1056816,"font":"mono","label":16723285,"weight":"heavy"}}"#
+    static let golden = ##"{"pink":{"accent":"#D6336C","corner":70},"system":{"fill":"#102030","font":"mono","label":"#FF2D55","weight":"heavy"}}"##
     static let goldenMap: [String: KeyStyle] = [
         "pink": KeyStyle(accentColor: 0xD6336C, corner: 70),
         "system": KeyStyle(labelColor: 0xFF2D55, fillColor: 0x102030, font: .mono, weight: .heavy),
@@ -39,7 +39,7 @@ final class PerThemeKeyStyleTests: XCTestCase {
         XCTAssertEqual(KeyStyleStore.serialize(Self.goldenMap), Self.golden)
         XCTAssertEqual(KeyStyleStore.parse(Self.golden), Self.goldenMap)
         // Thứ tự khoá / khoảng trắng khác ⇒ chuẩn hoá về cùng chuỗi.
-        XCTAssertEqual(KeyStyleStore.normalize(#"{ "system": {"weight":"heavy","label":16723285,"font":"mono","fill":1056816}, "pink":{"corner":70,"accent":14037868} }"#), Self.golden)
+        XCTAssertEqual(KeyStyleStore.normalize(##"{ "system": {"weight":"heavy","label":"#ff2d55","font":"mono","fill":"#102030"}, "pink":{"corner":70,"accent":"#D6336C"} }"##), Self.golden)
         XCTAssertNil(KeyStyleStore.normalize("[1,2]"))
         XCTAssertNil(KeyStyleStore.normalize("oops"))
         XCTAssertEqual(KeyStyleStore.serialize([:]), "{}")

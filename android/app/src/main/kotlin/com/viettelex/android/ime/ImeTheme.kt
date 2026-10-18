@@ -37,7 +37,8 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val keyStyle: KeyStyle = settings.effectiveKeyStyle
 
     private val basePalette: ThemePalette = run {
-        val base = settings.effectiveTheme.palette(systemDark) ?: ThemePalette(
+        // Theme tự tạo ("Giao diện JSON") hoặc có sẵn; Hệ thống = màu resource.
+        val base = settings.basePalette(systemDark) ?: ThemePalette(
             bg = ContextCompat.getColor(ctx, R.color.ime_bg),
             keyFill = ContextCompat.getColor(ctx, R.color.ime_key),
             specialFill = ContextCompat.getColor(ctx, R.color.ime_key_special),
@@ -50,8 +51,8 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
             chip = ContextCompat.getColor(ctx, R.color.ime_chip),
             isDark = systemDark)
         // Tuỳ chỉnh nâng cao (Plus): màu chữ / nền phím — trước ảnh nền và độ trong suốt.
-        // + Màu nhấn (Nhập, ⇧ bật/Caps, vệt vuốt) — riêng theme đang dùng, giải MỘT lần ở đây.
-        val styled = keyStyle.applyAccent(keyStyle.applyColors(base))
+        // Vá chế độ + màu chữ/phím + Màu nhấn (Nhập, ⇧ bật/Caps, vệt vuốt) — riêng theme đang dùng, giải MỘT lần ở đây.
+        val styled = settings.styledCurrent(base, systemDark)
         if (settings.wallpaperActive(wallpaperFile)) styled.overWallpaper() else styled
     }
     /** Sau hai thanh độ trong suốt (phím / ký tự) — áp một lần ở đây, không mỗi phím. */
@@ -87,7 +88,7 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val keyBorder = palette.keyBorder
     /** Nhận diện theme để IME biết khi nào phải dựng lại input view. */
     val signature = "${settings.effectiveTheme.id}|$systemDark|${palette.wallpaper}|${settings.dim}|${settings.version}" +
-        "|${settings.keyboardTransparency}|${settings.labelTransparency}|$keyStyle"
+        "|${settings.keyboardTransparency}|${settings.labelTransparency}|$keyStyle|${settings.effectiveCustom?.canonical?.hashCode()}"
 
     /** Màu khi đè phím: phủ ink 12% kiểu state layer Material. */
     fun pressed(color: Int): Int = blend(color, ink, 0.12f)

@@ -1,0 +1,73 @@
+# "Giao diện JSON" — ca CHUNG iOS (ThemeJSONTests.swift) + Android (ThemeSpecTests.kt). Cột cách bằng TAB.
+#
+# CASE  tên  kỳ-vọng  chuỗi-chuẩn(hoặc -)  đầu-vào
+#   kỳ-vọng: ok | ok+<mã cảnh báo> | err:<mã lỗi> (mã nằm trong danh sách lỗi)
+#   đầu-vào: văn bản một dòng | b64:<base64 bytes> | gen:size:<n> (ca "a" + khoảng trắng đến đúng n byte)
+#            | gen:deep:<n> ([[…1…]] n lớp) | gen:deepobj:<n> ({"a":{"a":…1…}} n lớp)
+#            | gen:longname:<n> (tên n chữ "a") | gen:longkey:<n> (khoá n chữ "k")
+# PAL   tên  dark(0/1)  bg key special ink accent accentInk trail balloon border deco(motif:màu@mật-độ)
+#   — palette dựng từ ca `tên` (AARRGGBB, '-' = không có): cùng chuỗi JSON ⇒ cùng palette hai nền tảng.
+CASE	a	ok	{"dark":"same","light":{"accent":"#0A84FF","bg":"#EEEEEE","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"Thử"},"v":1}	{"v":1,"name":{"vi":"Thử"},"light":{"key":"#ffffff","special":"#DDDDDD","ink":"#000000","accent":"#0a84ff","bg":"#EEEEEE"}}
+CASE	b	ok+clamped	{"corner":70,"dark":{"accent":"#D94680","bg":"#2B1520","border":"#80FFFFFF","ink":"#FCDDE8","key":"#472335","special":"#5E2F46"},"font":"serif","fontScale":120,"id":"my-theme","light":{"accent":"#D94680","bg":"#FCDDE8","deco":{"color":"#8CFF6FA3","density":200,"motif":"hearts"},"ink":"#5A1F38","key":"#FFF5F9","special":"#F6B8CE"},"name":{"en":"Pink \"love\"","vi":"Hồng 💖"},"v":1,"weight":"bold"}	{"v":1,"id":"my-theme","name":{"vi":"Hồng 💖","en":"Pink \"love\""},"light":{"bg":"#FCDDE8","key":"#FFF5F9","special":"#F6B8CE","ink":"#5A1F38","accent":"#D94680","deco":{"motif":"hearts","color":"#8CFF6FA3","density":300}},"dark":{"bg":"#2B1520","key":"#472335","special":"#5E2F46","ink":"#FCDDE8","accent":"#D94680","border":"#80FFFFFF"},"corner":70,"fontScale":120,"font":"serif","weight":"bold"}
+CASE	c	ok	{"dark":"same","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"à / b"},"v":1}	{"v":1,"name":{"vi":"à \/ b"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	d	ok	{"dark":"same","light":{"accent":"#000000","deco":{"motif":"none"},"ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"Có khoảng"},"v":1}	{ "v" : 1 , "name" : { "vi" : " Có khoảng " } , "light" : { "key" : "#FFFFFF" , "special" : "#DDDDDD" , "ink" : "#000000" , "accent" : "#000000", "deco": {"motif": "none"} } , "dark" : "same" }
+CASE	e	ok	{"dark":"same","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"e"},"v":1}	{"v":1,"name":{"vi":"e"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"dark":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"}}
+CASE	f	ok+lowContrast	{"dark":"same","light":{"accent":"#000000","ink":"#A0A0A0","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"f"},"v":1}	{"v":1,"name":{"vi":"f"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#A0A0A0","accent":"#000000"}}
+CASE	size-ok	ok	{"dark":"same","light":{"accent":"#0A84FF","bg":"#EEEEEE","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"Thử"},"v":1}	gen:size:16384
+CASE	size-big	err:tooLarge	-	gen:size:16385
+CASE	name-40	ok	-	gen:longname:40
+CASE	name-41	err:tooLong	-	gen:longname:41
+CASE	key-201	err:tooLong	-	gen:longkey:201
+CASE	deep-8	err:wrongType	-	gen:deep:8
+CASE	deep-9	err:depth	-	gen:deep:9
+CASE	deep-500	err:depth	-	gen:deep:500
+CASE	deepobj-40	err:depth	-	gen:deepobj:40
+CASE	empty	err:syntax	-	b64:
+CASE	open	err:syntax	-	{
+CASE	trailing-comma	err:syntax	-	{"v":1,}
+CASE	single-quote	err:syntax	-	{'v':1}
+CASE	garbage-after	err:syntax	-	{"v":1} x
+CASE	nan	err:syntax	-	{"v":NaN}
+CASE	infinity	err:syntax	-	{"v":Infinity}
+CASE	leading-zero	err:syntax	-	{"v":01}
+CASE	float	err:badNumber	-	{"v":1.5}
+CASE	exponent	err:badNumber	-	{"v":1e3}
+CASE	huge-number	err:badNumber	-	{"v":12345678901234567890}
+CASE	array-root	err:wrongType	-	[1,2]
+CASE	null-root	err:wrongType	-	null
+CASE	string-root	err:wrongType	-	"theme"
+CASE	duplicate	err:duplicateKey	-	{"v":1,"v":1}
+CASE	bom	err:encoding	-	b64:77u/eyJ2IjoxfQ==
+CASE	bad-utf8	err:encoding	-	b64:eyJ2IjoxLCJuYW1lIjp7InZpIjoi//4ifX0=
+CASE	bad-utf8-2	err:encoding	-	b64:eyJ2IjoxLCJuYW1lIjp7InZpIjoiwygifX0=
+CASE	lone-surrogate	err:encoding	-	{"v":1,"name":{"vi":"\ud800"}}
+CASE	raw-tab	err:controlChar	-	b64:eyJ2IjoxLCJuYW1lIjp7InZpIjoiYQliIn19
+CASE	raw-del	err:controlChar	-	b64:eyJ2IjoxLCJuYW1lIjp7InZpIjoiYX9iIn19
+CASE	escaped-newline	err:controlChar	-	{"v":1,"name":{"vi":"a\nb"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	escaped-u0000	err:controlChar	-	{"v":1,"name":{"vi":"a\u0000b"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	no-version	err:missingKey	-	{"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	version-2	err:badVersion	-	{"v":2,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	version-string	err:wrongType	-	{"v":"1","name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	no-name	err:missingKey	-	{"v":1,"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	empty-name	err:badValue	-	{"v":1,"name":{"vi":"   "},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	no-key	err:missingKey	-	{"v":1,"name":{"vi":"x"},"light":{"special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	unknown-root	err:unknownKey	-	{"v":1,"name":{"vi":"x"},"image":"https://example.com/a.png","light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	unknown-slot	err:unknownKey	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","script":"alert(1)"}}
+CASE	color-short	err:badColor	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	color-hex	err:badColor	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#GGGGGG","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	color-name	err:badColor	-	{"v":1,"name":{"vi":"x"},"light":{"key":"red","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	color-url	err:badColor	-	{"v":1,"name":{"vi":"x"},"light":{"key":"url(https://x)","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	color-number	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":16777215,"special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	color-null	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":null,"special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	color-bool	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":true,"special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	light-array	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":["#FFFFFF"]}
+CASE	dark-word	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"dark":"light"}
+CASE	motif-unknown	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","deco":{"motif":"skull","color":"#FF0000"}}}
+CASE	motif-image	err:unknownKey	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","deco":{"motif":"hearts","color":"#FF0000","image":"https://x/y.png"}}}
+CASE	density-string	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","deco":{"motif":"hearts","color":"#FF0000","density":"9"}}}
+CASE	font-unknown	err:badValue	-	{"v":1,"name":{"vi":"x"},"font":"comic","light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	id-bad	err:badValue	-	{"v":1,"id":"../etc","name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+CASE	contrast-too-low	err:contrastTooLow	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#777777","special":"#777777","ink":"#787878","accent":"#000000"}}
+PAL	b	0	FFFCDDE8 FFFFF5F9 FFF6B8CE FF5A1F38 FFD94680 FFFFFFFF 99D94680 FFFFF5F9 - hearts:8CFF6FA3@200
+PAL	b	1	FF2B1520 FF472335 FF5E2F46 FFFCDDE8 FFD94680 FFFFFFFF 99D94680 FF472335 80FFFFFF -
+PAL	a	1	FFEEEEEE FFFFFFFF FFDDDDDD FF000000 FF0A84FF FFFFFFFF 990A84FF FFFFFFFF - -

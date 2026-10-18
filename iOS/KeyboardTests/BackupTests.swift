@@ -12,6 +12,9 @@ final class BackupTests: XCTestCase {
 
     private static let iso: ISO8601DateFormatter = ISO8601DateFormatter()
 
+    /// Kho theme tự tạo trong fixture (chuỗi chuẩn — Android đọc + so cùng chuỗi).
+    static let customThemes = ##"{"custom":{"dark":"same","id":"custom","light":{"accent":"#0A84FF","bg":"#EEEEEE","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"Thử"},"v":1}}"##
+
     /// Payload đúng bằng nội dung backup-ios-v1.json.
     static let iosPayload: BackupPayload = {
         var s: [String: SettingValue] = [:]
@@ -26,6 +29,7 @@ final class BackupTests: XCTestCase {
         s["uiLanguage"] = .string("en")
         s["keySound"] = .bool(true); s["keySoundVolume"] = .int(70); s["keySoundStyle"] = .string("wood")
         s[KeyStyleStore.key] = .string(PerThemeKeyStyleTests.golden)   // Tuỳ chỉnh nâng cao theo theme
+        s[CustomThemeStore.key] = .string(BackupTests.customThemes)   // Giao diện JSON: theme tự tạo
         return BackupPayload(
             createdAt: iso.date(from: "2026-09-27T08:00:00Z"), platform: "ios", settings: s,
             shortcuts: ["ko": "không", "stk": "số tài khoản", "đc": "được"],

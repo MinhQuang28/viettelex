@@ -27,6 +27,8 @@ sealed class SettingKind {
     data class Choice(val default: String, val allowed: Set<String>) : SettingKind()
     /** Chuỗi JSON "Tuỳ chỉnh nâng cao" theo theme ([KeyStyleStore]) — chuẩn hoá khi đọc/ghi, mặc định "{}". */
     object StyleMap : SettingKind()
+    /** Chuỗi JSON kho theme tự tạo ([CustomThemeStore]) — chuẩn hoá (kiểm chặt) khi đọc/ghi, mặc định "{}". */
+    object ThemeMap : SettingKind()
 }
 
 object BackupSettings {
@@ -89,6 +91,8 @@ object BackupSettings {
         // định dạng iOS. Khoá chung cũ (keyLabelColor…) không còn sao lưu: file cũ có chúng ⇒ bỏ qua như
         // key lạ. "rounded" (chỉ iOS) vẫn giữ để khứ hồi; bàn phím Android vẽ như mặc định.
         Spec(Keys.KEY_STYLES, SettingKind.StyleMap),
+        // "Giao diện JSON" — theme tự tạo / dán (Plus): {"id": đặc tả, …}, cùng định dạng iOS.
+        Spec(Keys.CUSTOM_THEMES, SettingKind.ThemeMap),
         Spec(Keys.UI_LANGUAGE, SettingKind.Choice(L10n.DEFAULT, L10n.supported)),
         // Ngôn ngữ đích của Dịch trên máy (gói model KHÔNG đi theo — máy mới tải lại trong app).
         Spec(Keys.TRANSLATE_TARGET, SettingKind.Choice(TranslateLangs.DEFAULT_TARGET, TranslateLangs.TARGETS)),
@@ -183,6 +187,7 @@ object BackupCodec {
                     is SettingKind.IntRange -> intValue(raw)?.let { out[k] = it.coerceIn(kind.range) }
                     is SettingKind.Choice -> (raw as? String)?.takeIf { it in kind.allowed }?.let { out[k] = it }
                     SettingKind.StyleMap -> (raw as? String)?.let(KeyStyleStore::normalize)?.let { out[k] = it }
+                    SettingKind.ThemeMap -> (raw as? String)?.let(CustomThemeStore::normalize)?.let { out[k] = it }
                 }
             }
             out
@@ -274,6 +279,7 @@ object BackupPrefs {
             is SettingKind.IntRange -> out[spec.key] = ((read(spec.key) as? Number)?.toInt() ?: k.default).coerceIn(k.range)
             is SettingKind.Choice -> out[spec.key] = (read(spec.key) as? String)?.takeIf { it in k.allowed } ?: k.default
             SettingKind.StyleMap -> out[spec.key] = (read(spec.key) as? String)?.let(KeyStyleStore::normalize) ?: KeyStyleStore.EMPTY
+            SettingKind.ThemeMap -> out[spec.key] = (read(spec.key) as? String)?.let(CustomThemeStore::normalize) ?: "{}"
         }
         return out
     }

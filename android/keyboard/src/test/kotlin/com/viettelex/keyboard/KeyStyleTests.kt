@@ -35,7 +35,7 @@ class KeyStyleTests {
         val base = s.effectiveTheme.palette(dark) ?: ThemePalette(bg = c.rgb(0xEEF0F4), keyFill = c.WHITE,
             specialFill = c.rgb(0xD6DBE3), ink = c.rgb(0x1F1F1F), trail = c.rgb(0x0B57D0), balloon = c.WHITE,
             popup = c.WHITE, action = c.rgb(0x0B57D0), actionInk = c.WHITE, chip = c.rgb(0xD3E3FD), isDark = dark)
-        val styled = s.styled(s.effectiveTheme, base)
+        val styled = s.styledCurrent(base, dark)
         return (if (wallpaper) styled.overWallpaper() else styled)
             .withTransparency(s.keyboardTransparency, s.labelTransparency, dark)
     }
@@ -104,10 +104,14 @@ class KeyStyleTests {
         assertEquals(custom, KeyStyleStore.parse(KeyStyleStore.serialize(mapOf("mint" to custom)))["mint"])
         assertEquals("{}", KeyStyleStore.serialize(mapOf("mint" to KeyStyle())))   // mặc định ⇒ không có mục
         // Rác / ngoài phạm vi (cùng luật khoá cũ).
-        val g = KeyStyleStore.parse("""{"mint":{"label":16777216,"fill":-7,"corner":300,"fontScale":30,"font":"comic-sans","weight":"ultra","accent":true}}""")["mint"]!!
-        assertNull(g.labelColor); assertNull(g.fillColor); assertNull(g.accentColor)
+        // Đọc CHẶT: mục có màu sai / khoá lạ / giá trị lạ bị bỏ CẢ MỤC (theme vẽ như chưa chỉnh).
+        assertNull(KeyStyleStore.parse("""{"mint":{"label":"#1000000"}}""")["mint"])
+        assertNull(KeyStyleStore.parse("""{"mint":{"label":"#FF2D55","what":1}}""")["mint"])
+        assertNull(KeyStyleStore.parse("""{"mint":{"font":"comic-sans"}}""")["mint"])
+        assertNull(KeyStyleStore.parse("""{"mint":{"accent":true}}""")["mint"])
+        // Số ngoài khoảng ⇒ kẹp.
+        val g = KeyStyleStore.parse("""{"mint":{"corner":300,"fontScale":30}}""")["mint"]!!
         assertEquals(100, g.corner); assertEquals(80, g.fontScale)
-        assertEquals(KeyLabelFont.DEFAULT, g.font); assertEquals(KeyLabelWeight.REGULAR, g.weight)
         assertEquals(150, KeyStyleStore.parse("""{"mint":{"fontScale":999}}""")["mint"]!!.fontScale)
         assertEquals(emptyMap<String, KeyStyle>(), KeyStyleStore.parse("not json"))
         assertEquals(emptyMap<String, KeyStyle>(), KeyStyleStore.parse("""{"bad id!":{"corner":5},"ok":[1]}"""))

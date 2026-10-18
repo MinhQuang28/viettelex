@@ -226,8 +226,8 @@ enum KeyboardTheme: String, CaseIterable {
     }
 
     /// Bo góc mặc định của theme (% như KeyStyle.corner) khi người dùng chưa chỉnh — nil = bo stock.
-    /// "Hồng": phím tròn trịa. Android cùng giá trị.
-    var defaultCorner: Int? { self == .pink ? 70 : nil }
+    /// "Hồng": phím tròn trịa (corner 70 trong builtin-themes.json). Android cùng giá trị.
+    var defaultCorner: Int? { spec?.corner }
 
     /// Theme tự vẽ nền (OLED, tương phản cao, pastel) — có tuỳ chọn "Nền theo hệ thống".
     /// Hệ thống / Kính vốn trong suốt.
@@ -268,68 +268,6 @@ enum KeyboardTheme: String, CaseIterable {
                                   specialFill: RGBA(r: 0.68, g: 0.70, b: 0.74), ink: .black,
                                   trail: blue.alpha(0.55), barInk: .black, balloon: .white,
                                   accent: blue, accentInk: .white, keyBorder: nil, isDark: false)
-        case .oled:
-            return KeyboardPalette(background: .black, keyFill: RGBA(hex: 0x1C1C1E),
-                                   specialFill: RGBA(hex: 0x3A3A3C), ink: .white,
-                                   trail: RGBA.white.alpha(0.6), barInk: .white,
-                                   balloon: RGBA(hex: 0x2C2C2E),
-                                   accent: RGBA(hex: 0x0A84FF), accentInk: .white,
-                                   keyBorder: nil, isDark: true)
-        case .contrast:
-            // Nền đen tuyền, phím đen viền trắng, chữ trắng, nhấn vàng (≥ AAA 7:1).
-            return KeyboardPalette(background: .black, keyFill: RGBA(hex: 0x141414),
-                                   specialFill: RGBA(hex: 0x4D4D4D), ink: .white,
-                                   trail: RGBA(hex: 0xFFD60A), barInk: .white,
-                                   balloon: RGBA(hex: 0x141414),
-                                   accent: RGBA(hex: 0xFFD60A), accentInk: .black,
-                                   keyBorder: RGBA.white.alpha(0.85), isDark: true)
-        // Pastel: sáng = bảng cũ; tối = cùng họ màu, nền + phím sẫm ngả màu, chữ sáng, giữ màu nhấn
-        // (trước 10/2026 pastel không đổi theo chế độ tối).
-        case .peach:
-            return systemDark
-                ? Self.solid(bg: 0x2A1A1C, key: 0x45292D, special: 0x5C3A3F, ink: 0xFBE3E1, accent: 0xC2505A)
-                : Self.solid(bg: 0xFBE3E1, key: 0xFFF8F7, special: 0xF1C4BF, ink: 0x4A2226, accent: 0xC2505A)
-        case .mint:
-            return systemDark
-                ? Self.solid(bg: 0x10241D, key: 0x1D3B30, special: 0x2A5244, ink: 0xD9F2E7, accent: 0x1F7A5C)
-                : Self.solid(bg: 0xD9F2E7, key: 0xF6FFFA, special: 0xAFDDC9, ink: 0x173B30, accent: 0x1F7A5C)
-        case .sky:
-            return systemDark
-                ? Self.solid(bg: 0x111E2E, key: 0x1E324A, special: 0x2B4566, ink: 0xDAE9F8, accent: 0x2C6BB8)
-                : Self.solid(bg: 0xDAE9F8, key: 0xF6FAFF, special: 0xB3CFEE, ink: 0x14304C, accent: 0x2C6BB8)
-        case .lavender:
-            return systemDark
-                ? Self.solid(bg: 0x1C1830, key: 0x2E2848, special: 0x403862, ink: 0xE8E2F6, accent: 0x6A48C4)
-                : Self.solid(bg: 0xE8E2F6, key: 0xFBF9FF, special: 0xCBBFEA, ink: 0x2C2345, accent: 0x6A48C4)
-        // Tim đen: luôn tối — nền đen, chữ trắng, tim hồng nhỏ vẽ một lần ở lớp nền.
-        case .blackHeart:
-            return Self.solid(bg: 0x000000, key: 0x1A1A1A, special: 0x333333, ink: 0xFFFFFF, accent: 0xE63E7A,
-                              decoration: KeyboardDecoration(motif: .hearts, color: RGBA(hex: 0xFF6FA3, alpha: 0.55)))
-        // Hoa xanh: phím trắng viền xanh mảnh, chữ xanh, hoa nhỏ mờ ở nền.
-        case .greenFloral:
-            return systemDark
-                ? Self.solid(bg: 0x0F1D15, key: 0x16291E, special: 0x21392A, ink: 0x9EE0B6, accent: 0x2E8B57,
-                             border: RGBA(hex: 0x4CAF6E, alpha: 0.8),
-                             decoration: KeyboardDecoration(motif: .flowers, color: RGBA(hex: 0x4CAF6E, alpha: 0.28)))
-                : Self.solid(bg: 0xEEF6EF, key: 0xFFFFFF, special: 0xDCEEDF, ink: 0x256B42, accent: 0x2E8B57,
-                             border: RGBA(hex: 0x4CAF6E),
-                             decoration: KeyboardDecoration(motif: .flowers, color: RGBA(hex: 0x6DBE8A, alpha: 0.35)))
-        // Xanh lá: phím sáng, phím chức năng + phím cách màu xanh xô thơm (sage).
-        case .sage:
-            return systemDark
-                ? Self.solid(bg: 0x161C15, key: 0x2A3328, special: 0x3A4A36, ink: 0xE4EDE1, accent: 0x5E7F55,
-                             function: 0x4A5E45)
-                : Self.solid(bg: 0xE4EBE2, key: 0xFBFCFA, special: 0x93AB8C, ink: 0x24331F, accent: 0x5E7F55,
-                             function: 0xA9BFA3)
-        // Neon: luôn tối — nền gần đen, phím xanh mòng két sẫm viền cyan, chữ cyan.
-        case .neon:
-            return Self.solid(bg: 0x05080A, key: 0x0E2A2E, special: 0x15393E, ink: 0x5FF5E8, accent: 0x00BFB2,
-                              accentInk: 0x000000, border: RGBA(hex: 0x00E5D4, alpha: 0.7))
-        // Hồng: hồng pastel, phím bo tròn (defaultCorner).
-        case .pink:
-            return systemDark
-                ? Self.solid(bg: 0x2B1520, key: 0x472335, special: 0x5E2F46, ink: 0xFCDDE8, accent: 0xD94680)
-                : Self.solid(bg: 0xFCDDE8, key: 0xFFF5F9, special: 0xF6B8CE, ink: 0x5A1F38, accent: 0xD94680)
         case .glass:
             // Nền trong suốt: backdrop mờ của hệ thống lộ ra (miễn phí, không
             // blur tự vẽ); phím trắng bán trong kiểu Liquid Glass.
@@ -345,25 +283,16 @@ enum KeyboardTheme: String, CaseIterable {
                                   trail: blue.alpha(0.55), barInk: .black, balloon: .white,
                                   accent: blue, accentInk: .white, keyBorder: RGBA.white.alpha(0.6),
                                   isDark: false)
+        default:
+            // Theme có sẵn khác: dữ liệu JSON (themes/builtin-themes.json → BuiltinThemes, đọc MỘT lần).
+            // Thiếu (không xảy ra — test khoá) ⇒ vẽ như Hệ thống, không crash.
+            guard let spec = BuiltinThemes.specs[rawValue] else { return Self.system.palette(systemDark: systemDark) }
+            return spec.palette(dark: systemDark)
         }
     }
 
-    /// Theme nền đục một màu (pastel, Tim đen, Neon…). `special` = phím khi đè (iOS) / phím chức
-    /// năng (Android); `function` = nền phím chức năng + phím cách nếu theme tô riêng.
-    private static func solid(bg: UInt32, key: UInt32, special: UInt32, ink: UInt32, accent: UInt32,
-                              accentInk: UInt32 = 0xFFFFFF, border: RGBA? = nil, function: UInt32? = nil,
-                              functionInk: UInt32? = nil, decoration: KeyboardDecoration? = nil) -> KeyboardPalette {
-        let a = RGBA(hex: accent), i = RGBA(hex: ink)
-        var p = KeyboardPalette(background: RGBA(hex: bg), keyFill: RGBA(hex: key),
-                                specialFill: RGBA(hex: special), ink: i,
-                                trail: a.alpha(0.6), barInk: i,
-                                balloon: RGBA(hex: key), accent: a, accentInk: RGBA(hex: accentInk),
-                                keyBorder: border, isDark: i.luminance > 0.5)
-        p.functionFill = function.map { RGBA(hex: $0) }
-        p.functionInk = functionInk.map { RGBA(hex: $0) }
-        p.decoration = decoration
-        return p
-    }
+    /// Đặc tả JSON của theme có sẵn (nil = Hệ thống / Kính — vẽ theo nền tảng).
+    var spec: ThemeSpec? { BuiltinThemes.specs[rawValue] }
 }
 
 /// Hoạ tiết nền theme (Tim đen: tim; Hoa xanh: hoa) — MỘT path vẽ một lần vào lớp nền
@@ -374,6 +303,8 @@ struct KeyboardDecoration: Equatable {
     enum Motif: String { case hearts, flowers }
     var motif: Motif
     var color: RGBA
+    /// Mật độ % ("Giao diện JSON" deco.density, 50…200): bước ngang = stepX × 100 / density.
+    var density: Int = 100
 
     /// Bước ngang (pt / dp), cỡ motif tối đa, lề hai bên, cỡ nhỏ nhất còn vẽ.
     static let stepX = 64.0, motifSize = 8.0, inset = 14.0, minMotifSize = 5.0
@@ -401,7 +332,7 @@ struct KeyboardDecoration: Equatable {
     }
 
     /// Motif dọc từng khe (so le giữa các khe), cỡ vừa khe (chừa `clearance` mỗi bên); khe quá hẹp bỏ.
-    static func placements(width w: Double, gaps: [Gap]) -> [Placement] {
+    static func placements(width w: Double, gaps: [Gap], density: Int = 100) -> [Placement] {
         guard w > 2 * inset else { return [] }
         func layout(_ step: Double) -> [Placement] {
             var out: [Placement] = []
@@ -413,7 +344,7 @@ struct KeyboardDecoration: Equatable {
             }
             return out
         }
-        var step = stepX
+        var step = stepX * 100 / Double(min(max(density, 50), 200))   // kẹp lại: bước luôn > 0
         var pts = layout(step)
         while pts.count > maxMotifs { step *= 1.15; pts = layout(step) }
         return pts
@@ -463,7 +394,14 @@ enum ThemePicker {
     static func select(_ t: KeyboardTheme, in s: ThemeSettings) -> ThemeSettings? {
         guard ThemeGate.allows(t) else { return nil }
         var n = s
-        n.theme = t
+        n.select(t)
+        return n
+    }
+    /// Chạm thẻ theme tự tạo: cần Plus ⇒ không có thì nil (mở màn Plus).
+    static func select(custom spec: ThemeSpec, in s: ThemeSettings) -> ThemeSettings? {
+        guard ThemeGate.allowsCustom else { return nil }
+        var n = s
+        n.select(custom: spec)
         return n
     }
 
@@ -493,6 +431,9 @@ struct ThemeSettings: Equatable {
     static let cropKey = "wallpaperCrop"      // "x,y,w,h" chuẩn hoá theo ảnh gốc; thiếu = cắt giữa
 
     var theme: KeyboardTheme = .system
+    /// Theme tự tạo ĐANG CHỌN ("Giao diện JSON", Plus) — có thì thay `theme` (khi đó `theme` = .system
+    /// làm dự phòng). Bàn phím chỉ đọc theme này (CustomThemeStore.activeKey), không đọc cả kho.
+    var custom: ThemeSpec?
     var wallpaper = false
     var dim = 30
     var blur = 0
@@ -510,15 +451,23 @@ struct ThemeSettings: Equatable {
     /// giữ nguyên để khứ hồi.
     var keyStyles: [String: KeyStyle] = [:]
 
+    /// Id theme đang chọn (có sẵn hoặc tự tạo) — khoá của `keyStyles`.
+    var themeId: String { custom?.id ?? theme.rawValue }
+
     /// Tuỳ chỉnh của theme ĐANG CHỌN (màn Giao diện đọc/ghi qua đây). Gán mặc định ⇒ xoá mục.
     var keyStyle: KeyStyle {
-        get { style(for: theme) }
-        set { setStyle(newValue, for: theme) }
+        get { keyStyles[themeId] ?? .default }
+        set { keyStyles[themeId] = newValue.isDefault ? nil : newValue }
     }
     func style(for t: KeyboardTheme) -> KeyStyle { keyStyles[t.rawValue] ?? .default }
     mutating func setStyle(_ st: KeyStyle, for t: KeyboardTheme) {
         keyStyles[t.rawValue] = st.isDefault ? nil : st
     }
+
+    /// Chọn theme có sẵn (bỏ theme tự tạo).
+    mutating func select(_ t: KeyboardTheme) { theme = t; custom = nil }
+    /// Chọn theme tự tạo.
+    mutating func select(custom spec: ThemeSpec) { theme = .system; custom = spec }
 
     /// "Khôi phục giao diện gốc": mọi chỉnh ở màn Giao diện về mặc định. Ảnh nền chỉ
     /// bỏ chọn (file giữ nguyên để bật lại); version giữ nguyên (không vứt cache vô cớ).
@@ -538,8 +487,14 @@ struct ThemeSettings: Equatable {
         let m = KeyStyleStore.migrate(theme: d.string(forKey: themeKey),
                                       styles: KeyStyleStore.parse(d.string(forKey: KeyStyleStore.key)),
                                       legacy: KeyStyleStore.loadLegacy(d))
-        // Id lạ / đã bỏ ⇒ Hệ thống (mặc định).
-        if let raw = m.theme, let t = KeyboardTheme(rawValue: raw) { s.theme = t }
+        // Id có sẵn ⇒ theme đó; id theme tự tạo ⇒ đọc (và kiểm lại) bản app đã chuẩn hoá; id lạ / đã bỏ /
+        // dữ liệu hỏng ⇒ Hệ thống (mặc định), không crash.
+        if let raw = m.theme {
+            if let t = KeyboardTheme(rawValue: raw) { s.theme = t }
+            else if KeyStyleStore.validId(raw) {
+                s.custom = CustomThemeStore.active(d.string(forKey: CustomThemeStore.activeKey), id: raw)
+            }
+        }
         s.keyStyles = m.styles
         s.wallpaper = d.bool(forKey: wallpaperKey)
         if d.object(forKey: dimKey) != nil { s.dim = max(0, min(80, d.integer(forKey: dimKey))) }
@@ -565,7 +520,10 @@ struct ThemeSettings: Equatable {
     }
 
     func save(_ d: UserDefaults?) {
-        d?.set(theme.rawValue, forKey: Self.themeKey)
+        d?.set(themeId, forKey: Self.themeKey)
+        // Bàn phím chỉ đọc theme tự tạo đang chọn — bản chuẩn hoá (đã kiểm) ở khoá riêng.
+        if let custom { d?.set(custom.canonical, forKey: CustomThemeStore.activeKey) }
+        else { d?.removeObject(forKey: CustomThemeStore.activeKey) }
         d?.set(wallpaper, forKey: Self.wallpaperKey)
         d?.set(dim, forKey: Self.dimKey)
         d?.set(blur, forKey: Self.blurKey)
@@ -586,21 +544,64 @@ struct ThemeSettings: Equatable {
 
     /// Theme thực dùng sau cổng Plus (hết quyền → về Hệ thống, không crash/không trắng).
     var effectiveTheme: KeyboardTheme { ThemeGate.allows(theme) ? theme : .system }
+    /// Theme tự tạo thực dùng: hết Plus ⇒ nil (vẽ Hệ thống; dữ liệu giữ nguyên để mua lại là có lại).
+    var effectiveCustom: ThemeSpec? { ThemeGate.allowsCustom ? custom : nil }
     /// Tuỳ chỉnh nâng cao thực dùng: hết quyền Plus ⇒ mặc định (giá trị lưu giữ nguyên để
     /// mua lại là có lại).
-    /// Bo góc chưa chỉnh ⇒ bo mặc định của theme (Hồng: tròn trịa).
-    var effectiveKeyStyle: KeyStyle { effectiveStyle(for: effectiveTheme) }
+    /// Bo góc / phông chưa chỉnh ⇒ của theme (Hồng: tròn trịa).
+    var effectiveKeyStyle: KeyStyle {
+        if let c = effectiveCustom { return effectiveStyle(id: c.id ?? "", typography: c.typography) }
+        return effectiveStyle(for: effectiveTheme)
+    }
     /// Như `effectiveKeyStyle` cho theme `t` bất kỳ (thẻ "Chọn giao diện" xem trước tuỳ chỉnh riêng).
     func effectiveStyle(for t: KeyboardTheme) -> KeyStyle {
-        var s = ThemeGate.allowsAdvanced ? style(for: t) : .default
-        if s.corner == nil { s.corner = t.defaultCorner }
+        effectiveStyle(id: t.rawValue, typography: t.spec?.typography)
+    }
+    func effectiveStyle(id: String, typography: KeyStyle?) -> KeyStyle {
+        var s = ThemeGate.allowsAdvanced ? (keyStyles[id] ?? .default) : .default
+        if let t = typography {
+            if s.corner == nil { s.corner = t.corner }
+            if s.fontScale == nil { s.fontScale = t.fontScale }
+            if s.font == .standard { s.font = t.font }
+            if s.weight == .regular { s.weight = t.weight }
+        }
         return s
     }
+
+    /// Palette đã áp tuỳ chỉnh (vá chế độ → nền hệ thống → màu chữ/phím → màu nhấn), TRƯỚC ảnh nền /
+    /// độ trong suốt. Dùng cho bàn phím, thẻ "Chọn giao diện" và "Chép JSON".
+    static func styled(_ base: KeyboardPalette, style st: KeyStyle, systemDark: Bool, backdrop: Bool) -> KeyboardPalette {
+        var p = st.applyPatch(to: base, dark: systemDark)
+        if backdrop { p = p.onSystemBackdrop(systemDark: systemDark) }
+        p = st.applyColors(to: p)
+        p.keyLabelPinned = st.labelColor != nil || p.keyLabelPinned
+        return st.applyAccent(to: p)
+    }
+
     /// Thẻ "Chọn giao diện": palette gốc của `t` + màu tuỳ chỉnh RIÊNG của nó (không ảnh nền / độ trong
     /// suốt / nền hệ thống — thẻ chỉ để nhận ra theme). Chưa chỉnh ⇒ đúng palette gốc.
     func cardPalette(for t: KeyboardTheme, systemDark: Bool) -> KeyboardPalette {
+        Self.styled(t.palette(systemDark: systemDark), style: effectiveStyle(for: t), systemDark: systemDark, backdrop: false)
+    }
+    func cardPalette(custom c: ThemeSpec, systemDark: Bool) -> KeyboardPalette {
+        Self.styled(c.palette(dark: systemDark), style: effectiveStyle(id: c.id ?? "", typography: c.typography),
+                    systemDark: systemDark, backdrop: false)
+    }
+
+    /// "Chép JSON": theme thực thấy (gồm tuỳ chỉnh) dạng đặc tả đầy đủ — miễn phí.
+    func exportSpec(for t: KeyboardTheme) -> ThemeSpec {
         let st = effectiveStyle(for: t)
-        return st.applyAccent(to: st.applyColors(to: t.palette(systemDark: systemDark)))
+        // Hệ thống / Kính (vẽ theo nền tảng, không có JSON gốc): xuất màu đã giải trên máy này.
+        return ThemeSpec.export(id: t.rawValue, nameVi: t.spec?.nameVi ?? (t == .glass ? "Kính" : "Hệ thống"),
+                                nameEn: t.spec?.nameEn ?? (t == .glass ? "Glass" : "System"),
+                                light: cardPalette(for: t, systemDark: false), dark: cardPalette(for: t, systemDark: true),
+                                style: st)
+    }
+    func exportSpec(custom c: ThemeSpec) -> ThemeSpec {
+        let st = effectiveStyle(id: c.id ?? "", typography: c.typography)
+        return ThemeSpec.export(id: c.id, nameVi: c.nameVi, nameEn: c.nameEn,
+                                light: cardPalette(custom: c, systemDark: false), dark: cardPalette(custom: c, systemDark: true),
+                                style: st)
     }
     /// Ảnh nền chỉ bật khi có quyền Plus VÀ file tồn tại.
     func wallpaperActive(fileExists: Bool) -> Bool {
@@ -619,16 +620,13 @@ struct ThemeSettings: Equatable {
     /// "Nền theo hệ thống" đang áp: theme có nền riêng + người dùng bật cho theme đó.
     /// Mặc định TẮT ⇒ 0 chi phí, như trước.
     var usesSystemBackdrop: Bool {
-        effectiveTheme.hasOwnBackground && systemBackdropThemes.contains(effectiveTheme)
+        effectiveCustom == nil && effectiveTheme.hasOwnBackground && systemBackdropThemes.contains(effectiveTheme)
     }
 
     func palette(systemDark: Bool, wallpaperActive: Bool) -> KeyboardPalette {
-        var p = effectiveTheme.palette(systemDark: systemDark)
-        if usesSystemBackdrop, !wallpaperActive { p = p.onSystemBackdrop(systemDark: systemDark) }
-        let style = effectiveKeyStyle
-        p = style.applyColors(to: p)
-        p.keyLabelPinned = style.labelColor != nil
-        p = style.applyAccent(to: p)
+        let base = effectiveCustom?.palette(dark: systemDark) ?? effectiveTheme.palette(systemDark: systemDark)
+        let p = Self.styled(base, style: effectiveKeyStyle, systemDark: systemDark,
+                            backdrop: usesSystemBackdrop && !wallpaperActive)
         return (wallpaperActive ? p.overWallpaper() : p)
             .withTransparency(keyboard: keyboardTransparency, labels: labelTransparency,
                               systemDark: systemDark, wallpaper: wallpaperActive)
@@ -704,6 +702,9 @@ struct KeyStyle: Equatable {
     var fontScale: Int?
     var font: KeyLabelFont = .standard
     var weight: KeyLabelWeight = .regular
+    /// Vá từng chế độ ("Giao diện JSON" → Sửa): màu nào có thì thay màu theme đúng chế độ đó.
+    var light = ThemeSlots()
+    var dark = ThemeSlots()
 
     static let `default` = KeyStyle()
     var isDefault: Bool { self == .default }
@@ -788,14 +789,60 @@ struct KeyStyle: Equatable {
     static func accentInk(_ themeInk: RGBA, on accent: RGBA) -> RGBA {
         KeyboardTransparency.readable(themeInk, on: accent)
     }
+
+    /// Bản vá theo chế độ (light / dark) — áp TRƯỚC applyColors / applyAccent. Mặc định tự tính như theme
+    /// JSON: balloon theo key, trail = nhấn 60%, accentInk tự tính. Viền trong suốt = bỏ viền; motif
+    /// "none" = bỏ hoạ tiết. Không vá ⇒ y như cũ (0 chi phí).
+    func applyPatch(to p: KeyboardPalette, dark d: Bool) -> KeyboardPalette {
+        let s = d ? dark : light
+        guard !s.isEmpty else { return p }
+        let c = ThemeColorCode.rgba
+        var q = p
+        if let v = s.bg { q.background = c(v) }
+        if let v = s.key { q.keyFill = c(v); q.balloon = c(v) }
+        if let v = s.special { q.specialFill = c(v) }
+        if let v = s.ink { q.ink = c(v); q.barInk = c(v); q.isDark = c(v).luminance > 0.5 }
+        if let v = s.accent {
+            q.accent = c(v)
+            q.trail = c(v).alpha(0.6)
+            q.accentInk = ThemeSpec.autoAccentInk(c(v))
+            q.accentShift = true
+        }
+        if let v = s.accentInk { q.accentInk = c(v) }
+        if let v = s.border { q.keyBorder = v >> 24 == 0 ? nil : c(v) }
+        if let v = s.fn { q.functionFill = c(v) }
+        if let v = s.fnInk { q.functionInk = c(v) }
+        if let v = s.balloon { q.balloon = c(v) }
+        if let v = s.trail { q.trail = c(v) }
+        if let dc = s.deco {
+            q.decoration = dc.motif.map { KeyboardDecoration(motif: $0, color: c(dc.color), density: dc.density) }
+        }
+        return q
+    }
+
+    /// Theme đầy đủ người dùng sửa (trình sửa JSON) → bản vá so với `base` (màu theme có sẵn từng chế độ)
+    /// + kiểu chữ. Bỏ label / fill / accent dạng chung (màu đã nằm trong bản vá). `lostBg` = người dùng bỏ
+    /// nền của theme có nền (không biểu diễn được — giữ nền).
+    static func fromEdited(_ edited: ThemeSpec, baseLight: ThemeSlots, baseDark: ThemeSlots) -> (style: KeyStyle, lostBg: Bool) {
+        let l = edited.slots(dark: false).patch(from: baseLight)
+        let d = edited.slots(dark: true).patch(from: baseDark)
+        var st = KeyStyle()
+        st.light = l.patch
+        st.dark = d.patch
+        st.corner = edited.corner
+        st.fontScale = edited.fontScale
+        st.font = edited.font ?? .standard
+        st.weight = edited.weight ?? .regular
+        return (st, l.lostBg || d.lostBg)
+    }
 }
 
-/// Lưu "Tuỳ chỉnh nâng cao" theo theme: MỘT khoá App Group `keyStyles` = chuỗi JSON gọn, khoá sắp xếp
-/// (y hệt Android KeyStyleStore — sao lưu / iCloud chuyển nguyên chuỗi giữa hai nền tảng):
-///   {"pink":{"accent":14239104,"corner":70},"system":{"fill":1056816,"font":"mono","label":16723285}}
-/// Trường (đều tuỳ chọn, thiếu = mặc định): label / fill / accent = 0xRRGGBB (số thập phân),
-/// corner 0…100, fontScale 80…150, font = KeyLabelFont.rawValue, weight = KeyLabelWeight.rawValue.
-/// Theme không chỉnh gì thì không có mục; trống = "{}". Giá trị sai/ngoài phạm vi bị bỏ / kẹp.
+/// Lưu "Tuỳ chỉnh nâng cao" (= bản vá "Giao diện JSON") theo theme: MỘT khoá App Group `keyStyles` =
+/// chuỗi JSON chuẩn (y hệt Android KeyStyleStore — sao lưu / iCloud chuyển nguyên chuỗi):
+///   {"pink":{"accent":"#D6336C","corner":70},"system":{"dark":{"key":"#202020"},"fill":"#102030"}}
+/// Trường (đều tuỳ chọn): label / fill / accent = "#RRGGBB" (áp cả sáng lẫn tối, chữ tự đọc được),
+/// corner 0…100, fontScale 80…150, font, weight, light / dark = vá màu từng chế độ (khoá như theme JSON).
+/// Theme không chỉnh gì thì không có mục; trống = "{}".
 enum KeyStyleStore {
     static let key = "keyStyles"
     static let empty = "{}"
@@ -814,52 +861,48 @@ enum KeyStyleStore {
         }
     }
 
+    /// Cả kho bản vá: tối đa ~ (50 theme tự tạo + 13 có sẵn) × vài KB.
+    static let limits: StrictJSON.Limits = {
+        var l = StrictJSON.Limits()
+        l.maxBytes = 512 * 1024
+        l.maxMembers = 128
+        return l
+    }()
+
+    /// Đọc CHẶT (ThemeSpecParser.override): mục nào có khoá lạ / màu sai ⇒ bỏ cả mục (theme đó vẽ như
+    /// chưa chỉnh); chuỗi hỏng ⇒ rỗng. Không bao giờ crash.
     static func parse(_ raw: String?) -> [String: KeyStyle] {
-        guard let raw, raw != empty, let data = raw.data(using: .utf8),
-              let obj = (try? JSONSerialization.jsonObject(with: data)) as? [String: Any] else { return [:] }
+        guard let raw, raw != empty, case .success(.object(let m)) = StrictJSON.parse(raw, limits: limits) else { return [:] }
         var out: [String: KeyStyle] = [:]
-        for (id, v) in obj {
-            guard validId(id), let o = v as? [String: Any] else { continue }
-            func int(_ k: String) -> Int? {
-                guard let n = o[k] as? NSNumber, CFGetTypeID(n) != CFBooleanGetTypeID() else { return nil }
-                let d = n.doubleValue
-                return d.isFinite && d == d.rounded() && abs(d) < 1e9 ? n.intValue : nil
-            }
-            var st = KeyStyle()
-            st.labelColor = KeyStyle.parseColor(int("label"))
-            st.fillColor = KeyStyle.parseColor(int("fill"))
-            st.accentColor = KeyStyle.parseColor(int("accent"))
-            st.corner = KeyStyle.parseCorner(int("corner"))
-            st.fontScale = KeyStyle.parseFontScale(int("fontScale"))
-            st.font = (o["font"] as? String).flatMap(KeyLabelFont.init(rawValue:)) ?? .standard
-            st.weight = (o["weight"] as? String).flatMap(KeyLabelWeight.init(rawValue:)) ?? .regular
-            if !st.isDefault { out[id] = st }
+        for (id, v) in m where validId(id) {
+            if let st = ThemeSpecParser.override(from: v), !st.isDefault { out[id] = st }
         }
         return out
     }
 
-    /// Chuỗi CHUẨN (khoá sắp xếp, không khoảng trắng) — so sánh / đồng bộ theo chuỗi được.
+    static func json(_ st: KeyStyle) -> StrictJSON {
+        var f: [(String, StrictJSON)] = []
+        func rgb(_ v: UInt32) -> StrictJSON { .string(ThemeColorCode.format(0xFF00_0000 | (v & 0xFFFFFF))) }
+        if let v = st.labelColor { f.append(("label", rgb(v))) }
+        if let v = st.fillColor { f.append(("fill", rgb(v))) }
+        if let v = st.accentColor { f.append(("accent", rgb(v))) }
+        if let v = st.corner { f.append(("corner", .int(v))) }
+        if let v = st.fontScale { f.append(("fontScale", .int(v))) }
+        if st.font != .standard { f.append(("font", .string(st.font.rawValue))) }
+        if st.weight != .regular { f.append(("weight", .string(st.weight.rawValue))) }
+        if !st.light.isEmpty { f.append(("light", ThemeSpec.json(st.light))) }
+        if !st.dark.isEmpty { f.append(("dark", ThemeSpec.json(st.dark))) }
+        return .object(f)
+    }
+
+    /// Chuỗi CHUẨN (StrictJSON.canonical: khoá sắp xếp, không khoảng trắng, màu "#RRGGBB") — trùng Android.
     static func serialize(_ m: [String: KeyStyle]) -> String {
-        var parts: [String] = []
-        for id in m.keys.sorted() where validId(id) {
-            guard let st = m[id], !st.isDefault else { continue }
-            var f: [String] = []
-            if let v = st.accentColor { f.append("\"accent\":\(v)") }
-            if let v = st.corner { f.append("\"corner\":\(v)") }
-            if let v = st.fillColor { f.append("\"fill\":\(v)") }
-            if st.font != .standard { f.append("\"font\":\"\(st.font.rawValue)\"") }
-            if let v = st.fontScale { f.append("\"fontScale\":\(v)") }
-            if let v = st.labelColor { f.append("\"label\":\(v)") }
-            if st.weight != .regular { f.append("\"weight\":\"\(st.weight.rawValue)\"") }
-            parts.append("\"\(id)\":{" + f.joined(separator: ",") + "}")
-        }
-        return "{" + parts.joined(separator: ",") + "}"
+        StrictJSON.object(m.compactMap { id, st in validId(id) && !st.isDefault ? (id, json(st)) : nil }).canonical
     }
 
     /// Chuẩn hoá chuỗi từ file sao lưu / iCloud; nil = không phải object JSON (bỏ qua).
     static func normalize(_ raw: String) -> String? {
-        guard let data = raw.data(using: .utf8),
-              (try? JSONSerialization.jsonObject(with: data)) is [String: Any] else { return nil }
+        guard case .success(.object) = StrictJSON.parse(raw, limits: limits) else { return nil }
         return serialize(parse(raw))
     }
 
@@ -1039,4 +1082,6 @@ final class KeyLabelFonts {
 extension ThemeGate {
     /// "Tuỳ chỉnh nâng cao" đi cùng quyền theme cao cấp (Plus).
     static var allowsAdvanced: Bool { PlusGate.isUnlocked(.premiumThemes) }
+    /// Theme tự tạo / dán / sửa JSON (Plus). "Chép JSON" luôn miễn phí.
+    static var allowsCustom: Bool { PlusGate.isUnlocked(.premiumThemes) }
 }

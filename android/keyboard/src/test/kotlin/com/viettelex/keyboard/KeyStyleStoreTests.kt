@@ -30,7 +30,7 @@ class KeyStyleStoreTests {
 
     companion object {
         /** Chuỗi chuẩn — iOS PerThemeKeyStyleTests.golden phải trùng (sao lưu đi qua lại). */
-        const val GOLDEN = """{"pink":{"accent":14037868,"corner":70},"system":{"fill":1056816,"font":"mono","label":16723285,"weight":"heavy"}}"""
+        const val GOLDEN = """{"pink":{"accent":"#D6336C","corner":70},"system":{"fill":"#102030","font":"mono","label":"#FF2D55","weight":"heavy"}}"""
         val GOLDEN_MAP = mapOf(
             "pink" to KeyStyle(accentColor = 0xD6336C, corner = 70),
             "system" to KeyStyle(labelColor = 0xFF2D55, fillColor = 0x102030, font = KeyLabelFont.MONO, weight = KeyLabelWeight.HEAVY),
@@ -51,14 +51,14 @@ class KeyStyleStoreTests {
         val base = s.effectiveTheme.palette(dark) ?: ThemePalette(bg = c.rgb(0xEEF0F4), keyFill = c.WHITE,
             specialFill = c.rgb(0xD6DBE3), ink = c.rgb(0x1F1F1F), trail = c.rgb(0x0B57D0), balloon = c.WHITE,
             popup = c.WHITE, action = c.rgb(0x0B57D0), actionInk = c.WHITE, chip = c.rgb(0xD3E3FD), isDark = dark)
-        return s.styled(s.effectiveTheme, base).withTransparency(s.keyboardTransparency, s.labelTransparency, dark)
+        return s.styledCurrent(base, dark).withTransparency(s.keyboardTransparency, s.labelTransparency, dark)
     }
 
     @Test fun canonicalFormatMatchesIOS() {
         assertEquals(GOLDEN, KeyStyleStore.serialize(GOLDEN_MAP))
         assertEquals(GOLDEN_MAP, KeyStyleStore.parse(GOLDEN))
         assertEquals(GOLDEN, KeyStyleStore.normalize(
-            """{ "system": {"weight":"heavy","label":16723285,"font":"mono","fill":1056816}, "pink":{"corner":70,"accent":14037868} }"""))
+            """{ "system": {"weight":"heavy","label":"#ff2d55","font":"mono","fill":"#102030"}, "pink":{"corner":70,"accent":"#D6336C"} }"""))
         assertNull(KeyStyleStore.normalize("[1,2]"))
         assertNull(KeyStyleStore.normalize("oops"))
         assertEquals("{}", KeyStyleStore.serialize(emptyMap()))
@@ -86,8 +86,8 @@ class KeyStyleStoreTests {
         assertEquals(s.keyStyles, ThemeSettings.load(prefs.get).keyStyles)
         assertEquals(setOf("mint", "peach"), s.keyStyles.keys)
         // Thẻ "Chọn giao diện" phản ánh tuỳ chỉnh riêng; theme chưa chỉnh = palette gốc.
-        assertEquals(c.rgb(0x102030), s.styled(KeyboardTheme.MINT, KeyboardTheme.MINT.palette(false)!!).keyFill)
-        assertEquals(KeyboardTheme.SKY.palette(false), s.styled(KeyboardTheme.SKY, KeyboardTheme.SKY.palette(false)!!))
+        assertEquals(c.rgb(0x102030), s.styled(KeyboardTheme.MINT, KeyboardTheme.MINT.palette(false)!!, false).keyFill)
+        assertEquals(KeyboardTheme.SKY.palette(false), s.styled(KeyboardTheme.SKY, KeyboardTheme.SKY.palette(false)!!, false))
         assertEquals(70, s.effectiveStyleFor(KeyboardTheme.PINK).corner)
     }
 
@@ -108,7 +108,7 @@ class KeyStyleStoreTests {
         assertEquals(KeyStyle(), s.effectiveKeyStyle)
         val base = KeyboardTheme.SKY.palette(true)!!
         assertEquals(base, KeyStyle().applyAccent(base))
-        assertEquals(base, s.styled(KeyboardTheme.SKY, base))
+        assertEquals(base, s.styled(KeyboardTheme.SKY, base, true))
         assertEquals("{}", s.toMap()[Keys.KEY_STYLES])
     }
 

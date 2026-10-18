@@ -35,7 +35,7 @@ class ThemeDecorDrawable(private val bg: Int, private val decoration: ThemeDecor
     }
 
     private fun rebuild() {
-        decorPath(path, decoration.motif, ThemeDecoration.placements(bounds.width() / density.toDouble(), gaps),
+        decorPath(path, decoration.motif, ThemeDecoration.placements(bounds.width() / density.toDouble(), gaps, decoration.density),
             density, bounds.left.toFloat(), 0f)
     }
 

@@ -62,8 +62,9 @@ class BackupTests {
         val p = BackupCodec.decode(fixture("backup-ios-v1"))
         assertEquals("ios", p.platform)
         assertEquals(Instant.parse("2026-09-27T08:00:00Z"), p.createdAt)
-        assertEquals(41, p.settings!!.size)             // emojiSuggest/pasteButton chỉ iOS, bị bỏ qua
+        assertEquals(42, p.settings!!.size)             // emojiSuggest/pasteButton chỉ iOS, bị bỏ qua
         assertEquals(KeyStyleStoreTests.GOLDEN, p.settings!![Keys.KEY_STYLES])   // chuỗi chuẩn trùng iOS
+        assertEquals("""{"custom":{"dark":"same","id":"custom","light":{"accent":"#0A84FF","bg":"#EEEEEE","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"Thử"},"v":1}}""", p.settings!![Keys.CUSTOM_THEMES])   // Giao diện JSON: cùng chuỗi chuẩn
         assertEquals(true, p.settings!![Keys.TEXT_TOOLS_ENABLED])
         assertEquals("wood", p.settings!![Keys.KEY_SOUND_STYLE])
         assertEquals(true, p.settings!![Keys.KEY_SOUND])
@@ -130,7 +131,7 @@ class BackupTests {
             "keyboardTransparency" to 250, "keyLabelTransparency" to 35,
             BackupPrefs.SHORTCUTS_KEY to "# VietTelex — bảng gõ tắt\nko: không\n")
         val p = BackupPrefs.snapshot({ prefs[it] }, listOf(TemplateItem("", "a")), null)
-        assertEquals(53, p.settings!!.size)   // +splitKeyboard; 6 khoá KeyStyle chung → 1 keyStyles (18/10/2026)
+        assertEquals(54, p.settings!!.size)   // +splitKeyboard; 6 khoá KeyStyle chung → 1 keyStyles (18/10/2026)
         assertEquals("{}", p.settings!![Keys.KEY_STYLES])   // chưa chỉnh theme nào
         assertEquals(false, p.settings!![Keys.SPLIT_KEYBOARD])   // tách đôi: mặc định tắt
         assertEquals(0, p.settings!![Keys.SUGGESTION_COUNT])   // số từ gợi ý: mặc định Tự động

@@ -100,15 +100,17 @@ struct ThemeSettingsView: View {
                     ThemePickerView(settings: $settings, onChange: save)
                 } label: {
                     HStack(spacing: 12) {
-                        ThemePreview(palette: settings.cardPalette(for: settings.theme, systemDark: scheme == .dark),
+                        ThemePreview(palette: settings.custom.map { settings.cardPalette(custom: $0, systemDark: scheme == .dark) }
+                                        ?? settings.cardPalette(for: settings.theme, systemDark: scheme == .dark),
                                      wallpaper: nil, dim: 0, large: false,
-                                     keyStyle: settings.effectiveStyle(for: settings.theme))
+                                     keyStyle: settings.custom.map { settings.effectiveStyle(id: $0.id ?? "", typography: $0.typography) }
+                                        ?? settings.effectiveStyle(for: settings.theme))
                             .frame(width: 56, height: 36)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
                         Text(L("Giao diện bàn phím"))
                         Spacer()
-                        Text(settings.effectiveTheme.title).foregroundStyle(.secondary).lineLimit(1)
+                        Text(settings.effectiveCustom?.name ?? settings.effectiveTheme.title).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
                 if settings.theme.hasOwnBackground {
@@ -558,7 +560,7 @@ struct ThemePreview: View {
         let gaps = (1...3).map { i in
             KeyboardDecoration.Gap(center: Double((pad + CGFloat(i) * keyH + (CGFloat(i) - 0.5) * gap) / k), height: 11)
         }
-        let path = d.path(KeyboardDecoration.placements(width: 390, gaps: gaps))
+        let path = d.path(KeyboardDecoration.placements(width: 390, gaps: gaps, density: d.density))
         return Path(path).applying(CGAffineTransform(scaleX: k, y: k)).fill(Color(d.color.ui))
     }
 
@@ -602,84 +604,5 @@ struct ThemePreview: View {
             .overlay(Text(label).font(font).minimumScaleFactor(0.5).lineLimit(1)
                 .foregroundColor(Color((ink ?? palette.keyInk).ui)))
             .frame(width: max(w, 1), height: max(h, 1))
-    }
-}
-
-/// "Chọn giao diện": lưới 2 cột thẻ xem trước (vẽ bằng token theme, không ảnh), chia "Miễn phí" /
-/// "Plus". Chạm là chọn ngay và ở lại trang (thẻ đang chọn có viền + dấu ✓). Theme Plus bị khoá:
-/// mờ + nhãn Plus, chạm mở màn VietTelex Plus (như Android); lối mua Plus cũng ở đầu trang.
-struct ThemePickerView: View {
-    @Binding var settings: ThemeSettings
-    let onChange: () -> Void
-    @Environment(\.colorScheme) private var scheme
-    /// Chạm thẻ Plus bị khoá ⇒ mở màn VietTelex Plus (cùng màn PlusEntryRow mở).
-    @State private var showPlus = false
-
-    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
-
-    var body: some View {
-        List {
-            if !ThemeGate.allowsWallpaper {
-                Section {
-                    PlusEntryRow()
-                } footer: {
-                    Text(L("Theme có nhãn Plus và ảnh nền thuộc VietTelex Plus. Hệ thống, Tối OLED và Tương phản cao luôn miễn phí."))
-                }
-            }
-            ForEach(ThemePicker.sections, id: \.title) { section in
-                Section {
-                    LazyVGrid(columns: columns, spacing: 14) {
-                        ForEach(section.themes, id: \.self) { card($0) }
-                    }
-                    .padding(.vertical, 6)
-                } header: { Text(L(section.title)) }
-            }
-        }
-        .navigationTitle(L("Chọn giao diện"))
-        .navigationBarTitleDisplayMode(.inline)
-        .navigationDestination(isPresented: $showPlus) { PlusView(model: PlusShared.model) }
-    }
-
-    private func card(_ t: KeyboardTheme) -> some View {
-        let selected = settings.theme == t
-        let locked = !ThemeGate.allows(t)
-        return Button {
-            switch ThemePicker.tap(t, in: settings) {
-            case .select(let next): settings = next; onChange()
-            case .openPlus: showPlus = true
-            }
-        } label: {
-            VStack(spacing: 6) {
-                // Thẻ phản ánh tuỳ chỉnh riêng của theme đó (rẻ: vài phép màu, không ảnh).
-                ThemePreview(palette: settings.cardPalette(for: t, systemDark: scheme == .dark),
-                             wallpaper: nil, dim: 0, large: false,
-                             keyStyle: settings.effectiveStyle(for: t))
-                    .frame(height: 78)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10)
-                        .stroke(selected ? Color.accentColor : Color.secondary.opacity(0.3),
-                                lineWidth: selected ? 3 : 1))
-                    .overlay(alignment: .topTrailing) {
-                        if selected {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundStyle(.white, Color.accentColor).font(.title3).padding(4)
-                        }
-                    }
-                HStack(spacing: 4) {
-                    Text(t.title).font(.footnote).lineLimit(1)
-                    if t.isPlus && locked {
-                        Text("Plus").font(.caption2.weight(.bold))
-                            .padding(.horizontal, 5).padding(.vertical, 1)
-                            .background(Capsule().fill(Color.orange.opacity(0.85)))
-                            .foregroundStyle(.white)
-                    }
-                }
-                .foregroundStyle(.primary)
-            }
-            .opacity(locked ? 0.5 : 1)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(t.title + (selected ? L(", đang chọn") : "") + (locked ? " · Plus" : ""))
-        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }
