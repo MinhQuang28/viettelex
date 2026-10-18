@@ -3,10 +3,10 @@
   "url": "https://github.com/ptrinh/viettelex/releases/tag/v1.8.26",
   "build": 135,
   "windows": {
-    "version": "1.3.1",
-    "x64": "https://github.com/ptrinh/viettelex/releases/download/windows-v1.3.1/VietTelex-1.3.1-x64.msi",
-    "arm64": "https://github.com/ptrinh/viettelex/releases/download/windows-v1.3.1/VietTelex-1.3.1-arm64.msi",
-    "notes": "Dữ liệu ngôn ngữ mới, gợi ý nhớ cách viết hoa, thêm dấu cả câu chính xác hơn."
+    "version": "1.3.2",
+    "x64": "https://github.com/ptrinh/viettelex/releases/download/windows-v1.3.2/VietTelex-1.3.2-x64.msi",
+    "arm64": "https://github.com/ptrinh/viettelex/releases/download/windows-v1.3.2/VietTelex-1.3.2-arm64.msi",
+    "notes": "Từ tiếng Anh trả về chữ gốc ngay khi gõ, gợi ý đuôi email, thêm nhiều từ gợi ý, viết hoa đúng tên riêng."
   },
   "linux": {
     "version": "1.0.16",
@@ -74,8 +74,8 @@
     "notes": "Dữ liệu ngôn ngữ mới, cặp từ chọn tay, gợi ý nhớ cách viết hoa, thêm dấu cả câu chính xác hơn."
   },
   "android": {
-    "version": "1.5.10",
-    "apk": "https://github.com/ptrinh/viettelex/releases/download/android-v1.5.10/VietTelex-android-1.5.10.apk",
+    "version": "1.5.11",
+    "apk": "https://github.com/ptrinh/viettelex/releases/download/android-v1.5.11/VietTelex-android-1.5.11.apk",
     "play": "https://play.google.com/store/apps/details?id=com.viettelex.android"
   }
 }
