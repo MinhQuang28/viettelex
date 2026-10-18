@@ -1,3 +1,23 @@
+viettelex (1.0.17) UNRELEASED; urgency=medium
+
+  * Từ tiếng Anh tự trả về chữ gốc ngay khi gõ ("goog" thay vì "gôg").
+  * Gợi ý đuôi email: "ten@" → gmail.com, ấn Tab để nhận.
+  * Thêm nhiều từ cho gợi ý (từ lóng, Gen Z, tài chính, y tế, công nghệ)
+    và viết hoa đúng tên riêng (VietTelex, GitHub…).
+  * Teencode: "daja" + dấu cách ra "Dạa" (khi bật Chính tả teencode).
+  * Gõ được "gét"; từ tục chỉ gợi ý khi tắt Lọc từ nhạy cảm (cả từ tiếng Anh).
+  * ---
+  * English words switch back to plain letters as soon as they are certain
+    ("goog" instead of "gôg").
+  * Email domain suggestions: "name@" → gmail.com, Tab to accept.
+  * Many more suggestion words (slang, Gen Z, finance, health, tech) with
+    proper capitalization (VietTelex, GitHub…).
+  * Teencode: "daja" + space gives "Dạa" (when teencode spelling is on).
+  * "gét" can be typed; vulgar words are suggested only with the sensitive
+    word filter off (English ones too).
+
+ -- VietTelex Maintainers <maintainers@viettelex.invalid>  Sun, 18 Oct 2026 22:15:00 +0700
+
 viettelex (1.0.16) UNRELEASED; urgency=medium
 
   * Dữ liệu ngôn ngữ mới (thêm văn hội thoại): thêm dấu cả câu và gợi ý từ
