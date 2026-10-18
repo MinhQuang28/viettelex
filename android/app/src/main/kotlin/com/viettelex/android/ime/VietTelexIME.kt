@@ -205,6 +205,8 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
             settings().let { syncClipHistory(it.clipboardHistory, it.clipboardTtl) }
         // Bật/tắt thả nổi trong app khi bàn phím đang mở (ô Thử gõ) → áp ngay.
         else if (key == Keys.FLOATING_KEYBOARD && inputShown) applyFloating(settings().floatingKeyboard)
+        // Bật/tắt bàn phím tách đôi trong app khi bàn phím đang mở → áp ngay.
+        else if (key == Keys.SPLIT_KEYBOARD && inputShown) keyboard?.setSplit(settings().splitKeyboard)
     }
 
     /**
@@ -416,7 +418,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
             th.dp(KeyLayout.keyAreaDp(th.tablet, th.landscape, settings.rowHeightAdjust, settings.numberRow,
                 settings.numberRowFullHeight, resources.configuration.screenHeightDp.toFloat())),
             field.numberSigned, field.numberDecimal, settings.numberRow, settings.numberRowFullHeight,
-            settings.spaceSideKey, emojiInStrip, settings.keyLabelSize)
+            settings.spaceSideKey, emojiInStrip, settings.keyLabelSize, settings.splitKeyboard)
         kb.keyPreview = settings.keyPreview
         kb.keyPressHighlight = settings.keyPressHighlight
         kb.configureSpaceFlick(settings.spaceSwipeLanguage, session.language)
@@ -1412,6 +1414,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
 
     override fun onToggleOneHand() {
         val kb = keyboard ?: return
+        if (kb.splitActive) return          // tách đôi: một tay tạm tắt (như iOS)
         val last = OneHandSide.fromPref(prefs.getString(Keys.ONE_HAND_LAST, null))
         onOneHandChange(OneHand.toggled(kb.oneHand, last))
     }

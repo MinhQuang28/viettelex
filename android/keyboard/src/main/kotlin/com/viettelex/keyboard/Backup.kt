@@ -64,6 +64,7 @@ object BackupSettings {
         // "Chiều cao thanh gợi ý" ([SuggestionBarHeight]) — cùng khoá + id iOS.
         Spec(Keys.SUGGESTION_BAR_HEIGHT, SettingKind.Choice(SuggestionBarHeight.DEFAULT.id, SuggestionBarHeight.IDS)),
         Spec(Keys.FLOATING_KEYBOARD, SettingKind.Bool(false)),
+        Spec(Keys.SPLIT_KEYBOARD, SettingKind.Bool(false)),
         Spec(Keys.SHORTCUTS_ENABLED, SettingKind.Bool(true)),
         Spec(Keys.ADD_TONES_CHIP, SettingKind.Bool(false)),
         Spec(Keys.NUMBER_CHIPS, SettingKind.Bool(true)),

@@ -117,6 +117,8 @@ object L10nTable {
         put("Thả nổi bàn phím", "Float keyboard")
         put("Gắn bàn phím xuống đáy", "Dock keyboard")
         put("Bàn phím thả nổi", "Floating keyboard")
+        put("Bàn phím tách đôi", "Split keyboard")
+        put("Màn hình rộng (điện thoại gập khi mở, điện thoại xoay ngang, máy tính bảng): chia bàn phím làm hai nửa để gõ bằng hai ngón cái. Khi đang tách, gõ vuốt và chế độ một tay tạm tắt.", "On wide screens (an open foldable, a phone in landscape, a tablet): splits the keyboard into two halves for thumb typing. While split, swipe typing and one-handed mode are paused.")
         put("Thả nổi", "Floating")
         put("Tách bàn phím khỏi đáy màn hình thành khung nhỏ, kéo thanh dưới cùng để đặt đâu cũng được — app bên dưới vẫn chạm được, không bị che hay co lại. Bật/tắt nhanh: giữ 😊 → 🪟; nút ⤓ trên thanh kéo để gắn lại. Khi thả nổi, chế độ một tay và Nâng bàn phím tạm bỏ qua. Vị trí nhớ riêng cho màn hình dọc và ngang.", "Detaches the keyboard from the bottom of the screen into a smaller panel — drag the bar at its bottom to put it anywhere. The app underneath stays usable and isn't covered or resized. Quick toggle: hold 😊 → 🪟; the ⤓ button on the drag bar docks it again. While floating, one-handed mode and Raise keyboard are ignored. Position is remembered separately for portrait and landscape.")
         put("Cài đặt VietTelex", "VietTelex settings")

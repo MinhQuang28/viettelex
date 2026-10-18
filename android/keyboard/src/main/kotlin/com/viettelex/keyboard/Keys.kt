@@ -126,6 +126,11 @@ object Keys {
      */
     const val FLOATING_KEYBOARD = "floatingKeyboard"
     /**
+     * Bool — bàn phím tách đôi khi màn hình rộng ([SplitLayout]; Giao diện). Mặc định TẮT. Tên như
+     * iOS App Group (`SplitLayout.settingKey`).
+     */
+    const val SPLIT_KEYBOARD = "splitKeyboard"
+    /**
      * String "fx,fy" (0…1, phần khoảng trống ngang/dọc còn lại) — vị trí khung thả nổi theo
      * chiều màn hình. Lưu ở prefs trạng thái IME ("ime_state"), không sao lưu (riêng từng máy).
      */

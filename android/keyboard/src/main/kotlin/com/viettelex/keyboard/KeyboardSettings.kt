@@ -112,6 +112,8 @@ data class KeyboardSettings(
     var oneHandMode: String = "off",
     /** Bàn phím thả nổi (#112) — mặc định TẮT; bật ⇒ một tay + nâng bàn phím bị bỏ qua. */
     var floatingKeyboard: Boolean = false,
+    /** Bàn phím tách đôi khi rộng ≥ [SplitLayout.MIN_WIDTH_DP] — mặc định TẮT (tắt ⇒ 0 chi phí). */
+    var splitKeyboard: Boolean = false,
     var debugTouchLog: Boolean = false,
     /** Lịch sử clipboard — mặc định TẮT. */
     var clipboardHistory: Boolean = false,
@@ -199,6 +201,7 @@ data class KeyboardSettings(
             s.keyLabelSize = KeyLabelSize.of(get(Keys.KEY_LABEL_SIZE))
             s.oneHandMode = (get(Keys.ONE_HAND_MODE) as? String)?.takeIf { it == "left" || it == "right" } ?: "off"
             s.floatingKeyboard = b(Keys.FLOATING_KEYBOARD, s.floatingKeyboard)
+            s.splitKeyboard = b(Keys.SPLIT_KEYBOARD, s.splitKeyboard)
             s.clipboardHistory = b(Keys.CLIPBOARD_HISTORY, s.clipboardHistory)
             s.clipboardTtl = ClipboardTTL.of(get(Keys.CLIPBOARD_TTL))
             s.incognito = b(Keys.INCOGNITO, s.incognito)
