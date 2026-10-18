@@ -118,9 +118,10 @@ final class CompositionSyncBridgeTests: XCTestCase {
     func testFailSafeBoundarySkipsAutoRestore() {
         let p = MockProxy()
         let b = EngineBridge(settings: KeyboardSettings())
-        for ch in "google" { b.letter(ch, proxy: p) }
+        // "test" (không phải "google": từ 18/10/2026 google trả về raw ngay giữa từ).
+        for ch in "test" { b.letter(ch, proxy: p) }
         let shown = p.text
-        XCTAssertNotEqual(shown, "google")       // engine đang hiện dạng có dấu
+        XCTAssertNotEqual(shown, "test")         // engine đang hiện dạng có dấu
         p.fakeContext = "abc"
         let final = b.boundary(" ", proxy: p)
         XCTAssertEqual(p.text, shown + " ")      // không xoá gì, chỉ chèn space

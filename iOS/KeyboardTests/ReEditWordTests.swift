@@ -108,12 +108,13 @@ final class ReEditWordTests: XCTestCase {
     /// engine rỗng — đúng điều kiện controller dùng để chào backspace-undo (restoreUndo).
     func testAutoRestoredWordNotReopened() {
         let p = MockProxy(); let b = EngineBridge(settings: KeyboardSettings())
-        for ch in "google" { b.letter(ch, proxy: p) }
+        // "test" (tét → test ở space); google nay restore ngay giữa từ.
+        for ch in "test" { b.letter(ch, proxy: p) }
         let composed = b.composedWord
         let committed = b.boundary(" ", proxy: p)
         XCTAssertNotEqual(composed, committed)   // restoreUndo sẽ được set
         XCTAssertFalse(b.backspace(proxy: p))
-        XCTAssertEqual(p.text, "google")
+        XCTAssertEqual(p.text, "test")
         XCTAssertFalse(b.isComposing)            // → undoOfferActive vẫn bật như cũ
     }
 
