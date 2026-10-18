@@ -166,13 +166,15 @@ class KeyboardSessionTests {
 
     @Test fun testBackspaceUndoAfterAutoRestore() {
         val s = session(traits = FieldTraits()); val p = MockProxy()
-        s.typeKeys(p, "google ")
-        val composed = "gôgle"                      // engine restore gôgle → google
-        assertEquals("google ", p.text)
+        // "test" (collision, "tét" hợp lệ ⇒ restore ở boundary). Không còn dùng "google":
+        // eager English restore (18/10/2026) đưa nó về raw giữa từ ⇒ không có restore để undo.
+        s.typeKeys(p, "test ")
+        val composed = "tét"                        // engine restore tét → test
+        assertEquals("test ", p.text)
         s.handle(Key.Backspace, p)
         val set = s.suggestionsNow(p)!!
         assertEquals(composed, set.literal)
-        assertEquals("google", p.text)
+        assertEquals("test", p.text)
         s.acceptSuggestion(composed, p)
         assertEquals("$composed ", p.text)
     }

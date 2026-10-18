@@ -115,10 +115,17 @@ class BridgeContractTests {
         for (ch in "loss") b2.letter(ch, p2)
         assertEquals("los", b2.composedWord)
         assertEquals("los", b2.boundary(" ", p2))
+        // Ca restore thật ở boundary: "test" (bảng collision, "tét" hợp lệ nên không đóng
+        // băng). "google" KHÔNG còn là ca này từ 18/10/2026: eager English restore đưa nó về
+        // raw ngay lúc đóng băng ("goog"), boundary không ghi đè gì ⇒ không có cặp undo.
         val p3 = MockProxy(); val b3 = EngineBridge(KeyboardSettings())
-        for (ch in "google") b3.letter(ch, p3)
-        assertEquals("gôgle", b3.composedWord)
+        for (ch in "test") b3.letter(ch, p3)
+        assertEquals("tét", b3.composedWord)
         assertNotEquals(b3.composedWord, b3.boundary(" ", p3))
+        val p4 = MockProxy(); val b4 = EngineBridge(KeyboardSettings())
+        for (ch in "google") b4.letter(ch, p4)
+        assertEquals("google", b4.composedWord)
+        assertEquals("google", b4.boundary(" ", p4))
     }
 }
 
