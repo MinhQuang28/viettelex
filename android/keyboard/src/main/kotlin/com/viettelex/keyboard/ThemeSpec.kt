@@ -12,9 +12,18 @@ import java.nio.charset.CodingErrorAction
  *
  * AN TOÀN (dữ liệu không tin được — dán từ clipboard): kiểm cỡ TRƯỚC khi đọc (16 KB), UTF-8 chặt (không
  * BOM), độ sâu ≤ 8, chuỗi ≤ 200 ký tự (tên ≤ 40), chỉ số nguyên ≤ 9 chữ số, khoá lặp / khoá lạ / null /
- * sai kiểu / ký tự điều khiển ⇒ LỖI (không bao giờ ném ra ngoài, không `!!`). Không URL / ảnh / mã: chỉ
- * màu, số và vài giá trị liệt kê. IME chỉ đọc bản app đã chuẩn hoá và vẫn kiểm lại — hỏng thì về
- * theme có sẵn / Hệ thống.
+ * sai kiểu / ký tự điều khiển ⇒ LỖI (không bao giờ ném ra ngoài, không `!!`). Không mã: chỉ màu, số,
+ * vài giá trị liệt kê và URL tệp tải về (đã kiểm). IME chỉ đọc bản app đã chuẩn hoá và vẫn kiểm lại —
+ * hỏng thì về theme có sẵn / Hệ thống.
+ *
+ * Tệp tải về (Plus — ThemeAssets.kt: kế hoạch / kho / dọn; app ui/ThemeAssetDownloader.kt: tải + xử lý):
+ *   "font": "serif" | {"name":"Nunito","url":"https://….ttf|otf","sha256":"…"?}
+ *   "background": {"url":"https://…","sha256":"…"?}      ảnh nền theme (ảnh nền tự đặt của người dùng thắng)
+ *   "foreground": {"url":"https://…","sha256":"…"?}      PNG/WebP trong suốt TRÊN phím, căng đúng cỡ bàn phím
+ *   "keys": {"default"|"special"|"space"|"return"|"shift"|"delete"|"a"…"z":
+ *            {"url","sha256"?,"slice":[t,l,b,r]? (9-slice, px ảnh gốc),"pressed":{"url","sha256"?}?}}
+ * Chỉ https, không user/cổng, host có dấu chấm; ≤ 16 ảnh khác nhau, ≤ 20 tệp. JSON chỉ là CHỈ DẪN: dán /
+ * đọc không bao giờ tự tải — app hỏi trước rồi mới tải; bàn phím không bao giờ dùng mạng.
  */
 
 // ---- Lỗi / cảnh báo
@@ -23,7 +32,7 @@ data class ThemeIssue(val code: Code, val path: String = "") {
     enum class Code {
         tooLarge, encoding, syntax, depth, duplicateKey, unknownKey, missingKey, wrongType,
         badColor, badNumber, tooLong, badValue, badVersion, controlChar, clamped, lowContrast,
-        contrastTooLow, tooMany, bgKept
+        contrastTooLow, tooMany, bgKept, badUrl, tooManyFiles
     }
     val isError: Boolean get() = code != Code.clamped && code != Code.lowContrast && code != Code.bgKept
 
@@ -48,6 +57,8 @@ data class ThemeIssue(val code: Code, val path: String = "") {
         Code.contrastTooLow -> tr("Tương phản quá thấp ở %s (tối thiểu 2:1).", path)
         Code.tooMany -> tr("Đã đủ %s giao diện tự tạo — xoá bớt trước khi dán.", path)
         Code.bgKept -> tr("Giao diện có sẵn này luôn có nền — đã giữ nền gốc.")
+        Code.badUrl -> tr("Địa chỉ tệp không hợp lệ ở %s (chỉ https://, phông .ttf/.otf).", path)
+        Code.tooManyFiles -> tr("Quá nhiều tệp tải về (%s).", path)
     }
 }
 
@@ -405,6 +416,92 @@ data class ThemeSlots(
     }
 }
 
+// ---- Tệp tải về (mô hình — iOS ThemeSpec.swift y hệt)
+
+/** Một tệp: URL https (đã kiểm) + sha256 (64 hex chữ thường) nếu có. */
+data class ThemeAssetRef(val url: String, val sha256: String? = null)
+
+/** Phông tải về: tên hiển thị + tệp .ttf/.otf. */
+data class ThemeFontAsset(val name: String, val ref: ThemeAssetRef)
+
+/** Skin một phím / nhóm phím: ảnh (9-slice theo [slice] = [trên, trái, dưới, phải] px ẢNH GỐC) + ảnh khi đè. */
+data class ThemeKeySkin(val image: ThemeAssetRef, val slice: List<Int>? = null, val pressed: ThemeAssetRef? = null)
+
+/**
+ * Phần "tệp tải về" của theme (font / ảnh nền / tiền cảnh / skin phím). Nằm ở ThemeSpec lẫn KeyStyle (bản vá
+ * theme có sẵn) — cùng bộ đọc ([ThemeSpecParser] typography).
+ */
+data class ThemeAssetSpec(
+    val font: ThemeFontAsset? = null,
+    val background: ThemeAssetRef? = null,
+    val foreground: ThemeAssetRef? = null,
+    val keys: Map<String, ThemeKeySkin> = emptyMap(),
+) {
+    val isEmpty: Boolean get() = font == null && background == null && foreground == null && keys.isEmpty()
+    val hasImages: Boolean get() = background != null || foreground != null || keys.isNotEmpty()
+
+    /** `this` thắng từng trường; skin phím: có bộ nào thì thay CẢ bộ (không trộn hai bộ skin). */
+    fun mergedOver(base: ThemeAssetSpec): ThemeAssetSpec = ThemeAssetSpec(
+        font = font ?: base.font, background = background ?: base.background,
+        foreground = foreground ?: base.foreground, keys = keys.ifEmpty { base.keys })
+
+    companion object {
+        val GROUP_KEYS = listOf("default", "special")
+        val NAMED_KEYS = listOf("space", "return", "shift", "delete")
+        val LETTER_KEYS = ('a'..'z').map { it.toString() }
+        val SKIN_KEYS: Set<String> = (GROUP_KEYS + NAMED_KEYS + LETTER_KEYS).toSet()
+        const val MAX_IMAGES = 16
+        const val MAX_FILES = 20
+        const val MAX_SLICE = 1024
+        const val NAME_MAX = 40
+    }
+}
+
+/**
+ * Kiểm URL tệp (thuần, iOS y hệt): https://host/đường-dẫn, ASCII in được, không khoảng trắng / gạch chéo
+ * ngược / user@ / cổng; host chữ thường a-z 0-9 . -, có dấu chấm, không phải IP số; phông: đường dẫn kết thúc
+ * .ttf/.otf.
+ */
+object ThemeAssetURL {
+    const val PREFIX = "https://"
+
+    fun isValid(s: String, font: Boolean): Boolean {
+        if (!s.startsWith(PREFIX)) return false
+        val bytes = s.toByteArray(Charsets.UTF_8)
+        if (bytes.size > 200) return false
+        for (b in bytes) {
+            val v = b.toInt() and 0xFF
+            if (v <= 0x20 || v >= 0x7F || v == 0x5C || v == 0x22) return false
+        }
+        val rest = s.substring(PREFIX.length)
+        val hostEnd = rest.indexOfFirst { it == '/' || it == '?' || it == '#' }
+        if (hostEnd < 0 || rest[hostEnd] != '/') return false
+        val host = rest.substring(0, hostEnd)
+        if (host.isEmpty() || host.length > 253) return false
+        var dot = false
+        var allNumeric = true
+        for (ch in host) when (ch) {
+            in 'a'..'z', '-' -> allNumeric = false
+            in '0'..'9' -> {}
+            '.' -> dot = true
+            else -> return false   // chữ hoa, @, :, [ …
+        }
+        if (!dot || allNumeric || host.first() == '.' || host.last() == '.' || host.first() == '-') return false
+        if (font) {
+            val path = s.split('?', '#').first().lowercase()
+            if (!path.endsWith(".ttf") && !path.endsWith(".otf")) return false
+        }
+        return true
+    }
+
+    /** Tên miền (hiện trong câu hỏi trước khi tải). */
+    fun host(s: String): String = s.removePrefix(PREFIX).takeWhile { it != '/' && it != '?' && it != '#' }
+
+    /** "64 hex" (hoa / thường) ⇒ chữ thường; sai ⇒ null. */
+    fun sha256(s: String): String? =
+        if (s.length == 64 && s.all { it in '0'..'9' || it in 'a'..'f' || it in 'A'..'F' }) s.lowercase() else null
+}
+
 data class ThemeSpec(
     val id: String? = null,
     val nameVi: String,
@@ -416,12 +513,14 @@ data class ThemeSpec(
     val fontScale: Int? = null,
     val font: KeyLabelFont? = null,
     val weight: KeyLabelWeight? = null,
+    /** Tệp tải về (phông / ảnh nền / tiền cảnh / skin phím). Có `assets.font` ⇒ `font` = null. */
+    val assets: ThemeAssetSpec = ThemeAssetSpec(),
 ) {
     fun slots(dark: Boolean): ThemeSlots = if (dark) (this.dark ?: light) else light
     val name: String get() = if (L10n.isEnglish) (nameEn ?: nameVi) else nameVi
-    /** Kiểu chữ / bo góc mặc định của theme. */
+    /** Kiểu chữ / bo góc / tệp tải về mặc định của theme. */
     val typography: KeyStyle get() = KeyStyle(corner = corner, fontScale = fontScale, font = font ?: KeyLabelFont.DEFAULT,
-        weight = weight ?: KeyLabelWeight.REGULAR)
+        weight = weight ?: KeyLabelWeight.REGULAR, assets = assets)
 
     fun palette(dark: Boolean): ThemePalette = palette(slots(dark), dark)
 
@@ -437,8 +536,10 @@ data class ThemeSpec(
         m.add("dark" to (dark?.let { json(it) } ?: SJ.Str("same")))
         corner?.let { m.add("corner" to SJ.Num(it)) }
         fontScale?.let { m.add("fontScale" to SJ.Num(it)) }
-        font?.let { m.add("font" to SJ.Str(it.id)) }
+        val fa = assets.font
+        if (fa != null) m.add("font" to json(fa)) else font?.let { m.add("font" to SJ.Str(it.id)) }
         weight?.let { m.add("weight" to SJ.Str(it.id)) }
+        appendImages(assets, m)
         return SJ.Obj(m)
     }
     /** Chuỗi chuẩn (trùng iOS từng ký tự). */
@@ -461,6 +562,26 @@ data class ThemeSpec(
                 m.add("deco" to SJ.Obj(dm))
             }
             return SJ.Obj(m)
+        }
+
+        fun json(r: ThemeAssetRef, extra: List<Pair<String, SJ>> = emptyList()): SJ {
+            val m = ArrayList<Pair<String, SJ>>()
+            m.add("url" to SJ.Str(r.url))
+            r.sha256?.let { m.add("sha256" to SJ.Str(it)) }
+            return SJ.Obj(m + extra)
+        }
+        fun json(f: ThemeFontAsset): SJ = json(f.ref, listOf("name" to SJ.Str(f.name)))
+        fun json(k: ThemeKeySkin): SJ {
+            val extra = ArrayList<Pair<String, SJ>>()
+            k.slice?.let { s -> extra.add("slice" to SJ.Arr(s.map { SJ.Num(it) })) }
+            k.pressed?.let { extra.add("pressed" to json(it)) }
+            return json(k.image, extra)
+        }
+        /** background / foreground / keys (font ghi riêng — chung khoá với phông hệ thống). */
+        fun appendImages(a: ThemeAssetSpec, m: MutableList<Pair<String, SJ>>) {
+            a.background?.let { m.add("background" to json(it)) }
+            a.foreground?.let { m.add("foreground" to json(it)) }
+            if (a.keys.isNotEmpty()) m.add("keys" to SJ.Obj(a.keys.map { (k, v) -> k to json(v) }))
         }
 
         /** Chữ trên nền nhấn tự tính: trắng nếu đọc được (≥ 3:1), không thì đen/trắng tương phản hơn. */
@@ -495,7 +616,8 @@ data class ThemeSpec(
         fun export(id: String?, nameVi: String, nameEn: String?, light: ThemePalette, dark: ThemePalette, style: KeyStyle): ThemeSpec {
             val l = slots(light); val d = slots(dark)
             return ThemeSpec(id, nameVi, nameEn, l, if (d == l) null else d, style.corner, style.fontScale,
-                style.font.takeIf { it != KeyLabelFont.DEFAULT }, style.weight.takeIf { it != KeyLabelWeight.REGULAR })
+                style.font.takeIf { it != KeyLabelFont.DEFAULT && style.assets.font == null },
+                style.weight.takeIf { it != KeyLabelWeight.REGULAR }, style.assets)
         }
     }
 }
@@ -513,7 +635,8 @@ object ThemeSpecParser {
         val failed: Boolean get() = issues.any { it.isError }
     }
 
-    private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight")
+    private val ASSET_KEYS = setOf("background", "foreground", "keys")
+    private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight") + ASSET_KEYS
     private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco").toSet()
 
     fun parse(text: String): Outcome = when (val r = StrictJson.parse(text)) {
@@ -563,7 +686,8 @@ object ThemeSpecParser {
         val typo = typography(j, KeyStyle(), c)
         if (c.failed) return Outcome(null, c.issues)
         val spec = ThemeSpec(id, vi, en, light, if (dark == light) null else dark, typo.corner, typo.fontScale,
-            if (j["font"] != null) typo.font else null, if (j["weight"] != null) typo.weight else null)
+            if (j["font"] != null && typo.assets.font == null) typo.font else null,
+            if (j["weight"] != null) typo.weight else null, typo.assets)
         if (contrast) c.issues.addAll(contrastIssues(spec))
         return Outcome(if (c.failed) null else spec, c.issues)
     }
@@ -645,8 +769,13 @@ object ThemeSpecParser {
         when (val v = d["font"]) {
             null -> {}
             is SJ.Str -> KeyLabelFont.entries.firstOrNull { it.id == v.s }?.let { s = s.copy(font = it) } ?: c.err(ThemeIssue.Code.badValue, "font")
+            is SJ.Obj -> fontAsset(v, c)?.let { s = s.copy(font = KeyLabelFont.DEFAULT, assets = s.assets.copy(font = it)) }
             else -> c.err(ThemeIssue.Code.wrongType, "font")
         }
+        d["background"]?.let { s = s.copy(assets = s.assets.copy(background = assetRef(it, "background", false, emptySet(), c))) }
+        d["foreground"]?.let { s = s.copy(assets = s.assets.copy(foreground = assetRef(it, "foreground", false, emptySet(), c))) }
+        d["keys"]?.let { s = s.copy(assets = s.assets.copy(keys = keySkins(it, c))) }
+        c.issues.addAll(assetLimitIssues(s.assets))
         when (val v = d["weight"]) {
             null -> {}
             is SJ.Str -> KeyLabelWeight.entries.firstOrNull { it.id == v.s }?.let { s = s.copy(weight = it) } ?: c.err(ThemeIssue.Code.badValue, "weight")
@@ -655,11 +784,83 @@ object ThemeSpecParser {
         return s
     }
 
+    // ---- tệp tải về
+
+    /** {"url","sha256"?} (+ khoá thêm cho phông / skin). Sai ⇒ lỗi + null. */
+    private fun assetRef(v: SJ, p: String, font: Boolean, extra: Set<String>, c: Ctx): ThemeAssetRef? {
+        if (v !is SJ.Obj) { c.err(ThemeIssue.Code.wrongType, p); return null }
+        for ((k, _) in v.m) if (k != "url" && k != "sha256" && k !in extra) c.err(ThemeIssue.Code.unknownKey, "$p.$k")
+        var ok = true
+        var url = ""
+        when (val u = v["url"]) {
+            null -> { c.err(ThemeIssue.Code.missingKey, "$p.url"); ok = false }
+            is SJ.Str -> if (ThemeAssetURL.isValid(u.s, font)) url = u.s else { c.err(ThemeIssue.Code.badUrl, "$p.url"); ok = false }
+            else -> { c.err(ThemeIssue.Code.wrongType, "$p.url"); ok = false }
+        }
+        var sha: String? = null
+        when (val h = v["sha256"]) {
+            null -> {}
+            is SJ.Str -> { sha = ThemeAssetURL.sha256(h.s); if (sha == null) { c.err(ThemeIssue.Code.badValue, "$p.sha256"); ok = false } }
+            else -> { c.err(ThemeIssue.Code.wrongType, "$p.sha256"); ok = false }
+        }
+        return if (ok) ThemeAssetRef(url, sha) else null
+    }
+
+    private fun fontAsset(m: SJ.Obj, c: Ctx): ThemeFontAsset? {
+        val n = name(m["name"], "font.name", true, c)
+        val ref = assetRef(m, "font", true, setOf("name"), c)
+        return if (ref != null && n != null) ThemeFontAsset(n, ref) else null
+    }
+
+    private fun keySkins(v: SJ, c: Ctx): Map<String, ThemeKeySkin> {
+        if (v !is SJ.Obj) { c.err(ThemeIssue.Code.wrongType, "keys"); return emptyMap() }
+        val out = LinkedHashMap<String, ThemeKeySkin>()
+        for ((k, value) in v.m) {
+            val p = "keys.$k"
+            if (k !in ThemeAssetSpec.SKIN_KEYS) { c.err(ThemeIssue.Code.unknownKey, p); continue }
+            if (value !is SJ.Obj) { c.err(ThemeIssue.Code.wrongType, p); continue }
+            val ref = assetRef(value, p, false, setOf("slice", "pressed"), c) ?: continue
+            var slice: List<Int>? = null
+            var pressed: ThemeAssetRef? = null
+            var ok = true
+            when (val sv = value["slice"]) {
+                null -> {}
+                is SJ.Arr -> {
+                    val ins = ArrayList<Int>()
+                    for (x in sv.a) { if (x is SJ.Num) ins.add(x.v) else { c.err(ThemeIssue.Code.wrongType, "$p.slice"); ok = false; break } }
+                    if (ok) {
+                        if (ins.size == 4 && ins.all { it in 0..ThemeAssetSpec.MAX_SLICE }) slice = ins
+                        else { c.err(ThemeIssue.Code.badValue, "$p.slice"); ok = false }
+                    }
+                }
+                else -> { c.err(ThemeIssue.Code.wrongType, "$p.slice"); ok = false }
+            }
+            value["pressed"]?.let { pv ->
+                pressed = assetRef(pv, "$p.pressed", false, emptySet(), c)
+                if (pressed == null) ok = false
+            }
+            if (ok) out[k] = ThemeKeySkin(ref, slice, pressed)
+        }
+        return out
+    }
+
+    /** ≤ 16 ảnh khác nhau (theo URL), ≤ 20 tệp (ảnh + phông). */
+    fun assetLimitIssues(a: ThemeAssetSpec): List<ThemeIssue> {
+        val images = ThemeAssetPlan.imageURLs(a)
+        val files = images.size + (if (a.font == null) 0 else 1)
+        return when {
+            images.size > ThemeAssetSpec.MAX_IMAGES ->
+                listOf(ThemeIssue(ThemeIssue.Code.tooManyFiles, "${images.size} > ${ThemeAssetSpec.MAX_IMAGES}"))
+            files > ThemeAssetSpec.MAX_FILES -> listOf(ThemeIssue(ThemeIssue.Code.tooManyFiles, "$files > ${ThemeAssetSpec.MAX_FILES}"))
+            else -> emptyList()
+        }
+    }
+
     /** Bản vá theo theme (KeyStyleStore) — khoá lạ / sai ⇒ null (cả mục bị bỏ). */
     fun override(j: SJ): KeyStyle? {
         if (j !is SJ.Obj) return null
         val c = Ctx()
-        val allowed = setOf("label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark")
+        val allowed = setOf("label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark") + ASSET_KEYS
         for ((k, _) in j.m) if (k !in allowed) c.err(ThemeIssue.Code.unknownKey, k)
         fun rgb(k: String): Int? {
             val v = j[k] ?: return null

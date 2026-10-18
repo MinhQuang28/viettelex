@@ -597,10 +597,15 @@ struct ThemeSettings: Equatable {
     func effectiveStyle(id: String, typography: KeyStyle?) -> KeyStyle {
         var s = ThemeGate.allowsAdvanced ? (keyStyles[id] ?? .default) : .default
         if let t = typography {
+            // Phông người dùng chọn (hệ thống hoặc tải về) thắng phông của theme.
+            let userSystemFont = s.font != .standard && s.assets.font == nil
             if s.corner == nil { s.corner = t.corner }
             if s.fontScale == nil { s.fontScale = t.fontScale }
             if s.font == .standard { s.font = t.font }
             if s.weight == .regular { s.weight = t.weight }
+            s.assets = s.assets.merged(over: t.assets)
+            if userSystemFont { s.assets.font = nil }
+            if s.assets.font != nil { s.font = .standard }
         }
         return s
     }
@@ -742,11 +747,13 @@ struct KeyStyle: Equatable {
     /// Vá từng chế độ ("Giao diện JSON" → Sửa): màu nào có thì thay màu theme đúng chế độ đó.
     var light = ThemeSlots()
     var dark = ThemeSlots()
+    /// Tệp tải về (phông / ảnh nền / tiền cảnh / skin phím — ThemeAssets.swift). Rỗng = như cũ.
+    var assets = ThemeAssetSpec()
 
     static let `default` = KeyStyle()
     var isDefault: Bool { self == .default }
-    /// Có đổi chữ (phông / độ đậm / cỡ) — bật đường đo + kẹp chữ.
-    var customizesLabels: Bool { font != .standard || weight != .regular || fontScale != nil }
+    /// Có đổi chữ (phông / độ đậm / cỡ / phông tải về) — bật đường đo + kẹp chữ.
+    var customizesLabels: Bool { font != .standard || weight != .regular || fontScale != nil || assets.font != nil }
     var labelScale: CGFloat { CGFloat(fontScale ?? 100) / 100 }
 
     static func parseColor(_ v: Int?) -> UInt32? {
@@ -870,6 +877,7 @@ struct KeyStyle: Equatable {
         st.fontScale = edited.fontScale
         st.font = edited.font ?? .standard
         st.weight = edited.weight ?? .regular
+        st.assets = edited.assets
         return (st, l.lostBg || d.lostBg)
     }
 }
@@ -925,8 +933,10 @@ enum KeyStyleStore {
         if let v = st.accentColor { f.append(("accent", rgb(v))) }
         if let v = st.corner { f.append(("corner", .int(v))) }
         if let v = st.fontScale { f.append(("fontScale", .int(v))) }
-        if st.font != .standard { f.append(("font", .string(st.font.rawValue))) }
+        if st.font != .standard, st.assets.font == nil { f.append(("font", .string(st.font.rawValue))) }
+        if let fa = st.assets.font { f.append(("font", ThemeSpec.json(fa))) }
         if st.weight != .regular { f.append(("weight", .string(st.weight.rawValue))) }
+        ThemeSpec.appendImages(st.assets, to: &f)
         if !st.light.isEmpty { f.append(("light", ThemeSpec.json(st.light))) }
         if !st.dark.isEmpty { f.append(("dark", ThemeSpec.json(st.dark))) }
         return .object(f)
@@ -1070,19 +1080,36 @@ final class KeyLabelFonts {
     /// Có tuỳ chỉnh chữ — false ⇒ đường cũ y nguyên (không đo, không kẹp).
     let active: Bool
     private let compact: UIFontDescriptor?
+    /// Phông tải về (theme JSON "font": {…}) đã nạp từ App Group; nil = phông hệ thống (`font`).
+    let custom: CTFontDescriptor?
     private var cache: [CGFloat: UIFont] = [:]
     private var emCache: [String: KeyLabelEm] = [:]
 
-    init(style: KeyStyle, compact: UIFontDescriptor?) {
+    init(style: KeyStyle, compact: UIFontDescriptor?, custom: CTFontDescriptor? = nil) {
         font = style.font; weight = style.weight; scale = style.labelScale
         active = style.customizesLabels
         self.compact = compact
+        self.custom = custom
+    }
+
+    /// Cùng phông tải về (đối tượng mô tả) — đổi theme ⇒ dựng lại.
+    func sameCustom(_ d: CTFontDescriptor?) -> Bool {
+        switch (custom, d) {
+        case (nil, nil): return true
+        case let (a?, b?): return a === b
+        default: return false
+        }
+    }
+
+    private func makeFont(size: CGFloat) -> UIFont {
+        if let custom { return CTFontCreateWithFontDescriptor(custom, size, nil) as UIFont }
+        return Self.make(font, weight, size: size, compact: compact)
     }
 
     /// Phông ở đúng cỡ `size` (nơi gọi tự nhân `scale` nếu cần).
     func font(size: CGFloat) -> UIFont {
         if let f = cache[size] { return f }
-        let f = Self.make(font, weight, size: size, compact: compact)
+        let f = makeFont(size: size)
         if cache.count > 64 { cache.removeAll() }
         cache[size] = f
         return f
@@ -1110,7 +1137,7 @@ final class KeyLabelFonts {
     /// đo ở cỡ khác lệch bề ngang; một lần cho mỗi mẫu).
     func em(_ sample: String) -> KeyLabelEm {
         if let e = emCache[sample] { return e }
-        let e = KeyLabelEm.measure(Self.make(font, weight, size: 24, compact: compact), sample: sample)
+        let e = KeyLabelEm.measure(makeFont(size: 24), sample: sample)
         emCache[sample] = e
         return e
     }

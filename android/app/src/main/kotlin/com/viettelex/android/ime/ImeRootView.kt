@@ -46,6 +46,22 @@ class ImeRootView(
     }
     private val dimColor = wallLayer.overlay
 
+    /**
+     * Ảnh nền / tiền cảnh của THEME (tệp tải về, app đã xử lý). Ảnh nền tự đặt của người dùng (đang bật) thắng ảnh
+     * nền theme. Không có ⇒ null, không đọc gì. Thứ tự lớp: nền (màu + ảnh) · phím · tiền cảnh · vệt / hiệu ứng · ô
+     * phóng to.
+     */
+    private val themeBgFile: java.io.File? = theme.assets?.background?.takeIf {
+        com.viettelex.keyboard.ThemeAssetPlan.showsThemeBackground(userWallpaperActive = theme.palette.wallpaper, themeBackgroundReady = true)
+    }
+    private var themeBg: android.graphics.Bitmap? = null
+    private var themeBgW = 0
+    private var themeBgH = 0
+    private val themeBgRect = android.graphics.RectF()
+    private val themeBgPaint = android.graphics.Paint(android.graphics.Paint.FILTER_BITMAP_FLAG)
+    /** Tiền cảnh: view riêng TRÊN phím, dưới vệt vuốt / hiệu ứng / balloon; không nhận chạm. */
+    private val foreground: ThemeForegroundView? = theme.assets?.foreground?.let { ThemeForegroundView(context, it) }
+
     /** Nền theme (màu / gradient kính) — nền view khi dính đáy, vẽ tay trong khung khi thả nổi. */
     private val bgDrawable: android.graphics.drawable.Drawable = theme.palette.bgBottom.let { bottom ->
         // Kính giả lập: gradient dọc (GradientDrawable — vẽ phẳng, không blur).
@@ -68,10 +84,11 @@ class ImeRootView(
     init {
         background = bgDrawable
         if (bgDrawable is ThemeDecorDrawable) keyboard.onKeysLaidOut = { updateDecorGaps() }
-        if (wallpaperFile != null) setWillNotDraw(false)
+        if (wallpaperFile != null || themeBgFile != null) setWillNotDraw(false)
         isMotionEventSplittingEnabled = true
         addView(keyboard)
         addView(strip)
+        foreground?.let { addView(it) }
         addView(trail)
         addView(balloon)
     }
@@ -83,6 +100,16 @@ class ImeRootView(
         if (floating) return              // ảnh nền theo cỡ khung — onLayout lo
         recordPortraitSize(w, h)
         loadWallpaperFor(w, h)
+        loadThemeBgFor(w, h)
+    }
+
+    /** Ảnh nền theme cho vùng [w]×[h] (đồng bộ — chỉ khi đổi cỡ; ≤ cỡ vùng × 4 byte). */
+    private fun loadThemeBgFor(w: Int, h: Int) {
+        val f = themeBgFile ?: return
+        if (w == themeBgW && h == themeBgH && themeBg != null) return
+        themeBgW = w; themeBgH = h
+        themeBg = ThemeAssetLoader.loadScreen(f, w, h, fill = true, hardware = isHardwareAccelerated)
+        invalidate()
     }
 
     /** Giải ảnh nền cho vùng [w]×[h] (đồng bộ — chỉ khi đổi cỡ: xoay, đổi chế độ). */
@@ -131,13 +158,27 @@ class ImeRootView(
 
     /** Hẹn giờ ẩn: bỏ bitmap (true nếu đã có) — [reloadWallpaper] lúc hiện lại. */
     fun dropWallpaper(): Boolean {
-        val had = wallpaper != null
+        var had = wallpaper != null
         wallpaper = null; reloadGen++
+        if (themeBg != null) { themeBg = null; themeBgW = 0; themeBgH = 0; had = true }
+        if (foreground?.drop() == true) had = true
         return had
     }
 
     /** Giải lại ảnh nền trên [background] (không chặn main); chưa xong thì nền màu theme. */
     fun reloadWallpaper(background: (Runnable) -> Unit) {
+        foreground?.reload(background)
+        themeBgFile?.let { tf ->
+            val w = if (floating) panel.width() else width
+            val h = if (floating) panel.height() else height
+            if (themeBg == null && w > 0 && h > 0) {
+                val gen = reloadGen; val hw = isHardwareAccelerated
+                background(Runnable {
+                    val b = ThemeAssetLoader.loadScreen(tf, w, h, fill = true, hardware = hw)
+                    post { if (gen == reloadGen && themeBg == null) { themeBg = b; themeBgW = w; themeBgH = h; invalidate() } }
+                })
+            }
+        }
         val f = wallpaperFile ?: return
         val w = if (floating) panel.width() else width
         val h = if (floating) panel.height() else height
@@ -158,11 +199,20 @@ class ImeRootView(
     }
 
     private fun drawWallpaper(canvas: android.graphics.Canvas) {
+        drawThemeBg(canvas)
         val b = wallpaper ?: return
         // Bitmap HARDWARE chỉ vẽ được trên canvas GPU (canvas phần mềm — vd chụp view — bỏ qua).
         if (b.config == android.graphics.Bitmap.Config.HARDWARE && !canvas.isHardwareAccelerated) return
         canvas.drawBitmap(b, wallMatrix, wallPaint)
         canvas.drawColor(dimColor)
+    }
+
+    /** Ảnh nền theme (đã cắt đúng tỉ lệ vùng) vẽ đè màu nền theme. */
+    private fun drawThemeBg(canvas: android.graphics.Canvas) {
+        val b = themeBg ?: return
+        if (b.config == android.graphics.Bitmap.Config.HARDWARE && !canvas.isHardwareAccelerated) return
+        if (floating) themeBgRect.set(panel) else themeBgRect.set(0f, 0f, width.toFloat(), height.toFloat())
+        canvas.drawBitmap(b, null, themeBgRect, themeBgPaint)
     }
 
     // MARK: thả nổi (#112) — FloatingKeyboard. Tắt ⇒ không nhánh nào dưới đây chạy.
@@ -193,7 +243,7 @@ class ImeRootView(
             floating = on
             dragMode = -1
             background = if (on) null else bgDrawable
-            setWillNotDraw(!on && wallpaperFile == null)
+            setWillNotDraw(!on && wallpaperFile == null && themeBgFile == null)
             clipChildren = !on              // balloon / popup vẽ được phía trên khung
             if (on && floatPaint == null) floatPaint = android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG)
             panel.setEmpty()
@@ -300,12 +350,14 @@ class ImeRootView(
         updateDecorGaps()
         strip.layout(px, py, px + pw, py + strip.measuredHeight)
         trail.layout(px, py + s, px + pw, py + s + keyH)
+        foreground?.layout(px, py, px + pw, py + s + keyH)
         overlay?.layout(px, py + s, px + pw, py + s + keyH)
         // Balloon: x theo khung (toạ độ phím), y theo view gốc (KeyboardView cộng `top` của nó)
         // ⇒ trùm từ đỉnh cửa sổ tới đáy vùng phím: preview / popup hàng trên nổi ra ngoài khung.
         balloon.layout(px, 0, px + pw, py + s + keyH)
         effects?.layout(px, 0, px + pw, py + s + keyH)
         if (wallpaperFile != null && (wallW != pw || wallH != ph)) loadWallpaperFor(pw, ph) else updateWallMatrix()
+        loadThemeBgFor(pw, ph)
     }
     /**
      * "Hiệu ứng khi bấm phím" ([KeyEffectView], Plus) — cùng khung với balloon, ngay DƯỚI balloon;
@@ -338,6 +390,7 @@ class ImeRootView(
         strip.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(strip.viewHeightPx(), MeasureSpec.EXACTLY))
         trail.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
+        foreground?.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(s + keyH, MeasureSpec.EXACTLY))
         overlay?.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
         balloon.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(s + keyH, MeasureSpec.EXACTLY))
@@ -359,6 +412,7 @@ class ImeRootView(
         keyboard.measure(ew, MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
         strip.measure(ew, MeasureSpec.makeMeasureSpec(strip.viewHeightPx(), MeasureSpec.EXACTLY))
         trail.measure(ew, MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
+        foreground?.measure(ew, MeasureSpec.makeMeasureSpec(s + keyH, MeasureSpec.EXACTLY))
         overlay?.measure(ew, MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
         balloon.measure(ew, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
         effects?.measure(ew, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
@@ -374,6 +428,7 @@ class ImeRootView(
         updateDecorGaps()
         strip.layout(0, 0, w, strip.measuredHeight)
         trail.layout(0, s, w, s + keyH)
+        foreground?.layout(0, 0, w, s + keyH)
         overlay?.layout(0, s, w, s + keyH)
         balloon.layout(0, 0, w, s + keyH)
         effects?.layout(0, 0, w, s + keyH)

@@ -20,6 +20,31 @@ struct ThemeIssueList: View {
     }
 }
 
+/// Tệp tải về khai báo trong theme: bao nhiêu tệp, từ đâu, lỗi / cảnh báo lần tải trước. Không gửi yêu cầu nào —
+/// chỉ khi lưu / thêm, app mới HỎI rồi mới tải.
+struct ThemeAssetNote: View {
+    let assets: ThemeAssetSpec
+    @ObservedObject private var center = ThemeAssetCenter.shared
+    var body: some View {
+        let files = ThemeAssetPlan.make(assets).files
+        if !files.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                let hosts = Array(Set(files.map { ThemeAssetURL.host($0.ref.url) })).sorted().joined(separator: ", ")
+                Label(L("Giao diện có %@ tệp tải về từ %@ — sẽ hỏi trước khi tải.", files.count, hosts),
+                      systemImage: "arrow.down.circle").font(.footnote).foregroundStyle(.secondary)
+                ForEach(Array(center.errors(for: assets).enumerated()), id: \.offset) { _, e in
+                    Label(ThemeAssetURL.host(e.0) + ": " + e.1.message, systemImage: "xmark.octagon.fill")
+                        .foregroundStyle(.red).font(.footnote)
+                }
+                ForEach(Array(Set(center.storedWarnings(assets).map(\.rawValue)).sorted()), id: \.self) { w in
+                    Label(ThemeAssetWarning(rawValue: w)?.message ?? w, systemImage: "exclamationmark.triangle.fill")
+                        .foregroundStyle(.orange).font(.footnote)
+                }
+            }
+        }
+    }
+}
+
 /// Sửa JSON một theme. Lưu chỉ bật khi không còn lỗi; cảnh báo (tương phản thấp…) vẫn lưu được.
 struct ThemeJSONEditorView: View {
     let title: String
@@ -54,6 +79,7 @@ struct ThemeJSONEditorView: View {
                     .background(RoundedRectangle(cornerRadius: 8).fill(Color(.secondarySystemBackground)))
                 ThemeIssueList(issues: saveIssues.isEmpty ? outcome.issues : saveIssues)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                if let spec = outcome.spec { ThemeAssetNote(assets: spec.assets).frame(maxWidth: .infinity, alignment: .leading) }
             }
             .padding()
             .navigationTitle(title)
@@ -105,6 +131,7 @@ struct ThemePastePreview: View {
                 }
                 Section {
                     ThemeIssueList(issues: addError.map { [$0] } ?? outcome.issues)
+                    if let spec = outcome.spec { ThemeAssetNote(assets: spec.assets) }
                 }
             }
             .navigationTitle(L("Dán giao diện"))

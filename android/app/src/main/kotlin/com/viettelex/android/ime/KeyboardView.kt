@@ -314,6 +314,9 @@ class KeyboardView(
     private val specialPressed = theme.pressed(theme.fnFill)
     private val spacePressed = theme.pressed(theme.spaceFill)
     private val actionPressed = theme.blend(theme.action, theme.actionInk, 0.12f)
+    /** Skin phím của theme (ảnh 9-slice tải về) theo vai [ThemeKeyRole]; null = vẽ màu như cũ (không đọc gì). */
+    private val skins: Array<LoadedSkin?>? = theme.assets?.skins
+    private val skinPainter: SkinPainter? = if (skins != null) SkinPainter() else null
     // Logo Vᴛ mờ ở góc phải phím space như iOS (thay nhãn "Tiếng Việt").
     private val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
         colorFilter = android.graphics.PorterDuffColorFilter(theme.withAlpha(theme.ink, 0.16f), android.graphics.PorterDuff.Mode.SRC_IN)
@@ -933,14 +936,20 @@ class KeyboardView(
             else -> if (k.pressed) keyPressed else theme.keyFill
         }
         if (trackpad) face = theme.keyFill
-        facePaint.color = face
-        // Bo góc tuỳ chỉnh (Plus) áp mọi phím kể cả enter; mặc định enter là viên thuốc như cũ.
-        val r = if (k.kind == KeyKind.RETURN && theme.keyStyle.corner == null) minOf(k.width, k.height) / 2
-            else theme.keyRadius(k.width, k.height, radius)
-        c.drawRoundRect(k.left, k.top, k.right, k.bottom, r, r, facePaint)
-        borderPaint?.let { bp ->
-            val h = bp.strokeWidth / 2
-            c.drawRoundRect(k.left + h, k.top + h, k.right - h, k.bottom - h, r, r, bp)
+        // Skin của theme (ảnh tải về): thay nền phím; đè ⇒ ảnh "pressed" (⇧ bật cũng vậy). Chữ vẫn vẽ đè lên.
+        val skin = if (skins != null && !trackpad) skins[ThemeKeyRole.index(k.kind, k.label, k.side)] else null
+        if (skin != null) {
+            skinPainter?.draw(c, skin, k.pressed || (k.kind == KeyKind.SHIFT && shift != Shift.OFF), k.left, k.top, k.right, k.bottom)
+        } else {
+            facePaint.color = face
+            // Bo góc tuỳ chỉnh (Plus) áp mọi phím kể cả enter; mặc định enter là viên thuốc như cũ.
+            val r = if (k.kind == KeyKind.RETURN && theme.keyStyle.corner == null) minOf(k.width, k.height) / 2
+                else theme.keyRadius(k.width, k.height, radius)
+            c.drawRoundRect(k.left, k.top, k.right, k.bottom, r, r, facePaint)
+            borderPaint?.let { bp ->
+                val h = bp.strokeWidth / 2
+                c.drawRoundRect(k.left + h, k.top + h, k.right - h, k.bottom - h, r, r, bp)
+            }
         }
 
         // 0.2 khi trackpad; × độ trong suốt ký tự (alpha paint — không offscreen).
@@ -2073,7 +2082,8 @@ class KeyboardView(
 
     private fun showBalloon(k: LaidKey, text: String) {
         balloonOwner = k
-        balloon.show(k.left, k.top + top, k.right, k.bottom + top, text)
+        balloon.show(k.left, k.top + top, k.right, k.bottom + top, text,
+            skins?.get(ThemeKeyRole.index(k.kind, k.label, k.side)))
     }
 
     private fun hideBalloon(k: LaidKey) {

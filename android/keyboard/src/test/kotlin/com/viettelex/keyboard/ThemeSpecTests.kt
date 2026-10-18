@@ -46,6 +46,13 @@ class ThemeSpecTests {
                 "deepobj" -> """{"a":""".repeat(n) + "1" + "}".repeat(n)
                 "longname" -> """{"v":1,"name":{"vi":"${"a".repeat(n)}"},$slots}"""
                 "longkey" -> """{"${"k".repeat(n)}":1}"""
+                "skins", "skinspressed" -> {
+                    val letters = ThemeAssetSpec.LETTER_KEYS.take(n).mapIndexed { i, l ->
+                        val pr = if (p[1] == "skinspressed") ""","pressed":{"url":"https://example.com/p$i.png"}""" else ""
+                        """"$l":{"url":"https://example.com/k$i.png"$pr}"""
+                    }
+                    """{"v":1,"name":{"vi":"x"},$slots,"keys":{${letters.joinToString(",")}}}"""
+                }
                 else -> ""
             }
             return s.toByteArray(Charsets.UTF_8)
@@ -120,6 +127,14 @@ class ThemeSpecTests {
                 hex(p.actionInk), hex(p.trail), hex(p.balloon), hex(p.keyBorder), deco).joinToString(" ")
             assertEquals("PAL ${cs[1]} ${cs[2]}", cs[3], got)
         }
+        // Kế hoạch tệp tải về: cùng JSON ⇒ cùng chuỗi kế hoạch hai nền tảng.
+        var plans = 0
+        for (cs in fixtureLines().filter { it[0] == "PLAN" }) {
+            val s = specs[cs[1]] ?: error(cs[1])
+            assertEquals("PLAN ${cs[1]}", cs[2], ThemeAssetPlan.make(s.typography.assets).description)
+            plans++
+        }
+        assertTrue(plans >= 6)
     }
 
     // ---- fuzz — không crash, hoặc model hợp lệ hoặc lỗi

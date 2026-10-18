@@ -65,9 +65,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var keyStyle = KeyStyle()
     private func applyKeyStyle(_ style: KeyStyle) {
         keyStyle = style
+        let custom = style.assets.font == nil ? nil : themeAssets?.font
         if Self.labelFonts.font != style.font || Self.labelFonts.weight != style.weight
-            || Self.labelFonts.scale != style.labelScale || Self.labelFonts.active != style.customizesLabels {
-            Self.labelFonts = KeyLabelFonts(style: style, compact: Self.compactDescriptor)
+            || Self.labelFonts.scale != style.labelScale || Self.labelFonts.active != style.customizesLabels
+            || !Self.labelFonts.sameCustom(custom) {
+            Self.labelFonts = KeyLabelFonts(style: style, compact: Self.compactDescriptor, custom: custom)
         }
         Self.cornerPercent = style.corner
         if balloonMade { balloon.invalidateStyle() }   // ô phóng to lấy phông mới lần hiện kế
@@ -228,6 +230,15 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var decorWidth: CGFloat = 0
     private var wallpaperActive = false
     private var wallpaperLoadedFor: CGSize = .zero
+    /// Tệp tải về của theme (theme JSON: phông / ảnh nền / tiền cảnh / skin phím) — nạp MỘT lần mỗi theme
+    /// (ThemeAssetLoader, cache theo chữ ký). Theme không có tệp ⇒ nil, mọi đường bên dưới thoát ngay.
+    private var themeAssets: LoadedThemeAssets?
+    /// Ảnh nền theme (trên màu nền, dưới ảnh nền người dùng — ảnh người dùng bật thì thắng).
+    private let themeImageView = UIImageView()
+    /// Ảnh tiền cảnh: TRÊN hàng phím, căng đúng cỡ bàn phím, không nhận chạm; ô phóng to / hiệu ứng nằm trên.
+    private let foregroundView = UIImageView()
+    private var themeScreenLoadedFor: (size: CGSize, sig: String)?
+    private var builtAssetsSig: String?
 
     init(needsGlobe: Bool, inputController: UIInputViewController?, onKey: @escaping (Key) -> Void) {
         self.needsGlobe = needsGlobe
@@ -345,6 +356,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         keyEffects = nil; fxPoint = nil
         wallpaperView.image = nil
         wallpaperLoadedFor = .zero
+        themeImageView.image = nil; foregroundView.image = nil; themeScreenLoadedFor = nil
         Self.stripSubviews(of: self, constraints: true)
         removeFromSuperview()
     }
@@ -953,6 +965,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         layoutOverlayPanel()
         layoutBackdrop()
         loadWallpaperIfNeeded()
+        loadThemeScreensIfNeeded()
         logGeometryIfChanged()
         if pasteCard.superview != nil, !pasteCard.isHidden {   // xoay màn hình
             let w = Self.stripZoneWidth
@@ -1773,15 +1786,19 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
     private func applyBackdrop() {
         if themeBackdrop.superview == nil {
-            for v in [themeBackdrop, wallpaperView, wallpaperDim] {
+            for v in [themeBackdrop, themeImageView, wallpaperView, wallpaperDim] {
                 v.isUserInteractionEnabled = false
                 v.frame = bounds
                 v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
             }
             wallpaperView.contentMode = .scaleAspectFill
             wallpaperView.clipsToBounds = true
+            themeImageView.contentMode = .scaleAspectFill
+            themeImageView.clipsToBounds = true
+            themeImageView.isHidden = true
             insertSubview(themeBackdrop, at: 0)
-            insertSubview(wallpaperView, aboveSubview: themeBackdrop)
+            insertSubview(themeImageView, aboveSubview: themeBackdrop)
+            insertSubview(wallpaperView, aboveSubview: themeImageView)
             insertSubview(wallpaperDim, aboveSubview: wallpaperView)
         }
         // Theme nền trong suốt (mặc định Hệ thống): KHÔNG phủ nền đục — vật liệu bàn phím hệ
@@ -1794,7 +1811,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // chồng lên góc bo xám của hệ thống). cornerRadius trên view lá màu phẳng / ảnh ⇒ không
         // offscreen pass.
         let r = clear ? 0 : KeyLayout.backdropCornerRadius(phone: !Self.isPad, systemMajor: Self.systemMajor)
-        for v in [themeBackdrop, wallpaperView, wallpaperDim] where v.layer.cornerRadius != r {
+        for v in [themeBackdrop, themeImageView, foregroundView, wallpaperView, wallpaperDim] where v.layer.cornerRadius != r {
             v.layer.cornerRadius = r
             v.layer.maskedCorners = [.layerMinXMinYCorner, .layerMaxXMinYCorner]
             v.layer.cornerCurve = .circular   // khớp khung hệ thống (đo pixel, KeyLayout)
@@ -1812,6 +1829,48 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             wallpaperLoadedFor = .zero         // version/cỡ có thể đã đổi → nạp lại
             setNeedsLayout()
         }
+        applyThemeScreens()
+    }
+
+    /// Ảnh nền theme (ảnh nền người dùng đang bật thì thắng) + tiền cảnh. Không có ⇒ ẩn, nhả bitmap.
+    private func applyThemeScreens() {
+        let bg = ThemeAssetPlan.showsThemeBackground(userWallpaperActive: wallpaperActive,
+                                                     themeBackgroundReady: themeAssets?.backgroundURL != nil)
+        let fg = themeAssets?.foregroundURL != nil
+        themeImageView.isHidden = !bg
+        if !bg { themeImageView.image = nil }
+        if fg, foregroundView.superview == nil {
+            foregroundView.isUserInteractionEnabled = false     // chạm xuyên xuống phím
+            foregroundView.contentMode = .scaleToFill           // căng đúng cỡ bàn phím
+            foregroundView.clipsToBounds = true
+            foregroundView.frame = bounds
+            insertSubview(foregroundView, aboveSubview: rowsContainer)
+        }
+        foregroundView.isHidden = !fg
+        if !fg { foregroundView.image = nil }
+        themeScreenLoadedFor = nil
+        if bg || fg { setNeedsLayout() }
+    }
+
+    /// Giải ảnh nền / tiền cảnh theme ở đúng cỡ view, ngoài main (một lần mỗi cỡ + theme).
+    private func loadThemeScreensIfNeeded() {
+        guard let a = themeAssets, a.backgroundURL != nil || a.foregroundURL != nil,
+              bounds.width > 0, bounds.height > 0 else { return }
+        if foregroundView.superview === self, foregroundView.frame != bounds { foregroundView.frame = bounds }
+        if let l = themeScreenLoadedFor, l.size == bounds.size, l.sig == a.signature { return }
+        themeScreenLoadedFor = (bounds.size, a.signature)
+        let size = bounds.size, sig = a.signature
+        let scale = Wallpaper.decodeScale(screenScale: window?.screen.scale ?? UIScreen.main.scale)
+        let bgURL = themeImageView.isHidden ? nil : a.backgroundURL, fgURL = a.foregroundURL
+        Wallpaper.queue.async { [weak self] in
+            let bg = bgURL.flatMap { ThemeAssetLoader.loadScreen($0, viewSize: size, scale: scale, fill: true) }
+            let fg = fgURL.flatMap { ThemeAssetLoader.loadScreen($0, viewSize: size, scale: scale, fill: false) }
+            DispatchQueue.main.async {
+                guard let self, self.themeAssets?.signature == sig else { return }
+                if !self.themeImageView.isHidden { self.themeImageView.image = bg }
+                if !self.foregroundView.isHidden { self.foregroundView.image = fg }
+            }
+        }
     }
 
     private static let systemMajor = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
@@ -1820,7 +1879,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// phần host cấp dư hoặc thiếu) — đặt frame tường minh mỗi lượt layout, không dựa
     /// autoresizing từ frame lúc chèn (có thể là .zero).
     private func layoutBackdrop() {
-        for v in [themeBackdrop, wallpaperView, wallpaperDim] where v.superview === self && v.frame != bounds {
+        for v in [themeBackdrop, themeImageView, wallpaperView, wallpaperDim] where v.superview === self && v.frame != bounds {
             v.frame = bounds
         }
         layoutDecoration()
@@ -1916,6 +1975,14 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     func applyAppearance(_ appearance: UIKeyboardAppearance, style: UIUserInterfaceStyle) {
         systemDark = AppearancePolicy.isDark(appearance: appearance, style: style)
         themeSettings = ThemeSettings.load(UserDefaultsProvider.shared)
+        // Tệp tải về: chỉ theme có khai báo mới đọc mục lục / giải ảnh (một lần, cache theo chữ ký).
+        let assetSpec = themeSettings.effectiveKeyStyle.assets
+        if assetSpec.isEmpty {
+            if themeAssets != nil { ThemeAssetLoader.dropCache() }
+            themeAssets = nil
+        } else {
+            themeAssets = ThemeAssetLoader.load(ThemeAssetPlan.make(assetSpec))
+        }
         applyKeyStyle(themeSettings.effectiveKeyStyle)
         resolvePalette()
         configureKeyEffects()
@@ -2001,6 +2068,12 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             b.tintColor = shift != .off ? shiftOnInk : fnInk
             b.normalBackground = fill
             // ⇧ đổi trạng thái ở touchDown — ngón còn đè thì giữ nền sẫm, nhả tay mới về nền mới.
+            if let k = b as? KeyButton, k.skin != nil {
+                // Skin theme: glyph theo chữ phím chức năng (đọc được trên skin); bật = ảnh đè của skin (nếu có).
+                b.tintColor = fnInk
+                k.setSkinLatched(shift != .off)
+                continue
+            }
             if !((b as? KeyButton)?.pressShown ?? false) { b.backgroundColor = fill }
         }
         capsKey?.setImage(UIImage(systemName: shift == .caps ? "capslock.fill" : "capslock"),
@@ -2080,6 +2153,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             for (i, symbol) in ["arrow.left.arrow.right", "arrow.up.left.and.arrow.down.right"].enumerated() {
                 let b = baseButton(title: "", special: true)
                 b.styledKey = false        // nút tròn của rail, không phải phím
+                b.setSkin(nil)
                 b.setImage(UIImage(systemName: symbol,
                     withConfiguration: UIImage.SymbolConfiguration(pointSize: 15, weight: .medium)), for: .normal)
                 b.accessibilityLabel = i == 0 ? L("Đổi bên bàn phím một tay") : L("Thoát chế độ một tay")
@@ -2190,6 +2264,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             || builtKeypad != keypadStyle
             || builtGeom != geomSig
             || builtKeyStyle != keyStyle
+            || builtAssetsSig != themeAssets?.signature
         let widthChanged = builtWidth != bounds.width
         let sigChanged = styleChanged || widthChanged
         if builtPlane == plane, !sigChanged { return }
@@ -2225,6 +2300,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         builtPlane = plane; builtReturn = returnTitle
         builtDark = dark; builtPalette = palette; builtWidth = bounds.width
         builtKeyStyle = keyStyle
+        builtAssetsSig = themeAssets?.signature
         builtGlobe = needsGlobe; builtKind = inputKind
         builtNumberRow = numberRowEnabled
         builtNumberRowFull = numberRowFullHeight
@@ -3029,6 +3105,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                 ret.tintColor = palette.accentInk.ui
             }
         }
+        if themeAssets != nil {
+            applySkin(ret, role: "return")
+            // Skin thay nền nhấn ⇒ chữ/icon theo màu phím chức năng (đọc được trên skin).
+            if ret.skin != nil, returnTitle != "return" { ret.setTitleColor(fnInk, for: .normal); ret.tintColor = fnInk }
+        }
         return ret
     }
 
@@ -3092,6 +3173,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         let space = baseButton(title: "", special: true)
         space.backgroundColor = fnFill
         space.normalBackground = fnFill
+        applySkin(space, role: "space")
         space.pressedBackground = specialFill      // space sẫm lại khi đè
         space.accessibilityLabel = L("Dấu cách")
         if primary { spaceBar = space; installSpaceMark(on: space) }
@@ -3517,12 +3599,86 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         /// cho action), còn begin/commit tường minh ngoài transaction ngầm lại ép commit đồng bộ
         /// lên render server — đo 12/10/2026 (KeyboardBench): sync_p50 +~0.1ms/phím.
         func showPressed(_ on: Bool) {
+            if let sl = skinLayer {
+                // Skin theme: đổi ảnh đè / thường = gán con trỏ CGImage (ảnh đã giải sẵn, dùng chung).
+                pressShown = on
+                let img = on || skinLatched ? (skinPressed ?? skinNormal) : skinNormal
+                if (sl.contents as AnyObject?) !== img { sl.contents = img }
+                return
+            }
             guard let c = on ? pressedBackground : (pressedBackground != nil ? normalBackground : nil) else { return }
             pressShown = on
             if backgroundColor != c { backgroundColor = c }
         }
         /// Đang hiện nền đè (applyShiftAppearance không ghi đè nền khi ngón còn trên ⇧).
         private(set) var pressShown = false
+
+        // MARK: skin phím (theme JSON "keys") — ảnh 9-slice thay nền màu; nil = như cũ (0 chi phí).
+        private(set) var skinLayer: CALayer?
+        private(set) var skinNormal: CGImage?
+        private var skinPressed: CGImage?
+        private var skinInsets: [Int]?
+        private var skinLaidOut: CGSize = .zero
+        /// ⇧ bật/Caps trên phím có skin: giữ ảnh đè (thay cho nền đảo màu).
+        private var skinLatched = false
+        func setSkinLatched(_ on: Bool) {
+            guard let sl = skinLayer, skinLatched != on else { return }
+            skinLatched = on
+            guard !pressShown else { return }
+            let img = on ? (skinPressed ?? skinNormal) : skinNormal
+            if (sl.contents as AnyObject?) !== img { sl.contents = img }
+        }
+        /// Skin đang dùng (ô phóng to vẽ cùng skin).
+        private(set) var skin: LoadedThemeAssets.Skin?
+        /// Có skin ⇒ nền màu luôn trong (màu theme chỉ là dự phòng khi thiếu ảnh).
+        override var backgroundColor: UIColor? {
+            get { super.backgroundColor }
+            set { super.backgroundColor = skinLayer == nil ? newValue : .clear }
+        }
+        func setSkin(_ s: LoadedThemeAssets.Skin?) {
+            skin = s
+            guard let s else {
+                if let sl = skinLayer { sl.removeFromSuperlayer(); skinLayer = nil; backgroundColor = normalBackground }
+                skinNormal = nil; skinPressed = nil; skinInsets = nil
+                return
+            }
+            let sl = skinLayer ?? {
+                let l = CALayer()
+                // Không hoạt ảnh ngầm (đổi ảnh đè phải tức thì, không tốn transaction).
+                l.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull(),
+                             "contentsScale": NSNull(), "contentsCenter": NSNull(), "frame": NSNull()]
+                layer.insertSublayer(l, at: 0)
+                skinLayer = l
+                return l
+            }()
+            skinNormal = s.normal; skinPressed = s.pressed; skinInsets = s.insets
+            sl.contents = s.normal
+            sl.contentsCenter = s.insets.map { NineSlice.contentsCenter($0, w: s.normal.width, h: s.normal.height) }
+                ?? CGRect(x: 0, y: 0, width: 1, height: 1)
+            super.backgroundColor = .clear
+            layer.borderWidth = 0
+            // Skin có ảnh đè ⇒ bật đường đè (dù "Phím sẫm khi bấm" tắt) — chỉ đổi con trỏ ảnh.
+            if s.pressed != nil, pressedBackground == nil { pressedBackground = .clear }
+            skinLaidOut = .zero
+            setNeedsLayout()
+        }
+        /// Lúc layout (không mỗi lần gõ): khung + contentsScale để góc 9-slice đúng cỡ (NineSlice).
+        private func layoutSkin() {
+            guard let sl = skinLayer, let img = skinNormal, bounds.size != skinLaidOut,
+                  bounds.width > 0, bounds.height > 0 else { return }
+            skinLaidOut = bounds.size
+            sl.frame = bounds
+            let h = Double(img.height)
+            if let ins = skinInsets {
+                let k = NineSlice.shrink(ins, srcH: img.height, width: Double(bounds.width), height: Double(bounds.height))
+                sl.contentsScale = CGFloat(h / (Double(bounds.height) * k))
+            } else {
+                sl.contentsScale = CGFloat(h / Double(bounds.height))
+            }
+        }
+        #if DEBUG
+        var debugSkinLayer: CALayer? { skinLayer }
+        #endif
         private var pressedAt: CFTimeInterval = 0
         private(set) var releasePending = false
         /// Chạm xuống: sẫm + ghi giờ. pressedBackground nil (công tắc TẮT) ⇒ thoát ngay.
@@ -3626,6 +3782,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         override func layoutSubviews() {
             applyPadTypographyIfNeeded()
             applyKeyStyleIfNeeded()
+            layoutSkin()
             super.layoutSubviews()
         }
         /// Phím (baseButton) — nhận bo góc / kẹp chữ của Tuỳ chỉnh nâng cao. Slot gợi ý, nút rail: false.
@@ -3817,7 +3974,14 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         b.addAction(UIAction { [weak b] _ in b?.press() }, for: .touchDown)
         b.addAction(UIAction { [weak b] _ in b?.release() },
                     for: [.touchUpInside, .touchUpOutside, .touchCancel])
+        if themeAssets != nil { applySkin(b, role: special ? "special" : "default") }
         return b
+    }
+
+    /// Skin theme cho vai `role` (đã giải thứ tự từng phím → nhóm trong ThemeAssetPlan). Không có ⇒ màu theme.
+    private func applySkin(_ b: KeyButton, role: String) {
+        guard let a = themeAssets else { return }
+        b.setSkin(a.skins[role])
     }
 
     // Âm click phát ở TOUCH-DOWN như stock (nguồn cảm giác "nhanh").
@@ -3877,6 +4041,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // hộp action được sendActions() kích.
         b.isUserInteractionEnabled = false
         if keyPressHighlightEnabled { b.pressedBackground = specialFill }
+        if themeAssets != nil, ThemeAssetSpec.skinKeys.contains(s.lowercased()) { applySkin(b, role: s.lowercased()) }
         letterKeys.append((b, s))
         if Self.isPad {
             // Chữ + ký tự phụ căn theo tâm phím như stock (KeyGeometry.Typography.Pad).
@@ -3947,7 +4112,40 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
         /// keyRect trong toạ độ superview. Path cache theo hình dạng — gõ cùng
         /// một hàng phím thì không dựng lại path (không alloc trên hot path).
-        func present(keyRect: CGRect, text: String, popup: PopupUI, topLimit: CGFloat, containerWidth: CGFloat) {
+        /// Skin phím (theme JSON): bubble vẽ cùng ảnh 9-slice với phím; nil ⇒ chỉ màu (như cũ).
+        private var skinLayer: CALayer?
+        private var skinFor: (image: CGImage, w: CGFloat, h: CGFloat)?
+        private func applySkin(_ skin: LoadedThemeAssets.Skin?, bubble: CGSize) {
+            guard let skin else { skinLayer?.isHidden = true; return }
+            let sl = skinLayer ?? {
+                let l = CALayer()
+                l.actions = ["contents": NSNull(), "bounds": NSNull(), "position": NSNull(), "hidden": NSNull(),
+                             "contentsScale": NSNull(), "contentsCenter": NSNull()]
+                layer.insertSublayer(l, above: shape)
+                skinLayer = l
+                return l
+            }()
+            sl.isHidden = false
+            if let f = skinFor, f.image === skin.normal, f.w == bubble.width, f.h == bubble.height { return }
+            skinFor = (skin.normal, bubble.width, bubble.height)
+            sl.contents = skin.normal
+            sl.frame = CGRect(origin: .zero, size: bubble)
+            let img = skin.normal
+            if let ins = skin.insets {
+                sl.contentsCenter = NineSlice.contentsCenter(ins, w: img.width, h: img.height)
+                let k = NineSlice.shrink(ins, srcH: img.height, width: Double(bubble.width), height: Double(bubble.height))
+                sl.contentsScale = CGFloat(Double(img.height) / (Double(bubble.height) * k))
+            } else {
+                sl.contentsCenter = CGRect(x: 0, y: 0, width: 1, height: 1)
+                sl.contentsScale = CGFloat(img.height) / max(bubble.height, 1)
+            }
+        }
+        #if DEBUG
+        var debugSkinContents: AnyObject? { skinLayer?.isHidden == false ? skinLayer?.contents as AnyObject? : nil }
+        #endif
+
+        func present(keyRect: CGRect, text: String, popup: PopupUI, topLimit: CGFloat, containerWidth: CGFloat,
+                     skin: LoadedThemeAssets.Skin? = nil) {
             // Sát mép màn hình: bubble dời vào trong (BalloonGeometry), không tràn ra bị cắt.
             frame = BalloonGeometry.frame(keyRect: keyRect, containerWidth: containerWidth, topLimit: topLimit)
             let bubbleW = frame.width, top = frame.minY
@@ -3999,6 +4197,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                 shape.lineWidth = CGFloat(st.borderWidth)
                 label.textColor = popup.ink
             }
+            if skin != nil || skinLayer != nil {
+                applySkin(skin, bubble: CGSize(width: bubbleW, height: max(keyRect.minY - top - 6, 22)))
+            }
             label.text = text
             isHidden = false
         }
@@ -4028,6 +4229,19 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var balloonMade = false
     private lazy var balloon: BalloonView = { balloonMade = true; return BalloonView() }()
     var debugBalloonMade: Bool { balloonMade }
+    #if DEBUG
+    /// Test: tệp tải về đang nạp + view ảnh nền / tiền cảnh theme + skin ô phóng to.
+    var debugThemeAssets: LoadedThemeAssets? { themeAssets }
+    var debugThemeImageView: UIImageView { themeImageView }
+    var debugForegroundView: UIImageView { foregroundView }
+    var debugBalloonSkin: AnyObject? { balloonMade ? balloon.debugSkinContents : nil }
+    func debugShowBalloon(over key: UIView, text: String) { showBalloon(over: key, text: text, force: true) }
+    /// Thứ tự (chỉ số subview) của hàng phím / tiền cảnh / ô phóng to.
+    var debugZOrder: (rows: Int?, foreground: Int?, balloon: Int?) {
+        (subviews.firstIndex(of: rowsContainer), subviews.firstIndex(of: foregroundView),
+         balloonMade ? subviews.firstIndex(of: balloon) : nil)
+    }
+    #endif
     private func showBalloon(over key: UIView, text: String, force: Bool = false) {
         guard keyPreviewEnabled || force else { return }
         let f = convert(key.bounds, from: key)
@@ -4039,7 +4253,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             balloonHidePending = false
             NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(hideBalloonDeferred), object: nil)
         }
-        balloon.present(keyRect: f, text: text, popup: popup, topLimit: topLimit, containerWidth: bounds.width)
+        balloon.present(keyRect: f, text: text, popup: popup, topLimit: topLimit, containerWidth: bounds.width,
+                        skin: themeAssets == nil ? nil : (key as? KeyButton)?.skin)
         balloonShownAt = CACurrentMediaTime()
     }
     private func hideBalloon() { if balloonMade { balloon.isHidden = true } }
@@ -4222,6 +4437,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private func shiftButton() -> UIView {
         let symbol = shift == .caps ? "capslock.fill" : (shift == .on ? "shift.fill" : "shift")
         let b = baseButton(title: "", special: true)
+        applySkin(b, role: "shift")
         b.setImage(UIImage(systemName: symbol), for: .normal)
         if Self.isPad { b.padRole = .icon }
         b.accessibilityLabel = "Shift"
@@ -4250,6 +4466,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
     private func backspaceButton() -> UIView {
         let b = baseButton(title: "", special: true)
+        applySkin(b, role: "delete")
         b.setImage(UIImage(systemName: "delete.left"), for: .normal)
         if Self.isPad { b.padRole = .icon }   // icon cỡ stock iPad (Typography.Pad)
         b.setImage(UIImage(systemName: "delete.left.fill"), for: .highlighted)
@@ -5915,6 +6132,16 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     func debugKeyColors(_ b: UIButton) -> (current: UIColor?, normal: UIColor?, pressed: UIColor?) {
         let k = b as? KeyButton
         return (b.backgroundColor, k?.normalBackground, k?.pressedBackground)
+    }
+    /// Test hook: lớp skin + ảnh đang hiện của một nút phím (nil = không skin).
+    func debugSkinContents(_ b: UIButton) -> AnyObject? {
+        (b as? KeyButton)?.debugSkinLayer?.contents as AnyObject?
+    }
+    func debugSkinLayer(_ b: UIButton) -> CALayer? { (b as? KeyButton)?.debugSkinLayer }
+    /// Test hook: đè / nhả một nút (đường press/release thật).
+    func debugPress(_ b: UIButton, _ on: Bool) {
+        guard let k = b as? KeyButton else { return }
+        if on { k.press() } else { k.showPressed(false) }
     }
     /// Test hook: các phím đang hiện nền đè (sẫm), theo thứ tự cây view.
     func debugPressedKeys() -> [UIButton] {

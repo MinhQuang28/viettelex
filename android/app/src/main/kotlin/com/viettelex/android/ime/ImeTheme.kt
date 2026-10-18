@@ -36,6 +36,16 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     /** "Tuỳ chỉnh nâng cao" thực dùng (sau cổng Plus) — mặc định ⇒ y như cũ. */
     val keyStyle: KeyStyle = settings.effectiveKeyStyle
 
+    /** Tệp tải về của theme (phông / ảnh nền / tiền cảnh / skin); null = không có ⇒ không đọc đĩa. */
+    private val assetPlan: com.viettelex.keyboard.ThemeAssetPlan? =
+        keyStyle.assets.takeIf { !it.isEmpty }?.let { com.viettelex.keyboard.ThemeAssetPlan.make(it) }
+    private val assetDir = com.viettelex.keyboard.ThemeAssetStore.dir(ctx.filesDir)
+    /** Mốc mục lục (app tải xong ⇒ đổi ⇒ dựng lại view). Chỉ stat khi theme có tệp. */
+    private val assetStamp: Long = if (assetPlan == null) 0L
+        else java.io.File(assetDir, com.viettelex.keyboard.ThemeAssetStore.INDEX_NAME).lastModified()
+    /** Giải LƯỜI (view đầu tiên cần) — dựng ImeTheme chỉ để so chữ ký không giải ảnh nào. */
+    val assets: LoadedThemeAssets? by lazy { assetPlan?.let { ThemeAssetLoader.load(it, assetDir, assetStamp) } }
+
     private val basePalette: ThemePalette = run {
         // Theme tự tạo ("Giao diện JSON") hoặc có sẵn; Hệ thống = màu resource.
         val base = settings.basePalette(systemDark) ?: ThemePalette(
@@ -90,7 +100,8 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val keyBorder = palette.keyBorder
     /** Nhận diện theme để IME biết khi nào phải dựng lại input view. */
     val signature = "${settings.effectiveTheme.id}|$systemDark|${palette.wallpaper}|${settings.dim}|${settings.version}" +
-        "|${settings.keyboardTransparency}|${settings.labelTransparency}|$keyStyle|${settings.effectiveCustom?.canonical?.hashCode()}"
+        "|${settings.keyboardTransparency}|${settings.labelTransparency}|$keyStyle|${settings.effectiveCustom?.canonical?.hashCode()}" +
+        "|$assetStamp"
 
     /** Màu khi đè phím: phủ ink 12% kiểu state layer Material. */
     fun pressed(color: Int): Int = blend(color, ink, 0.12f)
@@ -127,10 +138,15 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
      * giữ typeface cũ — không đổi gì). Độ đậm 100…900 cần API 28; máy cũ: Đậm/Rất đậm ⇒ BOLD,
      * Mỏng/Vừa ⇒ họ "-light"/"-medium" của sans-serif.
      */
-    val keyTypeface: Typeface? = run {
+    val keyTypeface: Typeface? by lazy {
         val st = keyStyle
+        // Phông tải về (theme / người dùng chọn): đã kiểm ở app; thiếu tệp ⇒ phông hệ thống như chưa chọn.
+        assets?.typeface?.let { tf ->
+            return@lazy if (android.os.Build.VERSION.SDK_INT >= 28 && st.weight != KeyLabelWeight.REGULAR)
+                Typeface.create(tf, st.weight.weight, false) else tf
+        }
         if (st.font == KeyLabelFont.DEFAULT || st.font == KeyLabelFont.ROUNDED) {
-            if (st.weight == KeyLabelWeight.REGULAR) return@run null
+            if (st.weight == KeyLabelWeight.REGULAR) return@lazy null
         }
         val family = st.font.androidFamily ?: "sans-serif"
         val base = Typeface.create(family, Typeface.NORMAL)

@@ -410,10 +410,16 @@ data class ThemeSettings(
     fun effectiveStyleFor(id: String, typography: KeyStyle?): KeyStyle {
         var s = if (ThemeGate.allowsAdvanced) keyStyles[id] ?: KeyStyle.DEFAULT else KeyStyle.DEFAULT
         if (typography != null) {
+            // Phông người dùng chọn (hệ thống hoặc tải về) thắng phông của theme — iOS effectiveStyle y hệt.
+            val userSystemFont = s.font != KeyLabelFont.DEFAULT && s.assets.font == null
             if (s.corner == null) s = s.copy(corner = typography.corner)
             if (s.fontScale == null) s = s.copy(fontScale = typography.fontScale)
             if (s.font == KeyLabelFont.DEFAULT) s = s.copy(font = typography.font)
             if (s.weight == KeyLabelWeight.REGULAR) s = s.copy(weight = typography.weight)
+            var a = s.assets.mergedOver(typography.assets)
+            if (userSystemFont) a = a.copy(font = null)
+            s = s.copy(assets = a)
+            if (a.font != null) s = s.copy(font = KeyLabelFont.DEFAULT)
         }
         return s
     }

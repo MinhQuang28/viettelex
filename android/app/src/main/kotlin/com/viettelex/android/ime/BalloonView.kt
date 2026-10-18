@@ -53,6 +53,9 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
 
     private var visible = false
     private var text = ""
+    /** Skin phím của theme cho ô phóng to (null = nền đục như cũ). */
+    private var bubbleSkin: LoadedSkin? = null
+    private val skinPainter: SkinPainter? = if (theme.assets?.skins != null) SkinPainter() else null
     private var ox = 0f; private var oy = 0f          // gốc bubble trong view
     private var bubbleW = 0f; private var bubbleH = 0f
     private var shapeW = -1f; private var shapeH = -1f
@@ -94,7 +97,8 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
      * keyRect theo toạ độ view gốc. Preview kiểu Gboard/Material: thẻ bo góc nổi NGAY
      * TRÊN phím (không cổ nối như iOS), rộng hơn phím chút, chữ lớn.
      */
-    fun show(kl: Float, kt: Float, kr: Float, kb: Float, text: String) {
+    fun show(kl: Float, kt: Float, kr: Float, kb: Float, text: String, skin: LoadedSkin? = null) {
+        bubbleSkin = skin
         val kw = kr - kl; val kh = kb - kt
         val bw = maxOf(kw * 1.2f, theme.dp(44f))
         val bh = maxOf(kh * 1.15f, theme.dp(52f))
@@ -228,8 +232,12 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
         if (!visible) return
         c.save()
         c.translate(ox, oy)
-        c.drawPath(path, fill)
-        borderPaint?.let { c.drawPath(path, it) }
+        val sk = bubbleSkin
+        if (sk != null && skinPainter != null) skinPainter.draw(c, sk, false, 0f, 0f, bubbleW, bubbleH)
+        else {
+            c.drawPath(path, fill)
+            borderPaint?.let { c.drawPath(path, it) }
+        }
         c.drawText(text, bubbleW / 2, bubbleH / 2 + textOff, textPaint)
         c.restore()
     }

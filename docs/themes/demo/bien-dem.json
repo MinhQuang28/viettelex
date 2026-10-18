@@ -1,0 +1,120 @@
+{
+  "v": 1,
+  "id": "bien-dem",
+  "name": {
+    "vi": "Biển đêm",
+    "en": "Night Sea"
+  },
+  "light": {
+    "bg": "#0B1A33",
+    "key": "#1C3157",
+    "special": "#14264A",
+    "ink": "#F4F7FF",
+    "accent": "#F2C14E"
+  },
+  "dark": "same",
+  "corner": 30,
+  "font": {
+    "name": "Be Vietnam Pro",
+    "url": "https://viettelex.com/fonts/BeVietnamPro-Medium.ttf",
+    "sha256": "0ef42fffa93b447f4679a92775e64cae77b0d8983252e51cda698f993b053d9d"
+  },
+  "background": {
+    "url": "https://viettelex.com/themes/demo/bg.jpg",
+    "sha256": "5ee2487890ed826a945d982a26b41b7117af47326e40c73028cea8bd5f147bcf"
+  },
+  "foreground": {
+    "url": "https://viettelex.com/themes/demo/fg.png",
+    "sha256": "69e13224e46958baea1586da3ce44ca3e812213768dac24f2b03d397d24897c5"
+  },
+  "keys": {
+    "default": {
+      "url": "https://viettelex.com/themes/demo/key.png",
+      "sha256": "b669643ab76d113976ca8f2397387c0509f03b1d539bd3ae8f8b5af233af3f54",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ],
+      "pressed": {
+        "url": "https://viettelex.com/themes/demo/key-pressed.png",
+        "sha256": "418f73a6a377751112e836db8745be580fd7bef93ef060e361ad841cd768db37"
+      }
+    },
+    "special": {
+      "url": "https://viettelex.com/themes/demo/special.png",
+      "sha256": "e3e34d1d74fbe8c146e0ebd2d6bca447362267d0ac1af0f86fa226fef16ffa3f",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ],
+      "pressed": {
+        "url": "https://viettelex.com/themes/demo/special-pressed.png",
+        "sha256": "4e4cefc2023b46b0dbb89a580440e92d46b0a35fb0456b28690c4c6007d04eee"
+      }
+    },
+    "space": {
+      "url": "https://viettelex.com/themes/demo/space.png",
+      "sha256": "41388db7ff6fa50edfa41e4e2b0fc40292767b351ddd15cd526cc6bb3c6fcc1d",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ]
+    },
+    "return": {
+      "url": "https://viettelex.com/themes/demo/return.png",
+      "sha256": "acfb7255fbb777875860303fbb2f2fb05930818a0d0e05b458d0ec262e2fe7da",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ]
+    },
+    "shift": {
+      "url": "https://viettelex.com/themes/demo/shift.png",
+      "sha256": "c68c1d56469d0b1c884afc5bd9ba15e2fc00e8c609eda051b9c902b08607f3a8",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ]
+    },
+    "delete": {
+      "url": "https://viettelex.com/themes/demo/delete.png",
+      "sha256": "33864d9ea1052deb4e3f1ed60d767ae2fb55455a31083ef123d55265445d0ac3",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ]
+    },
+    "v": {
+      "url": "https://viettelex.com/themes/demo/key-v.png",
+      "sha256": "c39c29dc345a964e1d8f6eb15f9224658473c263259fb5905352483ff6a9a394",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ]
+    },
+    "t": {
+      "url": "https://viettelex.com/themes/demo/key-t.png",
+      "sha256": "b4f5575f6d7cfcc6fafc50077dcfcb70fab3e951eeea35f3bd2da0d9ebfd7467",
+      "slice": [
+        30,
+        30,
+        34,
+        30
+      ]
+    }
+  }
+}

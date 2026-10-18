@@ -244,6 +244,7 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     // Ảnh đưa vào trình chỉnh (mới chọn: chưa ghi gì — Huỷ thì ảnh nền cũ còn nguyên).
     var editor by remember { mutableStateOf<EditorInput?>(null) }
     fun update(n: ThemeSettings) { s = n; saveThemeSettings(ctx, n) }
+    val assetPrompt = rememberAssetPrompt()
 
     fun afterWrite(ok: Boolean, enable: Boolean) {
         busy = false
@@ -397,7 +398,18 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
         }
     }
 
-    AdvancedStyleSection(s.keyStyle, pal, onChange = { update(s.withKeyStyle(it)) }, onOpenPlus = onOpenPlus)
+    AdvancedStyleSection(s.keyStyle, pal, onChange = { st ->
+        val before = s.keyStyle.assets
+        update(s.withKeyStyle(st))
+        if (st.assets != before) ThemeAssetFlow.gcAsync(ctx)
+    }, onOpenPlus = onOpenPlus, onFontAsset = { st ->
+        // Chọn phông tải về = đặt phông cho theme hiện tại, rồi HỎI trước khi tải.
+        val ns = s.withKeyStyle(st)
+        update(ns)
+        ThemeAssetFlow.gcAsync(ctx)
+        assetPrompt.offer(ctx, ns.effectiveKeyStyle.assets)
+    })
+    ThemeAssetPromptHost(assetPrompt, onOpenPlus)
 
     // Tính Năng → Giao diện gộp luôn chiều cao hàng + logo (không thuộc "Khôi phục giao diện gốc").
     VTSection(header = tr("Bàn phím")) {

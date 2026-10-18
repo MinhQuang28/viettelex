@@ -351,6 +351,8 @@ final class KeyEffectTests: XCTestCase {
     @MainActor func testOverlayBelowBalloon() throws {
         try withKeyboard(effect: "ripple", plus: true) { kb, _ in
             let o = try XCTUnwrap(kb.keyEffects)
+            // Thứ tự Phil: nền → phím → ảnh tiền cảnh (theme JSON) → hiệu ứng → ô phóng to.
+            XCTAssertGreaterThan(o.layer.zPosition, kb.debugForegroundView.layer.zPosition, "trên ảnh tiền cảnh")
             kb.debugSetKeyPreview(true)
             let f = try XCTUnwrap(kb.debugLetterFrame("q"))
             kb.benchTap(at: CGPoint(x: f.midX, y: f.midY), time: 1)
