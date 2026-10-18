@@ -33,6 +33,8 @@ targets:
       - Keyboard/ThemeSpec.swift
       - Keyboard/BuiltinThemes.swift
       - Keyboard/Wallpaper.swift
+      # Hiệu ứng khi bấm phím: xem thử ở trang chọn (cùng overlay với bàn phím).
+      - Keyboard/KeyEffects.swift
       - Keyboard/Shortcuts.swift
       - Shared
       # Từ điển cá nhân: app đọc/sửa userlm.plist bằng chính model của bàn phím.
@@ -172,6 +174,7 @@ targets:
       - Keyboard/ThemeSpec.swift
       - Keyboard/BuiltinThemes.swift
       - Keyboard/Wallpaper.swift
+      - Keyboard/KeyEffects.swift
       - Keyboard/KeyCommitQueue.swift
       - Keyboard/AdjacentKeyFixer.swift
       - Keyboard/AutoCorrect.swift

@@ -342,6 +342,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         letterKeys.removeAll(); shiftKeys = []; crossRowConstraints = []
         spaceBar = nil; spaceLogo = nil; spaceCode = nil; indentedRow = nil
         overlayPanel?.removeFromSuperview(); overlayPanel = nil
+        keyEffects = nil; fxPoint = nil
         wallpaperView.image = nil
         wallpaperLoadedFor = .zero
         Self.stripSubviews(of: self, constraints: true)
@@ -1737,6 +1738,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         popup = PopupUI(KeyPopupStyle.make(palette, style: themeSettings.effectiveKeyStyle,
                                            systemDark: systemDark, wallpaper: wallpaperActive))
         if balloonMade { balloon.invalidateStyle() }
+        // Hiệu ứng theo màu nhấn MỚI (đổi sáng/tối giữa chừng).
+        keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui) }
         applyBackdrop()
     }
 
@@ -1915,6 +1918,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         themeSettings = ThemeSettings.load(UserDefaultsProvider.shared)
         applyKeyStyle(themeSettings.effectiveKeyStyle)
         resolvePalette()
+        configureKeyEffects()
         // Chiều cao hàng phím ±10pt (Settings → Giao diện) — đọc mỗi lần hiện. Bản cũ (có công
         // tắc "Kích thước như bàn phím iPhone") chưa được app chuyển đổi ⇒ tính trong bộ nhớ,
         // không ghi (KeyGeometry.RowAdjust.effectiveAdjust).
@@ -3099,9 +3103,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // Chốt qua KeyCommitQueue: arm lúc chạm, chốt lúc nhấc / bị huỷ / khi ngón
         // khác chạm xuống trước (gõ chồng ngón). touchUpOutside CŨNG chốt: ngón trượt
         // khỏi mép lúc nhấc là chuyện thường. Trackpad (spaceHold) disarm.
-        armCommit(space) { [weak self] in
+        armCommit(space) { [weak self, weak space] in
             guard let self else { return }
             if self.consumeSpaceFlick() { return }    // flick đổi ngôn ngữ: không ra dấu cách
+            if let space { self.fxMark(space) }
             let now = CACurrentMediaTime()
             if now - self.lastSpaceTap < 0.35 {
                 self.tapped(.doubleSpacePeriod)
@@ -3899,6 +3904,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             guard let self, let b else { return }
             Self.clickLetter()                       // feedback tức thì
             self.showBalloon(over: b, text: b.currentTitle ?? title)
+            self.fxMark(b)
             self.shiftBeforeLastLetter = self.shift
             let cased: Character = (self.shift == .off) ? Character(s) : Character(s.uppercased())
             if let d = self.deferredLetterID {        // vuốt-lên-lệnh + vùng chọn: chèn lúc nhấc
@@ -4070,7 +4076,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         }
         b.addAction(UIAction { [weak self, weak b] _ in
             Self.clickLetter()
-            if let self, let b { self.showBalloon(over: b, text: s) }
+            if let self, let b { self.showBalloon(over: b, text: s); self.fxMark(b) }
         }, for: .touchDown)
         b.addAction(UIAction { [weak self] _ in self?.hideBalloonAfterTap() },
                     for: [.touchUpInside, .touchUpOutside, .touchCancel])
@@ -5603,8 +5609,27 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
 
     private func tapped(_ key: Key) {
+        // Hiệu ứng khi bấm phím: lấy điểm đã đánh dấu (fxMark), chữ chèn TRƯỚC rồi mới hẹn vẽ.
+        let fx = fxPoint
+        fxPoint = nil
         if handleSearchKey(key) { return }
         onKey(key)
+        if let fx, let o = keyEffects { o.emit(at: fx) }
+    }
+
+    // MARK: Hiệu ứng khi bấm phím (KeyEffects.swift) — TẮT ⇒ overlay nil, đường phím chỉ đọc optional.
+    private(set) var keyEffects: KeyEffectOverlay?
+    /// Tâm phím vừa chạm (toạ độ self) — chỉ ghi khi hiệu ứng bật; `tapped` tiêu thụ.
+    private var fxPoint: CGPoint?
+    @inline(__always) private func fxMark(_ v: UIView) {
+        guard keyEffects != nil else { return }
+        fxPoint = convert(CGPoint(x: v.bounds.midX, y: v.bounds.midY), from: v)
+    }
+    /// Đọc cài đặt lúc hiện (applyAppearance): kiểu + cổng Plus + nguồn điện thấp + giảm chuyển động.
+    private func configureKeyEffects() {
+        keyEffects = KeyEffectOverlay.install(KeyEffectPolicy.current(UserDefaultsProvider.shared),
+                                              color: palette.accent.alpha(1).ui, in: self, existing: keyEffects)
+        if keyEffects == nil { fxPoint = nil }
     }
 
     #if DEBUG

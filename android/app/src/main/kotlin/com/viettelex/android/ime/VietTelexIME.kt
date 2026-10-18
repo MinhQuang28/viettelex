@@ -334,6 +334,26 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         return r
     }
 
+    /**
+     * "Hiệu ứng khi bấm phím" (Plus): kiểu + cổng Plus + Trình tiết kiệm pin + hiệu ứng động hệ thống —
+     * đọc MỘT lần mỗi lần hiện. Không ⇒ gỡ overlay (không còn view nào, 0 chi phí mỗi phím).
+     */
+    private fun applyKeyEffect(setting: com.viettelex.keyboard.KeyEffect, th: ImeTheme, kb: KeyboardView) {
+        val r = root ?: return
+        val fx = if (setting == com.viettelex.keyboard.KeyEffect.NONE) setting else com.viettelex.keyboard.KeyEffectPolicy.active(
+            setting, com.viettelex.keyboard.KeyEffectGate.allows(setting),
+            powerSave = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true,
+            animationsOff = !android.animation.ValueAnimator.areAnimatorsEnabled())
+        if (fx == com.viettelex.keyboard.KeyEffect.NONE) {
+            r.effects = null; kb.effects = null
+            return
+        }
+        val v = r.effects ?: KeyEffectView(this, th.density)
+        v.configure(fx, th.action)
+        r.effects = v
+        kb.effects = v
+    }
+
     /** Theme từ cài đặt hiện tại (rẻ: vài lần đọc màu resource, không giải ảnh). */
     private fun freshTheme(): ImeTheme {
         val all = prefs.all
@@ -421,6 +441,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
             settings.spaceSideKey, emojiInStrip, settings.keyLabelSize, settings.splitKeyboard)
         kb.keyPreview = settings.keyPreview
         kb.keyPressHighlight = settings.keyPressHighlight
+        applyKeyEffect(settings.keyEffect, th, kb)
         kb.configureSpaceFlick(settings.spaceSwipeLanguage, session.language)
         if (session.language == com.viettelex.keyboard.KeyboardLanguage.EN) warmEnglish()
         // Plus + công tắc "Công cụ văn bản" (mặc định bật) + không phải ô mật khẩu.

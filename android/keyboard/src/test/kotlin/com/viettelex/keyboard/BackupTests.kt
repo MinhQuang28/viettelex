@@ -131,7 +131,8 @@ class BackupTests {
             "keyboardTransparency" to 250, "keyLabelTransparency" to 35,
             BackupPrefs.SHORTCUTS_KEY to "# VietTelex — bảng gõ tắt\nko: không\n")
         val p = BackupPrefs.snapshot({ prefs[it] }, listOf(TemplateItem("", "a")), null)
-        assertEquals(54, p.settings!!.size)   // +splitKeyboard; 6 khoá KeyStyle chung → 1 keyStyles (18/10/2026)
+        assertEquals(55, p.settings!!.size)   // +splitKeyboard; 6 khoá KeyStyle chung → 1 keyStyles (18/10/2026); +keyEffect (19/10)
+        assertEquals("none", p.settings!![Keys.KEY_EFFECT])   // hiệu ứng khi bấm phím: mặc định Không
         assertEquals("{}", p.settings!![Keys.KEY_STYLES])   // chưa chỉnh theme nào
         assertEquals(false, p.settings!![Keys.SPLIT_KEYBOARD])   // tách đôi: mặc định tắt
         assertEquals(0, p.settings!![Keys.SUGGESTION_COUNT])   // số từ gợi ý: mặc định Tự động

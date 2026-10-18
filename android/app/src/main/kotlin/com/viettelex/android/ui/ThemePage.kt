@@ -238,6 +238,9 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     var confirmReset by remember { mutableStateOf(false) }
     /** Trang con "Chọn giao diện" đang mở. */
     var picking by remember { mutableStateOf(false) }
+    /** Trang con "Hiệu ứng khi bấm phím" (Plus) đang mở. */
+    var pickingEffect by remember { mutableStateOf(false) }
+    val keyEffectRaw by rememberStringPref(Keys.KEY_EFFECT, com.viettelex.keyboard.KeyEffect.DEFAULT.id)
     // Ảnh đưa vào trình chỉnh (mới chọn: chưa ghi gì — Huỷ thì ảnh nền cũ còn nguyên).
     var editor by remember { mutableStateOf<EditorInput?>(null) }
     fun update(n: ThemeSettings) { s = n; saveThemeSettings(ctx, n) }
@@ -284,6 +287,12 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
         return
     }
 
+    if (pickingEffect) {
+        KeyEffectPage(s.styledCurrent(s.basePalette(dark) ?: previewPalette(KeyboardTheme.SYSTEM, dark), dark),
+            onOpenPlus = onOpenPlus, onBack = { pickingEffect = false })
+        return
+    }
+
     SubPageHeader(FeaturePage.GiaoDien.title, onBack)
 
     val active = s.wallpaperActive(wall != null)
@@ -313,6 +322,14 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
             Text(tr("Giao diện bàn phím"), style = VTType.body, color = c.label,
                 modifier = Modifier.weight(1f).padding(start = 12.dp))
             Text("${s.effectiveCustom?.name ?: s.effectiveTheme.title} ›", style = VTType.body, color = c.secondary, maxLines = 1)
+        }
+        RowDivider()
+        VTRow(onClick = { pickingEffect = true }) {
+            val fxOn = com.viettelex.keyboard.KeyEffectGate.allows
+            Text(tr("Hiệu ứng khi bấm phím") + if (fxOn) "" else " · Plus", style = VTType.body, color = c.label,
+                modifier = Modifier.weight(1f))
+            Text("${(if (fxOn) com.viettelex.keyboard.KeyEffect.of(keyEffectRaw) else com.viettelex.keyboard.KeyEffect.NONE).title} ›",
+                style = VTType.body, color = c.secondary, maxLines = 1)
         }
     }
 

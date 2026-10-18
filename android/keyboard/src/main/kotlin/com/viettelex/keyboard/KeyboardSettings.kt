@@ -88,6 +88,8 @@ data class KeyboardSettings(
     var keyPreview: Boolean = true,
     /** Phím sẫm khi bấm (phím chữ/số/ký hiệu) — mặc định BẬT như iOS; tắt ⇒ đường chạm không thêm việc. */
     var keyPressHighlight: Boolean = true,
+    /** "Hiệu ứng khi bấm phím" (Plus) — mặc định Không ⇒ IME không tạo overlay. */
+    var keyEffect: KeyEffect = KeyEffect.DEFAULT,
     /** [ROW_HEIGHT_MIN]…[ROW_HEIGHT_MAX] dp mỗi hàng (IME kẹp thêm phần trên +10 theo cao màn hình — KeyLayout.effectiveRowAdjust). */
     var rowHeightAdjust: Int = 0,
     /** Hàng phím số 1…0 trên hàng chữ — mặc định TẮT. */
@@ -189,6 +191,7 @@ data class KeyboardSettings(
             s.showSpaceLogo = b(Keys.SHOW_SPACE_LOGO, s.showSpaceLogo)
             s.keyPreview = b(Keys.KEY_PREVIEW, s.keyPreview)
             s.keyPressHighlight = b(Keys.KEY_PRESS_HIGHLIGHT, s.keyPressHighlight)
+            s.keyEffect = KeyEffect.of(get(Keys.KEY_EFFECT))
             s.debugTouchLog = b(Keys.DEBUG_TOUCH_LOG, s.debugTouchLog)
             s.numberRow = b(Keys.NUMBER_ROW, s.numberRow)
             s.numberRowFullHeight = b(Keys.NUMBER_ROW_FULL_HEIGHT, s.numberRowFullHeight)

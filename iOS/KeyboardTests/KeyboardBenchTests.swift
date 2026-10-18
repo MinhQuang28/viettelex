@@ -75,6 +75,11 @@ final class KeyboardBenchTests: XCTestCase {
             d.set(["ko": "không", "dc": "được", "vn": "Việt Nam"], forKey: "shortcuts")
         default: break
         }
+        // Hiệu ứng khi bấm phím (Plus): VT_BENCH_EFFECT=heart|bubble|ripple|petal|firework — A/B với cùng cfg.
+        if let e = ProcessInfo.processInfo.environment["VT_BENCH_EFFECT"], KeyEffect(rawValue: e) != nil {
+            d.set(e, forKey: KeyEffect.key)
+            PlusGate.paywallEnabled = false
+        }
         // Tách chi phí từng tính năng: VT_BENCH_OFF=smartTouch,showSuggestions (tắt thêm).
         for k in (ProcessInfo.processInfo.environment["VT_BENCH_OFF"] ?? "").split(separator: ",") {
             d.set(false, forKey: String(k))
@@ -235,7 +240,7 @@ final class KeyboardBenchTests: XCTestCase {
         let idleCPU = (Self.processCPU() - i0) * 1000
         let idleMain = (Self.mainThreadCPU() - m0) * 1000
 
-        let line = String(format: "BENCH cfg=%@ keys=%d sync_p50=%.3f sync_p95=%.3f sync_p99=%.3f "
+        let line = String(format: "BENCH cfg=%@ effect=\(rig.vc.debugKeyboard.keyEffects?.effect.rawValue ?? "none") keys=%d sync_p50=%.3f sync_p95=%.3f sync_p99=%.3f "
             + "main_p50=%.3f main_p95=%.3f main_p99=%.3f cpu100=%.1f noise100=%.1f "
             + "open_cold=%.1f open_warm=%.1f mem_base=%.1f mem_open=%.1f mem_typed=%.1f "
             + "idle%.0fs_cpu=%.1f idle_main=%.1f ctx_per_key=%.2f ins_per_key=%.2f del_per_key=%.2f",

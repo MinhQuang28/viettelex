@@ -498,9 +498,39 @@ class KeyboardView(
     private val textFires = HashMap<String, () -> Unit>()
     private fun textFire(s: String) = textFires.getOrPut(s) { val k = Key.Text(s); { emit(k) } }
 
+    /**
+     * "Hiệu ứng khi bấm phím" ([KeyEffectView], Plus) — null = tắt (mặc định): đường phím chỉ đọc một
+     * biến null. Bật: lúc chạm ghi tâm phím ([fxMark]); [emit] chèn chữ TRƯỚC rồi mới báo overlay.
+     */
+    var effects: KeyEffectView? = null
+        set(v) { field = v; fxPending = false }
+    private var fxPending = false
+    private var fxX = 0f
+    private var fxY = 0f
+
+    private fun fxMark(k: LaidKey) {
+        val fx = effects ?: return
+        fxPending = when (k.kind) {
+            KeyKind.LETTER, KeyKind.CHAR, KeyKind.PAD, KeyKind.PUNCT, KeyKind.SPACE -> true
+            else -> false
+        }
+        // Toạ độ overlay (cùng khung balloon: gốc view cha) = toạ độ phím + vị trí view này.
+        fxX = (k.left + k.right) / 2f + left - fx.left
+        fxY = (k.top + k.bottom) / 2f + top - fx.top
+    }
+
+    /** Sau khi phím đã tới IME: chữ / ký tự / dấu cách mới mang hiệu ứng. */
+    private fun fxAfter(k: Key) {
+        if (!fxPending) return
+        fxPending = false
+        val fx = effects ?: return
+        if (k is Key.Letter || k is Key.Text || k == Key.Space || k == Key.DoubleSpacePeriod) fx.burst(fxX, fxY)
+    }
+
     /** Mọi phím đi qua đây: plane tìm emoji giữ phím cho ô tìm, còn lại tới IME. */
     private fun emit(k: Key) {
-        if (plane != Plane.EMOJI_SEARCH) { listener?.onKey(k); return }
+        if (plane != Plane.EMOJI_SEARCH) { listener?.onKey(k); fxAfter(k); return }
+        fxPending = false
         when (k) {
             is Key.Letter -> search.type(k.ch)
             is Key.Text -> { if (k.replacesLetter) search.backspace(); search.insert(k.text) }
@@ -1252,6 +1282,7 @@ class KeyboardView(
         val prior = if (forced == null && hit.kind == KeyKind.LETTER && plane == Plane.LETTERS) letterPrior?.invoke() else null
         val k = if (prior != null) SmartTouch.refine(keys, hit, x, y - TouchGeometry.yOffset * d, prior) else hit
         ptrKey[pid] = k
+        if (effects != null) fxMark(k)
         when (k.kind) {
             KeyKind.LETTER -> {
                 feedback.click(Feedback.LETTER, this)

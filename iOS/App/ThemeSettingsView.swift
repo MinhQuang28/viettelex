@@ -41,6 +41,8 @@ struct ThemeSettingsView: View {
     @AppStorage("showSuggestions", store: groupDefaults) private var showSuggestions = true
     /// Bàn phím tách đôi khi màn hình rộng (SplitLayout.settingKey) — mặc định TẮT.
     @AppStorage("splitKeyboard", store: groupDefaults) private var splitKeyboard = false
+    /// "Hiệu ứng khi bấm phím" (Plus, KeyEffect) — trang con KeyEffectPickerView.
+    @AppStorage(KeyEffect.key, store: groupDefaults) private var keyEffectRaw = KeyEffect.defaultValue.rawValue
 
     /// Ảnh đưa vào trình chỉnh: mới chọn (chưa ghi gì) hoặc bản gốc đã lưu ("Chỉnh ảnh").
     struct EditorInput: Identifiable {
@@ -125,6 +127,20 @@ struct ThemeSettingsView: View {
                     .disabled(settings.wallpaperActive(fileExists: hasWallpaperFile))
                 }
             } header: { Text("Theme") }
+
+            Section {
+                NavigationLink {
+                    KeyEffectPickerView()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(L("Hiệu ứng khi bấm phím"))
+                        if !KeyEffectGate.allows { plusBadge }
+                        Spacer()
+                        Text(KeyEffectGate.allows ? KeyEffect.parse(keyEffectRaw).title : KeyEffect.none.title)
+                            .foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+            }
 
             Section {
                 PhotosPicker(selection: $pickerItem, matching: .images) {
