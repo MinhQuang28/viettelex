@@ -120,4 +120,40 @@ final class UXSnapshotTests: XCTestCase {
             }
         }
     }
+
+    /// Ảnh xem trước từng theme (sáng + tối) — VT_THEME_SNAPSHOT_DIR (riêng, chụp nhanh không cần cả bộ trên).
+    @MainActor func testWriteThemeSnapshots() throws {
+        guard let dir = ProcessInfo.processInfo.environment["VT_THEME_SNAPSHOT_DIR"] else {
+            throw XCTSkip("đặt VT_THEME_SNAPSHOT_DIR để xuất ảnh theme")
+        }
+        try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
+        let d = UserDefaultsProvider.shared
+        let saved = d?.object(forKey: ThemeSettings.themeKey)
+        let savedPaywall = PlusGate.paywallEnabled
+        PlusGate.paywallEnabled = false          // theme Plus hiện thật (không rơi về Hệ thống)
+        defer { d?.set(saved, forKey: ThemeSettings.themeKey); PlusGate.paywallEnabled = savedPaywall }
+        let w: CGFloat = 402
+        for theme in KeyboardTheme.allCases where theme != .system && theme != .oled && theme != .contrast {
+            for dark in [false, true] {
+                d?.set(theme.rawValue, forKey: ThemeSettings.themeKey)
+                let kb = KeyboardView(needsGlobe: false, inputController: nil, onKey: { _ in })
+                let host = UIView(frame: CGRect(x: 0, y: 0, width: w, height: 300))
+                host.backgroundColor = dark ? UIColor(white: 0.11, alpha: 1) : UIColor(red: 0.82, green: 0.83, blue: 0.86, alpha: 1)
+                host.overrideUserInterfaceStyle = dark ? .dark : .light
+                host.addSubview(kb)
+                kb.frame = host.bounds
+                kb.applyAppearance(dark ? .dark : .light, style: dark ? .dark : .light)
+                kb.setSuggestionsEnabled(true)
+                kb.configureInputKind(.normal)
+                kb.setNeedsLayout(); kb.layoutIfNeeded()
+                kb.showSuggestions(.init(nextWords: ["Em", "Anh", "Tôi"]))
+                let h = kb.systemLayoutSizeFitting(CGSize(width: w, height: 0)).height
+                host.frame.size.height = max(h, 200); kb.frame = host.bounds
+                host.layoutIfNeeded(); kb.layoutIfNeeded()
+                let img = UIGraphicsImageRenderer(bounds: host.bounds).image { host.layer.render(in: $0.cgContext) }
+                try XCTUnwrap(img.pngData()).write(to: URL(fileURLWithPath: dir)
+                    .appendingPathComponent("theme-\(theme.rawValue)-\(dark ? "dark" : "light").png"))
+            }
+        }
+    }
 }

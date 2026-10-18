@@ -170,7 +170,7 @@ final class KeyboardThemeTests: XCTestCase {
     // MARK: token
 
     func testThemeSetIsCompactAndSystemIsDefault() {
-        XCTAssertTrue((6...8).contains(KeyboardTheme.allCases.count))
+        XCTAssertTrue((6...16).contains(KeyboardTheme.allCases.count))
         XCTAssertEqual(ThemeSettings().theme, .system)
         XCTAssertEqual(ThemeSettings.load(nil).theme, .system)
     }
@@ -190,10 +190,18 @@ final class KeyboardThemeTests: XCTestCase {
         XCTAssertTrue(dark.isDark)
     }
 
+    /// Theme tối cố định (OLED, Tương phản cao, Tim đen, Neon) không đổi theo hệ thống; mọi theme
+    /// nền đục khác có bản tối riêng (bug 10/2026: "giao diện plus ở chế độ tối không chuyển tối").
     func testFixedThemesIgnoreSystemAppearance() {
+        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon]
         for t in KeyboardTheme.allCases where t != .system && t != .glass {
-            XCTAssertEqual(t.palette(systemDark: false), t.palette(systemDark: true), t.rawValue)
             XCTAssertNotNil(t.palette(systemDark: false).background, "\(t) cần nền đục")
+            if fixed.contains(t) {
+                XCTAssertEqual(t.palette(systemDark: false), t.palette(systemDark: true), t.rawValue)
+                XCTAssertTrue(t.palette(systemDark: false).isDark, t.rawValue)
+            } else {
+                XCTAssertNotEqual(t.palette(systemDark: false), t.palette(systemDark: true), t.rawValue)
+            }
         }
         XCTAssertNil(KeyboardTheme.glass.palette(systemDark: false).background,
                      "Kính để lộ backdrop hệ thống, không tự blur")
@@ -395,12 +403,17 @@ final class KeyboardThemeTests: XCTestCase {
     /// Nền trong suốt lộ backdrop khác tông → chữ tự đổi đen/trắng cho đọc được;
     /// mức nhỏ không được lật màu (không đổi hình người đang dùng).
     func testLabelsStayReadableWhenBackgroundGoesClear() {
-        let peachDark = KeyboardTheme.peach.palette(systemDark: true)
+        // Chữ tối của theme sáng trên backdrop tối (cơ chế đổi đen/trắng).
+        let lightOnDark = KeyboardTheme.peach.palette(systemDark: false)
             .withTransparency(keyboard: 100, labels: 0, systemDark: true, wallpaper: false)
-        XCTAssertEqual(peachDark.keyInk, .white)
-        XCTAssertTrue(peachDark.isDark)
-        XCTAssertGreaterThanOrEqual(RGBA.contrast(peachDark.barInk,
+        XCTAssertEqual(lightOnDark.keyInk, .white)
+        XCTAssertTrue(lightOnDark.isDark)
+        XCTAssertGreaterThanOrEqual(RGBA.contrast(lightOnDark.barInk,
                                                   KeyboardTransparency.systemBackdrop(dark: true)), 4.5)
+        // Hồng đào TỐI (chữ sáng) trên backdrop tối: chữ theme vẫn đọc được ⇒ giữ nguyên màu theme.
+        let peachDark = KeyboardTheme.peach.palette(systemDark: true)
+        XCTAssertEqual(peachDark.withTransparency(keyboard: 100, labels: 0, systemDark: true,
+                                                  wallpaper: false).keyInk, peachDark.ink)
         let peachLight = KeyboardTheme.peach.palette(systemDark: false)
         XCTAssertEqual(peachLight.withTransparency(keyboard: 100, labels: 0, systemDark: false,
                                                    wallpaper: false).keyInk, peachLight.ink)
@@ -822,5 +835,300 @@ final class KeyStyleTests: XCTestCase {
                                 containerURL: nil).settings()
         XCTAssertEqual(fresh[KeyStyle.labelColorKey], .int(-1))
         XCTAssertEqual(fresh[KeyStyle.fontScaleKey], .int(0))
+    }
+}
+
+
+/// Bản tối của theme pastel + bộ theme 10/2026 (Tim đen, Hoa xanh, Xanh lá, Trắng hồng, Neon, Hồng):
+/// bảng màu chung với Android (Fixtures/theme-palettes.tsv), độ đọc được, cổng Plus, hoạ tiết nền rẻ,
+/// và đi cùng độ trong suốt / ảnh nền / Nền theo hệ thống / Tuỳ chỉnh nâng cao ở chế độ tối.
+final class ThemeSetTests: XCTestCase {
+    private var savedDefaults: UserDefaults!
+    private var savedPaywall = false
+    private var suite = ""
+
+    override func setUp() {
+        super.setUp()
+        savedDefaults = PlusGate.defaults
+        savedPaywall = PlusGate.paywallEnabled
+        PlusGate.paywallEnabled = false
+        suite = "themeset-\(UUID().uuidString)"
+        PlusGate.defaults = UserDefaults(suiteName: suite)!
+    }
+
+    override func tearDown() {
+        PlusGate.defaults.removePersistentDomain(forName: suite)
+        PlusGate.defaults = savedDefaults
+        PlusGate.paywallEnabled = savedPaywall
+        super.tearDown()
+    }
+
+    static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .pureWhite, .neon, .pink]
+    static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
+
+    // MARK: bảng màu chung iOS ↔ Android
+
+    private struct Fixture {
+        var order: [String] = []
+        var plus: [String] = []
+        var rows: [(theme: String, dark: Bool, cols: [String])] = []
+    }
+
+    private func fixture() throws -> Fixture {
+        let url = try XCTUnwrap(Bundle(for: ThemeSetTests.self).url(forResource: "theme-palettes", withExtension: "tsv"))
+        var f = Fixture()
+        for line in try String(contentsOf: url, encoding: .utf8).split(separator: "\n") where !line.hasPrefix("#") {
+            let c = line.split(separator: "\t").map(String.init)
+            switch c[0] {
+            case "order": f.order = c[1].split(separator: ",").map(String.init)
+            case "plus": f.plus = c[1].split(separator: ",").map(String.init)
+            default: f.rows.append((c[0], c[1] == "1", Array(c.dropFirst(2))))
+            }
+        }
+        return f
+    }
+
+    /// AARRGGBB, alpha cắt cụt (Android withAlpha cũng cắt cụt).
+    private static func hex(_ c: RGBA?) -> String {
+        guard let c else { return "-" }
+        func b(_ v: Double) -> Int { Int((v * 255).rounded()) }
+        return String(format: "%02X%02X%02X%02X", Int(c.a * 255), b(c.r), b(c.g), b(c.b))
+    }
+
+    func testPalettesMatchSharedFixtureWithAndroid() throws {
+        let f = try fixture()
+        XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
+        XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
+        XCTAssertEqual(f.rows.count, 24)
+        for r in f.rows {
+            let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
+            let p = t.palette(systemDark: r.dark)
+            let deco = p.decoration.map { "\($0.motif.rawValue):\(Self.hex($0.color))" } ?? "-"
+            let got = [Self.hex(p.background), Self.hex(p.keyFill), Self.hex(p.specialFill), Self.hex(p.ink),
+                       Self.hex(p.accent), Self.hex(p.accentInk), Self.hex(p.keyBorder), Self.hex(p.functionFill),
+                       Self.hex(p.functionInk), deco]
+            XCTAssertEqual(got, r.cols, "\(r.theme) dark=\(r.dark)")
+        }
+    }
+
+    // MARK: bản tối
+
+    func testDarkVariantsKeepHueFamilyAndAccent() {
+        for t in Self.pastels + [.greenFloral, .sage, .pureWhite, .pink] {
+            let light = t.palette(systemDark: false), dark = t.palette(systemDark: true)
+            XCTAssertNotEqual(light, dark, t.rawValue)
+            XCTAssertFalse(light.isDark, t.rawValue)
+            XCTAssertTrue(dark.isDark, "\(t) bản tối phải là tối (icon/emoji theo nhánh tối)")
+            XCTAssertLessThan(dark.background!.luminance, 0.05, "\(t) nền tối sẫm")
+            XCTAssertLessThan(dark.keyFill.luminance, 0.08, "\(t) phím tối sẫm")
+            XCTAssertEqual(light.accent, dark.accent, "\(t) giữ màu nhấn")
+            // Cùng họ màu: kênh trội của nền tối = kênh trội của nền sáng (hồng / xanh / tím…).
+            func dominant(_ c: RGBA) -> Int { [c.r, c.g, c.b].enumerated().max { $0.element < $1.element }!.offset }
+            if t != .pureWhite { XCTAssertEqual(dominant(light.background!), dominant(dark.background!), t.rawValue) }
+        }
+    }
+
+    /// Đi theo sáng/tối hệ thống TỰ ĐỘNG qua ThemeSettings (không công tắc riêng).
+    func testSettingsFollowSystemAppearance() {
+        for t in Self.pastels + Self.newThemes {
+            let s = ThemeSettings(theme: t)
+            XCTAssertEqual(s.palette(systemDark: true, wallpaperActive: false).background,
+                           t.palette(systemDark: true).background, t.rawValue)
+            XCTAssertEqual(s.palette(systemDark: false, wallpaperActive: false).background,
+                           t.palette(systemDark: false).background, t.rawValue)
+        }
+    }
+
+    // MARK: đọc được
+
+    /// Chữ phím, chữ phím chức năng, thanh gợi ý: ≥ 4.5:1 và `readable` không phải lật màu.
+    func testLabelsReadableInEveryMode() {
+        for t in KeyboardTheme.allCases where t != .system && t != .glass {
+            for dark in [false, true] {
+                let p = t.palette(systemDark: dark)
+                let bg = p.background!
+                let key = p.keyFill.over(bg), fn = p.fnFill.over(bg)
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(p.ink, key), 4.5, "\(t) \(dark) phím")
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(p.fnInk, fn), 4.5, "\(t) \(dark) phím chức năng")
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(p.ink, p.specialFill.over(bg)), 4.5, "\(t) \(dark) phím đè")
+                XCTAssertEqual(KeyboardTransparency.readable(p.ink, on: key), p.ink)
+                XCTAssertEqual(KeyboardTransparency.readable(p.fnInk, on: fn), p.fnInk)
+                XCTAssertEqual(KeyboardTransparency.readable(p.barInk, on: bg), p.barInk)
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(p.ink, p.balloon), 4.5, "\(t) \(dark) ô phóng to")
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(p.accentInk, p.accent), 3, "\(t) \(dark) Nhập")
+                if let d = p.decoration {
+                    // Hoạ tiết mờ: chữ thanh gợi ý vẫn đọc được ngay trên hoạ tiết.
+                    XCTAssertGreaterThanOrEqual(RGBA.contrast(p.barInk, d.color.over(bg)), 4.5, "\(t) \(dark) hoạ tiết")
+                }
+            }
+        }
+    }
+
+    // MARK: Plus
+
+    func testNewThemesArePlusAndGated() {
+        for t in Self.newThemes { XCTAssertTrue(t.isPlus, t.rawValue) }
+        PlusGate.paywallEnabled = true
+        PlusGate.setPurchased(false)
+        PlusGate.debugOverride = false
+        for t in Self.newThemes {
+            XCTAssertFalse(ThemeGate.allows(t), t.rawValue)
+            let s = ThemeSettings(theme: t)
+            XCTAssertEqual(s.effectiveTheme, .system)
+            XCTAssertNil(s.effectiveKeyStyle.corner, "hết Plus ⇒ không mang bo góc của Hồng")
+        }
+        PlusGate.setPurchased(true)
+        for t in Self.newThemes { XCTAssertTrue(ThemeGate.allows(t), t.rawValue) }
+    }
+
+    func testNewThemesRoundTripAndBackupKeys() throws {
+        let name = "themeset-rt-\(UUID().uuidString)"
+        let d = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { d.removePersistentDomain(forName: name) }
+        for t in Self.newThemes {
+            ThemeSettings(theme: t).save(d)
+            XCTAssertEqual(ThemeSettings.load(d).theme, t)
+            let k = try XCTUnwrap(t.systemBackdropKey)
+            XCTAssertEqual(BackupSettings.byKey[k]?.kind, .bool(false), k)
+        }
+    }
+
+    // MARK: trang "Chọn giao diện"
+
+    func testPickerSectionsFreeThenPlus() {
+        let secs = ThemePicker.sections
+        XCTAssertEqual(secs.map(\.title), ["Miễn phí", "Plus"])
+        XCTAssertEqual(secs[0].themes, [.system, .oled, .contrast])
+        XCTAssertEqual(Set(secs[0].themes + secs[1].themes), Set(KeyboardTheme.allCases))
+        XCTAssertTrue(secs[1].themes.allSatisfy(\.isPlus))
+        XCTAssertEqual(L10n.en["Miễn phí"], "Free")
+        XCTAssertEqual(L10n.en["Chọn giao diện"], "Choose theme")
+        XCTAssertEqual(L10n.en["Giao diện bàn phím"], "Keyboard theme")
+    }
+
+    func testPickerSelectRespectsPlusGate() {
+        let s = ThemeSettings(theme: .oled, keyboardTransparency: 30)
+        XCTAssertEqual(ThemePicker.select(.neon, in: s)?.theme, .neon)        // paywall tắt ⇒ mở
+        XCTAssertEqual(ThemePicker.select(.neon, in: s)?.keyboardTransparency, 30)   // chỉ đổi theme
+        PlusGate.paywallEnabled = true
+        PlusGate.setPurchased(false)
+        PlusGate.debugOverride = false
+        XCTAssertNil(ThemePicker.select(.blackHeart, in: s))                   // khoá ⇒ không đổi
+        XCTAssertEqual(ThemePicker.select(.contrast, in: s)?.theme, .contrast) // miễn phí luôn chọn được
+        PlusGate.setPurchased(true)
+        XCTAssertEqual(ThemePicker.select(.blackHeart, in: s)?.theme, .blackHeart)
+    }
+
+    // MARK: bo góc Hồng
+
+    func testPinkRoundedByDefaultButUserCornerWins() {
+        XCTAssertEqual(ThemeSettings(theme: .pink).effectiveKeyStyle.corner, 70)
+        XCTAssertNil(ThemeSettings(theme: .peach).effectiveKeyStyle.corner)
+        var s = ThemeSettings(theme: .pink)
+        s.keyStyle = KeyStyle(corner: 10)
+        XCTAssertEqual(s.effectiveKeyStyle.corner, 10)
+        XCTAssertNil(s.resetToDefaults().effectiveKeyStyle.corner)
+    }
+
+    // MARK: hoạ tiết nền
+
+    func testDecorationOnlyOnHeartAndFloral() {
+        for t in KeyboardTheme.allCases {
+            for dark in [false, true] {
+                let m = t.palette(systemDark: dark).decoration?.motif
+                switch t {
+                case .blackHeart: XCTAssertEqual(m, .hearts)
+                case .greenFloral: XCTAssertEqual(m, .flowers)
+                default: XCTAssertNil(m, t.rawValue)
+                }
+            }
+        }
+    }
+
+    /// Chi phí: số motif có trần, tất định, nằm trong vùng (lề tránh góc bo nền).
+    func testDecorationGeometryBoundedAndInside() {
+        typealias D = KeyboardDecoration
+        for (w, h) in [(402.0, 300.0), (320.0, 260.0), (1366.0, 420.0), (834.0, 380.0), (20.0, 20.0)] {
+            let pts = D.placements(width: w, height: h)
+            XCTAssertLessThanOrEqual(pts.count, D.maxMotifs, "\(w)x\(h)")
+            if w > 100 { XCTAssertGreaterThan(pts.count, 8, "\(w)x\(h) phải có hoạ tiết") }
+            for p in pts {
+                XCTAssertGreaterThanOrEqual(p.x - D.motifSize / 2, D.inset - 1e-9)
+                XCTAssertLessThanOrEqual(p.x, w - D.inset + 1e-9)
+                XCTAssertGreaterThanOrEqual(p.y - D.motifSize / 2, D.inset - 1e-9)
+                XCTAssertLessThanOrEqual(p.y, h - D.inset + 1e-9)
+            }
+            XCTAssertEqual(pts.map(\.x), D.placements(width: w, height: h).map(\.x))
+            for motif in [D.Motif.hearts, .flowers] {
+                let box = D(motif: motif, color: .white).path(in: CGSize(width: w, height: h)).boundingBoxOfPath
+                if pts.isEmpty { XCTAssertTrue(box.isNull || box.isEmpty); continue }
+                XCTAssertTrue(CGRect(x: 0, y: 0, width: w, height: h).contains(box), "\(motif) \(w)x\(h)")
+            }
+        }
+        // Mốc chung với Android (ThemeDecorationTests): iPhone 402×300 → 36 motif.
+        XCTAssertEqual(D.placements(width: 402, height: 300).count, 36)
+        // Hoa: 5 cánh không chồng nhau, không chạm nhuỵ (tô nonzero không thủng lỗ).
+        XCTAssertGreaterThan(2 * 0.32 * sin(Double.pi / 5), 2 * 0.18)
+        XCTAssertGreaterThan(0.32 - 0.18, 0.12)
+    }
+
+    // MARK: đi cùng độ trong suốt / ảnh nền / Nền theo hệ thống / Tuỳ chỉnh nâng cao (tối)
+
+    func testDarkComposesWithTransparencyWallpaperBackdropAndAdvanced() {
+        for t in Self.pastels + Self.newThemes {
+            let base = t.palette(systemDark: true)
+            // Ảnh nền: bỏ nền + hoạ tiết; chữ ≥ 4.5 trên ảnh tệ nhất cả ở phím chức năng.
+            let wp = ThemeSettings(theme: t).palette(systemDark: true, wallpaperActive: true)
+            XCTAssertNil(wp.background); XCTAssertNil(wp.decoration)
+            XCTAssertTrue(wp.isDark, t.rawValue)
+            XCTAssertGreaterThanOrEqual(RGBA.contrast(wp.ink, wp.fnFill.over(.white)), 4.5, "\(t) phím chức năng trên ảnh")
+            // Nền theo hệ thống: không hoạ tiết, bảng emoji theo nền tối.
+            var sb = ThemeSettings(theme: t)
+            sb.systemBackdropThemes = [t]
+            let sp = sb.palette(systemDark: true, wallpaperActive: false)
+            XCTAssertNil(sp.background); XCTAssertNil(sp.decoration); XCTAssertEqual(sp.surfaceDark, true)
+            // Độ trong suốt: hoạ tiết + nền chức năng mờ theo phím; chữ vẫn đọc được trên backdrop.
+            let half = base.withTransparency(keyboard: 50, labels: 0, systemDark: true, wallpaper: false)
+            XCTAssertEqual(half.decoration?.color.a ?? 0, (base.decoration?.color.a ?? 0) * 0.5, accuracy: 1e-9)
+            XCTAssertEqual(half.functionFill?.a ?? 0.5, 0.5, accuracy: 1e-9)
+            let full = base.withTransparency(keyboard: 100, labels: 0, systemDark: true, wallpaper: false)
+            let sys = KeyboardTransparency.systemBackdrop(dark: true)
+            XCTAssertGreaterThanOrEqual(RGBA.contrast(full.fnInk, full.fnFill.over(sys)), KeyboardTransparency.minLabelContrast)
+            XCTAssertGreaterThanOrEqual(RGBA.contrast(full.keyInk, full.keyFill.over(sys)), KeyboardTransparency.minLabelContrast)
+            let faded = base.withTransparency(keyboard: 0, labels: 40, systemDark: true, wallpaper: false)
+            XCTAssertEqual(faded.fnInk.a, 0.6, accuracy: 1e-9)
+            // Tuỳ chỉnh nâng cao: màu người dùng phủ mọi phím.
+            var adv = ThemeSettings(theme: t)
+            adv.keyStyle = KeyStyle(labelColor: 0xFF2D55, fillColor: 0x102030)
+            let ap = adv.palette(systemDark: true, wallpaperActive: false)
+            XCTAssertEqual(ap.fnFill, RGBA(hex: 0x102030)); XCTAssertEqual(ap.fnInk, RGBA(hex: 0xFF2D55))
+            adv.keyStyle = KeyStyle(fillColor: 0xFFFFFF)
+            let wf = adv.palette(systemDark: true, wallpaperActive: false)
+            XCTAssertGreaterThanOrEqual(RGBA.contrast(wf.fnInk, wf.fnFill), KeyboardTransparency.minLabelContrast, t.rawValue)
+        }
+    }
+
+    // MARK: bàn phím thật
+
+    /// Tim đen / Hoa xanh vẽ hoạ tiết ở lớp nền; OLED / Hồng đào không.
+    @MainActor func testKeyboardViewDecorationLayer() throws {
+        let d = UserDefaultsProvider.shared
+        let saved = d?.object(forKey: ThemeSettings.themeKey)
+        defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
+        func make(_ t: KeyboardTheme, dark: Bool = true) -> KeyboardView {
+            d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
+            let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }
+            let host = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: 400))
+            host.addSubview(kb)
+            kb.frame = CGRect(x: 0, y: 0, width: 390, height: 300)
+            kb.applyAppearance(dark ? .dark : .light, style: dark ? .dark : .light)
+            kb.configureInputKind(.normal)
+            kb.setNeedsLayout(); kb.layoutIfNeeded()
+            return kb
+        }
+        XCTAssertTrue(make(.blackHeart).debugDecorationVisible)
+        XCTAssertTrue(make(.greenFloral, dark: false).debugDecorationVisible)
+        XCTAssertFalse(make(.oled).debugDecorationVisible)
+        XCTAssertFalse(make(.peach).debugDecorationVisible)
     }
 }

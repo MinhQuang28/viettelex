@@ -279,7 +279,7 @@ class KeyboardView(
     // Gboard: chữ 22 sp regular, nhãn chức năng 14 sp medium (font hệ thống sans-serif).
     // "Cỡ chữ trên phím" = Lớn ⇒ [applyLabelSize] đổi textSize (lúc cấu hình, không mỗi phím).
     private val letterPaint = theme.text(LETTER_SP)
-    private val controlPaint = theme.text(CONTROL_SP, medium = true)
+    private val controlPaint = theme.text(CONTROL_SP, color = theme.fnInk, medium = true)
     private val badgePaint = theme.text(14f, medium = true)
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.ink }
     private var letterOff = theme.centerOffset(letterPaint)
@@ -311,7 +311,8 @@ class KeyboardView(
     private val hintLift = theme.dp(6f)
     private val hintDrop = theme.dp(12f)
     private val keyPressed = theme.pressed(theme.keyFill)
-    private val specialPressed = theme.pressed(theme.specialFill)
+    private val specialPressed = theme.pressed(theme.fnFill)
+    private val spacePressed = theme.pressed(theme.spaceFill)
     private val actionPressed = theme.blend(theme.action, theme.actionInk, 0.12f)
     // Logo Vᴛ mờ ở góc phải phím space như iOS (thay nhãn "Tiếng Việt").
     private val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
@@ -886,9 +887,11 @@ class KeyboardView(
             k.kind == KeyKind.RETURN -> if (k.pressed) actionPressed else theme.action
             k.kind == KeyKind.SHIFT && shift == Shift.CAPS -> theme.chip
             k.kind == KeyKind.EDIT && editSelecting && k.insert == "SELECT" -> theme.chip
-            special -> if (k.pressed) specialPressed else theme.specialFill
+            special -> if (k.pressed) specialPressed else theme.fnFill
             k.kind == KeyKind.LETTER || k.kind == KeyKind.CHAR -> theme.keyFill   // popup lo phản hồi
-            k.kind == KeyKind.PAD && k.side -> if (k.pressed) specialPressed else theme.specialFill
+            k.kind == KeyKind.PAD && k.side -> if (k.pressed) specialPressed else theme.fnFill
+            // Phím cách: như phím chữ, trừ theme tô phím chức năng riêng (Xanh lá).
+            k.kind == KeyKind.SPACE -> if (k.pressed) spacePressed else theme.spaceFill
             else -> if (k.pressed) keyPressed else theme.keyFill
         }
         if (trackpad) face = theme.keyFill
@@ -934,27 +937,27 @@ class KeyboardView(
             KeyKind.PLANE, KeyKind.MORE -> drawLabel(c, k.label, cx, cy, controlPaint, controlOff, contentAlpha)
             KeyKind.SHIFT -> {
                 val id = when (shift) { Shift.CAPS -> ImeIcons.CAPS; Shift.ON -> ImeIcons.SHIFT_FILL; Shift.OFF -> ImeIcons.SHIFT }
-                icon(c, id, cx, cy, 22f, theme.ink, contentAlpha)
+                icon(c, id, cx, cy, 22f, theme.fnInk, contentAlpha)
             }
             KeyKind.BACKSPACE -> {
                 if (k.pressed && !trackpad) {
-                    icon(c, ImeIcons.DELETE_FILL, cx, cy, 22f, theme.ink, contentAlpha)
+                    icon(c, ImeIcons.DELETE_FILL, cx, cy, 22f, theme.fnInk, contentAlpha)
                     icon(c, ImeIcons.DELETE_X, cx, cy, 22f, face, 255)
-                } else icon(c, ImeIcons.DELETE, cx, cy, 22f, theme.ink, contentAlpha)
+                } else icon(c, ImeIcons.DELETE, cx, cy, 22f, theme.fnInk, contentAlpha)
                 // Vuốt ⌫: số từ sẽ xoá ở góc trên-phải (xem trước khi không bôi đen được).
                 if (bsSwipe == 1 && bsSwipeWords > 0)
                     drawLabel(c, "−$bsSwipeWords", k.right - hintInset - theme.dp(2f), k.top + hintInset, hintPaint, hintOff, contentAlpha)
             }
-            KeyKind.GLOBE -> icon(c, ImeIcons.GLOBE, cx, cy, 21f, theme.ink, contentAlpha)
+            KeyKind.GLOBE -> icon(c, ImeIcons.GLOBE, cx, cy, 21f, theme.fnInk, contentAlpha)
             KeyKind.EMOJI -> {
-                icon(c, ImeIcons.FACE, cx, cy, 22f, theme.ink, contentAlpha)
+                icon(c, ImeIcons.FACE, cx, cy, 22f, theme.fnInk, contentAlpha)
                 // Gợi ý giữ lâu kiểu Gboard: 🌐 nhỏ, mờ ở góc trên-phải — chỉ khi thanh điều hướng
                 // KHÔNG có nút đổi bàn phím (Android 16 báo qua onCustomImeSwitcherButtonRequestedVisible).
-                if (switcherHint) icon(c, ImeIcons.GLOBE, k.right - hintInset, k.top + hintInset, 10f, theme.ink, (contentAlpha * 0.55f).toInt())
+                if (switcherHint) icon(c, ImeIcons.GLOBE, k.right - hintInset, k.top + hintInset, 10f, theme.fnInk, (contentAlpha * 0.55f).toInt())
             }
-            KeyKind.CLEAR -> icon(c, ImeIcons.TRASH, cx, cy, 21f, theme.ink, contentAlpha)
+            KeyKind.CLEAR -> icon(c, ImeIcons.TRASH, cx, cy, 21f, theme.fnInk, contentAlpha)
             KeyKind.EDIT -> drawEditKey(c, k, contentAlpha)
-            KeyKind.DISMISS -> icon(c, ImeIcons.KB_DISMISS, cx, cy, 22f, theme.ink, contentAlpha)
+            KeyKind.DISMISS -> icon(c, ImeIcons.KB_DISMISS, cx, cy, 22f, theme.fnInk, contentAlpha)
             KeyKind.RETURN -> {
                 val id = when (returnLabel) {
                     "search" -> ImeIcons.SEARCH
