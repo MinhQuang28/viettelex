@@ -8,8 +8,9 @@ kinh nghiệm pinyin IME.
 
 ## Tổng quan
 
-Thanh gợi ý (30pt — quyết định giữ 30pt thay vì 44pt như stock, 2026-07-24, chỉ hiện khi bật toggle **Thanh gợi ý** trong app; bàn phím
-cao 246pt khi bật, 216pt khi tắt) có **ba trạng thái** theo ngữ cảnh gõ:
+Thanh gợi ý (30pt — quyết định giữ 30pt thay vì 44pt như stock, 2026-07-24; từ 18/10/2026 thành cài đặt
+**Chiều cao thanh gợi ý** Thấp 30 / Vừa 36 (mặc định) / Cao 44 — xem mục cuối; chỉ hiện khi bật toggle
+**Thanh gợi ý** trong app) có **ba trạng thái** theo ngữ cảnh gõ:
 
 | Trạng thái | Hiển thị | Nguồn dữ liệu |
 |---|---|---|
@@ -323,6 +324,7 @@ iPhone/iPad, cả điện thoại/tablet Android), hoặc `1…5`. Logic thuần
 | `learnWords` | true | Cho phép học từ hay dùng |
 | `filterSensitive` | true | Lọc từ tục khỏi gợi ý |
 | `suggestionCount` | 0 | "Số từ gợi ý": 0 = Tự động (3 ô), 1…5 — xem "Số từ gợi ý" ở trên |
+| `suggestionBarHeight` | "medium" | "Chiều cao thanh gợi ý": low / medium / high — xem "Chiều cao thanh gợi ý" |
 | `suggestInNoSuggestFields` | true | "Gợi ý cả khi ứng dụng tắt gợi ý" (#113) — xem dưới |
 | nút **Xóa từ đã học** | — | Xóa `userlm.bin` (+ `userlm.plist` cũ nếu còn); lần mở sau seed lại |
 
@@ -395,3 +397,19 @@ Test đo đạc nặng (heldout, độ trễ, RAM) nằm trong bộ chậm — x
   bài học pinyin IME.
 - Học case từ chính user (hiện DisplayCase là bảng tĩnh).
 - Gợi ý viết hoa theo ngữ cảnh câu (auto-shift-aware).
+
+## Chiều cao thanh gợi ý (`suggestionBarHeight`, 18/10/2026)
+
+Người dùng báo bar 30pt thấp, hay chạm nhầm. Cài đặt ở **Tính Năng → Giao diện → Bàn phím** (cạnh
+"Chiều cao hàng phím"): **Thấp** (30, bố cục cũ) / **Vừa** (36, mặc định) / **Cao** (44). Khoá App Group
+`suggestionBarHeight` (chuỗi, cùng Android), giá trị lạ ⇒ Vừa; có trong sao lưu (BackupFormat).
+
+- `SuggestionBarHeight` (Shared, THUẦN) cho `delta` 0 / 6 / 14 pt so với Thấp. `KeyboardView.openStripNow` =
+  strip cũ (stock 29 dọc / 34) + delta ⇒ tổng bàn phím tăng **đúng** delta; hàng phím, thu gọn (14), tắt (0),
+  plane emoji (tổng giữ nguyên) không đổi.
+- Hàng nội dung bar = 20 + delta (chữ gợi ý, chip, icon ☰/⌄/📋/😊 canh giữa hàng này); vùng chạm ô gợi ý
+  phủ trọn bar + nở xuống tới mép hàng phím như cũ. Cỡ chữ ô 17/18/19, chip 14/15/15.
+- iPhone **ngang**: delta kẹp ở Vừa (+6) — màn thấp. Máy gập mở / iPad không kẹp.
+- Host cấp thiếu chiều cao: bar Vừa/Cao co lại trước (sàn 20 = Thấp), hết chỗ mới dời lên như cũ.
+- Đọc một lần mỗi lần hiện bàn phím (`applyAppearance`) — 0 chi phí mỗi phím.
+- Android song sinh: strip 35 / 42 (mặc định, như cũ) / 51 dp — cùng tỉ lệ 30/36/44.

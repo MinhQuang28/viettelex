@@ -108,8 +108,18 @@ enum Wallpaper {
         render(source: source, crop: crop, blur: blur).flatMap { encodeJPEG($0) }
     }
 
-    /// Strip gợi ý mở (KeyboardView.openStrip).
+    /// Strip gợi ý mở ở mức Thấp (KeyboardView.openStrip).
     static let suggestionStrip: CGFloat = 34
+
+    /// Strip gợi ý mở như KeyboardView.openStripNow: iPhone theo bàn phím gốc (stock), cộng
+    /// "Chiều cao thanh gợi ý" (SuggestionBarHeight.delta; iPhone ngang kẹp ở Vừa).
+    static func openStrip(width: CGFloat, pad: Bool, landscape: Bool, stock: Bool,
+                          barHeight: SuggestionBarHeight = .defaultValue) -> CGFloat {
+        let base = stock
+            ? (KeyGeometry.StockSize.openStrip(width: width, landscape: landscape) ?? suggestionStrip)
+            : suggestionStrip
+        return base + barHeight.delta(landscape: !pad && landscape)
+    }
 
     /// Cỡ (pt) vùng bàn phím mà ảnh nền phủ — cùng công thức KeyboardView.keyAreaHeight
     /// + strip gợi ý (mở; trạng thái thu gọn nằm trong container riêng của extension, app
@@ -118,14 +128,13 @@ enum Wallpaper {
     /// số đo bàn phím gốc + chỉnh tay (KeyGeometry.rowSpec).
     static func keyboardSize(screenSize: CGSize, pad: Bool, landscape: Bool, rowHeightAdjust: Int,
                              numberRow: Bool, suggestions: Bool, raise: Int = 0,
-                             numberRowFullHeight: Bool = false) -> CGSize {
+                             numberRowFullHeight: Bool = false,
+                             barHeight: SuggestionBarHeight = .defaultValue) -> CGSize {
         let width = landscape ? max(screenSize.width, screenSize.height) : min(screenSize.width, screenSize.height)
         let base: CGFloat = pad ? (landscape ? 300 : 240) : (landscape ? 162 : KeyGeometry.phonePortraitBase)
         let spec = KeyGeometry.rowSpec(pad: pad, landscape: landscape, unfolded: false, width: width,
                                        base: base, adjust: CGFloat(rowHeightAdjust))
-        let strip = spec.stock
-            ? (KeyGeometry.StockSize.openStrip(width: width, landscape: landscape) ?? suggestionStrip)
-            : suggestionStrip
+        let strip = openStrip(width: width, pad: pad, landscape: landscape, stock: spec.stock, barHeight: barHeight)
         return CGSize(width: width, height: spec.keyArea(numberRow: numberRow, fullHeight: numberRowFullHeight) + (suggestions ? strip : 0)
                           + CGFloat(KeyGeometry.RowAdjust.clampRaise(raise)))
     }

@@ -120,11 +120,17 @@ object KeyLayout {
     const val BOTTOM_ROW_TOP = ROW_MARGIN_V
     const val BOTTOM_ROW_BOTTOM = ROW_MARGIN_V
     const val KEY_RADIUS = 7f
-    /** Strip gợi ý mở — tỉ lệ Gboard (~0.75 hàng phím 56 dp; #112: 34 dp trông mỏng, lệch). */
+    /**
+     * Strip gợi ý mở mặc định (mức Vừa — [com.viettelex.keyboard.SuggestionBarHeight.MEDIUM]) — tỉ lệ
+     * Gboard (~0.75 hàng phím 56 dp; #112: 34 dp trông mỏng, lệch). Thấp 35 / Cao 51 theo cài đặt
+     * "Chiều cao thanh gợi ý" (StripView.configure).
+     */
     const val OPEN_STRIP = 42f
     const val COLLAPSED_STRIP = 14f
     /** Tâm dọc nội dung bar (chữ gợi ý, pill, icon) khi mở: gần giữa dải, nhích lên 1 dp. */
     const val BAR_CY = OPEN_STRIP / 2 - 1f
+    /** [BAR_CY] cho strip mở cao [openStripDp] (mức "Chiều cao thanh gợi ý"). */
+    fun barCy(openStripDp: Float): Float = openStripDp / 2 - 1f
     const val STRIP_ZONE_W = 52f
 
     /** Khe dọc giữa 2 hàng phím (dp): mỗi hàng chừa [ROW_MARGIN_V] trên + dưới. */
@@ -209,8 +215,8 @@ object KeyLayout {
      */
     fun stripReserved(showSuggestionsSetting: Boolean): Boolean = showSuggestionsSetting
 
-    fun stripDp(suggestionsEnabled: Boolean, collapsed: Boolean): Float =
-        if (!suggestionsEnabled) 0f else if (collapsed) COLLAPSED_STRIP else OPEN_STRIP
+    fun stripDp(suggestionsEnabled: Boolean, collapsed: Boolean, open: Float = OPEN_STRIP): Float =
+        if (!suggestionsEnabled) 0f else if (collapsed) COLLAPSED_STRIP else open
 
     /**
      * Hàng đáy có phím "." RIÊNG (thêm vào, ngoài phím hẹp cạnh space)? Plane chữ ô thường ĐIỆN

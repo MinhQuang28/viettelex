@@ -196,10 +196,11 @@ final class WallpaperCropTests: XCTestCase {
     // MARK: cỡ khung bàn phím (app)
 
     func testKeyboardSizeMatchesKeyboardView() {
-        // iPhone 402pt dọc = bàn phím gốc (bước 54, cắt 4), gợi ý bật (strip stock 29): 212 + 29.
+        // iPhone 402pt dọc = bàn phím gốc (bước 54, cắt 4), gợi ý bật (strip stock 29 + thanh gợi ý
+        // mặc định Vừa +6, 18/10/2026): 212 + 35.
         let s = Wallpaper.keyboardSize(screenSize: CGSize(width: 402, height: 874), pad: false, landscape: false,
                                        rowHeightAdjust: 0, numberRow: false, suggestions: true)
-        XCTAssertEqual(s, CGSize(width: 402, height: 241))
+        XCTAssertEqual(s, CGSize(width: 402, height: 247))
         // Hàng số (khe 11 + phím 0.8×45) + mỗi hàng +2pt, tắt gợi ý: 224 + 47 − 4 = 267.
         let n = Wallpaper.keyboardSize(screenSize: CGSize(width: 874, height: 402), pad: false, landscape: false,
                                        rowHeightAdjust: 2, numberRow: true, suggestions: false)
@@ -207,17 +208,17 @@ final class WallpaperCropTests: XCTestCase {
         // Khớp đúng hình học bàn phím thật (KeyGeometry.rowSpec) — ảnh nền không lệch.
         XCTAssertEqual(n.height, KeyGeometry.rowSpec(pad: false, landscape: false, unfolded: false, width: 402,
                                                      base: 216, adjust: 2).keyArea(numberRow: true), accuracy: 1e-9)
-        // Ngang: bước 40 + đệm 2, strip 34.
+        // Ngang: bước 40 + đệm 2, strip 34 + 6 (Vừa).
         let l = Wallpaper.keyboardSize(screenSize: CGSize(width: 402, height: 874), pad: false, landscape: true,
                                        rowHeightAdjust: 0, numberRow: false, suggestions: true)
-        XCTAssertEqual(l, CGSize(width: 874, height: 196))
+        XCTAssertEqual(l, CGSize(width: 874, height: 202))
         // Nâng bàn phím: ảnh nền phủ cả đệm dưới.
         let r = Wallpaper.keyboardSize(screenSize: CGSize(width: 402, height: 874), pad: false, landscape: false,
                                        rowHeightAdjust: 0, numberRow: false, suggestions: true, raise: 20)
-        XCTAssertEqual(r, CGSize(width: 402, height: 261))
-        // iPad: bố cục cũ (240 + 4·adjust), strip 34.
+        XCTAssertEqual(r, CGSize(width: 402, height: 267))
+        // iPad: bố cục cũ (240 + 4·adjust), strip 34 + 6 (Vừa).
         let p = Wallpaper.keyboardSize(screenSize: CGSize(width: 834, height: 1194), pad: true, landscape: false,
                                        rowHeightAdjust: 1, numberRow: false, suggestions: true)
-        XCTAssertEqual(p, CGSize(width: 834, height: 244 + 34))
+        XCTAssertEqual(p, CGSize(width: 834, height: 244 + 40))
     }
 }

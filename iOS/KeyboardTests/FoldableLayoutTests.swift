@@ -104,7 +104,7 @@ final class FoldableLayoutTests: XCTestCase {
     @MainActor func testIPhoneNumbersUnchanged() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad)
         let (p, _) = makeKeyboard(width: 402, screen: iPhone17)
-        XCTAssertEqual(p.debugRequestedHeight, 29 + 212, accuracy: 0.01)
+        XCTAssertEqual(p.debugRequestedHeight, 29 + Self.bar + 212, accuracy: 0.01)
         XCTAssertEqual(try XCTUnwrap(p.debugLetterFrame("q")).height, 43, accuracy: 0.5)
         let pn = frame(p, try XCTUnwrap(p.debugControl("Số")))
         XCTAssertEqual(pn.height, 43, accuracy: 0.5)
@@ -116,14 +116,14 @@ final class FoldableLayoutTests: XCTestCase {
         XCTAssertEqual(ln.maxY, l.bounds.height - 2, accuracy: 0.5)
         // Duo gập = iPhone dọc (466 ≥ 420: nhóm máy lớn, bước 56 + đệm 7).
         let (f, _) = makeKeyboard(width: 466, screen: duoFolded)
-        XCTAssertEqual(f.debugRequestedHeight, 29 + 231, accuracy: 0.01)
+        XCTAssertEqual(f.debugRequestedHeight, 29 + Self.bar + 231, accuracy: 0.01)
     }
 
     /// Gập ⇄ mở trên cùng một view: hình học đổi theo bề ngang mới, không kẹt dạng cũ.
     @MainActor func testFoldUnfoldSwitchesForm() throws {
         try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad)
         let (kb, _) = makeKeyboard(width: 466, screen: duoFolded)
-        XCTAssertEqual(kb.debugRequestedHeight, 29 + 231, accuracy: 0.01)
+        XCTAssertEqual(kb.debugRequestedHeight, 29 + Self.bar + 231, accuracy: 0.01)
         kb.debugScreenSize = CGSize(width: 951, height: 669)
         kb.frame.size.width = 801
         kb.debugSetSafeBottom(18)
@@ -133,7 +133,7 @@ final class FoldableLayoutTests: XCTestCase {
         kb.frame.size.width = 466
         kb.debugSetSafeBottom(0)
         kb.setNeedsLayout(); kb.layoutIfNeeded()
-        XCTAssertEqual(kb.debugRequestedHeight, 29 + 231, accuracy: 0.01)
+        XCTAssertEqual(kb.debugRequestedHeight, 29 + Self.bar + 231, accuracy: 0.01)
     }
 
     /// Bug 2 (Phil 06/10/2026, ảnh #63): Duo GẬP + xoay NGANG (màn 678×466, view 528, safe đáy 18)
@@ -165,5 +165,7 @@ final class FoldableLayoutTests: XCTestCase {
         }
     }
 
-    private static var strip: CGFloat { KeyboardView.openStrip }
+    /// Strip mở mặc định = mức Thấp + "Chiều cao thanh gợi ý" Vừa (+6, 18/10/2026; ngang cũng +6).
+    private static var bar: CGFloat { SuggestionBarHeight.defaultValue.delta(landscape: true) }
+    private static var strip: CGFloat { KeyboardView.openStrip + bar }
 }

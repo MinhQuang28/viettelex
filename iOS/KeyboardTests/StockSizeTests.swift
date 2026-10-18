@@ -11,6 +11,8 @@ import UIKit
 /// khe ngang 6.67; thanh dự đoán: mép kính → đỉnh phím 40 (dọc).
 final class StockSizeTests: XCTestCase {
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
+    /// "Chiều cao thanh gợi ý" mặc định (Vừa) cộng vào strip mở dọc (18/10/2026).
+    private static let bar = SuggestionBarHeight.defaultValue.delta(landscape: false)
     typealias SS = KeyGeometry.StockSize
 
     // MARK: thuần
@@ -263,10 +265,10 @@ final class StockSizeTests: XCTestCase {
         let screen = CGSize(width: 440, height: 956)
         let s = Wallpaper.keyboardSize(screenSize: screen, pad: false, landscape: false, rowHeightAdjust: 0,
                                        numberRow: false, suggestions: true)
-        XCTAssertEqual(s.height, 56 * 4 + 7 + 29)
+        XCTAssertEqual(s.height, 56 * 4 + 7 + 29 + 6)   // + thanh gợi ý Vừa (mặc định 18/10/2026)
         let a = Wallpaper.keyboardSize(screenSize: screen, pad: false, landscape: false, rowHeightAdjust: 4,
                                        numberRow: false, suggestions: true)
-        XCTAssertEqual(a.height, 60 * 4 + 7 + 29)
+        XCTAssertEqual(a.height, 60 * 4 + 7 + 29 + 6)
         let r = Wallpaper.keyboardSize(screenSize: screen, pad: false, landscape: false, rowHeightAdjust: 4,
                                        numberRow: false, suggestions: true, raise: 12)
         XCTAssertEqual(r.height, a.height + 12)
@@ -275,7 +277,7 @@ final class StockSizeTests: XCTestCase {
         XCTAssertEqual(big.height, 56 * 4 + 7 + 48, "nâng kẹp 48")
         let std = Wallpaper.keyboardSize(screenSize: CGSize(width: 402, height: 874), pad: false, landscape: false,
                                          rowHeightAdjust: -2, numberRow: false, suggestions: true)
-        XCTAssertEqual(std.height, 52 * 4 - 4 + 29)
+        XCTAssertEqual(std.height, 52 * 4 - 4 + 29 + 6)
     }
 
     // MARK: Dải trống phía trên phím (#119 "thừa khoảng trắng khi đã tắt hết phụ trợ")
@@ -336,15 +338,20 @@ final class StockSizeTests: XCTestCase {
             // Hàng đáy cùng bước stock; máy thường phím đáy stock nằm thấp hơn đáy view 4pt (vùng
             // 🌐/mic hệ thống) ⇒ phím đáy mình cao hơn stock đúng phần đó, 3 hàng chữ vẫn trùng.
             XCTAssertEqual(num.minY - z.minY, pitch - max(m.bottomTrim, 0), accuracy: 0.5, "\(w) hàng đáy")
-            // Đỉnh phím hàng 1 cách mép trên đúng như thanh dự đoán stock (~40).
-            XCTAssertEqual(q.minY, m.predictiveTopPad, accuracy: 1, "\(w) mép trên → phím")
-            XCTAssertEqual(kb.debugRequestedHeight, 29 + 4 * pitch - m.bottomTrim, accuracy: 0.5, "\(w) tổng")
+            // Đỉnh phím hàng 1 cách mép trên như thanh dự đoán stock (~40) + "Chiều cao thanh gợi ý"
+            // mặc định Vừa (+6, 18/10/2026); mức Thấp = đúng stock (kiểm cuối vòng).
+            XCTAssertEqual(q.minY, m.predictiveTopPad + Self.bar, accuracy: 1, "\(w) mép trên → phím")
+            XCTAssertEqual(kb.debugRequestedHeight, 29 + Self.bar + 4 * pitch - m.bottomTrim, accuracy: 0.5, "\(w) tổng")
             // Vị trí tính từ ĐÁY view (= 75pt trên đáy màn hình): hàng Q trùng stock. 440: stock
             // đỉnh Q cách đáy màn hình 295 ⇒ cách đáy view 220; 402: 276 ⇒ 201.
             let h = kb.bounds.height
             XCTAssertEqual(h - q.minY, 4 * pitch - m.rowGap - m.bottomTrim, accuracy: 0.5, "\(w) Q từ đáy")
             XCTAssertEqual(h - q.minY, w >= 420 ? 220 : 201, accuracy: 0.5, "\(w)")
             XCTAssertEqual(h - num.maxY, max(-m.bottomTrim, 0), accuracy: 0.5, "\(w) đệm dưới phím đáy")
+            kb.debugSetBarHeight(.low); settle(kb)
+            XCTAssertEqual(try XCTUnwrap(kb.debugLetterFrame("q")).minY, m.predictiveTopPad, accuracy: 1,
+                           "\(w) Thấp: mép trên → phím như stock")
+            XCTAssertEqual(kb.debugRequestedHeight, 29 + 4 * pitch - m.bottomTrim, accuracy: 0.5, "\(w) Thấp tổng")
             withExtendedLifetime(host) {}
         }
     }
@@ -381,10 +388,10 @@ final class StockSizeTests: XCTestCase {
             XCTAssertEqual(num.minY - z.maxY, m.bottomTrim >= 0 ? m.pitch - m.bottomTrim - m.keyHeight
                                                                 : m.rowGap, accuracy: 0.5, what)
             XCTAssertEqual(kb.bounds.height - num.maxY, max(-m.bottomTrim, 0), accuracy: 0.5, what)
-            XCTAssertEqual(kb.debugRequestedHeight, 29 + 4 * (m.pitch + CGFloat(a)) - m.bottomTrim, accuracy: 0.5, what)
+            XCTAssertEqual(kb.debugRequestedHeight, 29 + Self.bar + 4 * (m.pitch + CGFloat(a)) - m.bottomTrim, accuracy: 0.5, what)
             kb.debugSetRowAdjust(0); settle(kb)
             XCTAssertEqual(try XCTUnwrap(kb.debugLetterFrame("q")).height, m.keyHeight, accuracy: 0.5, what)
-            XCTAssertEqual(kb.debugRequestedHeight, 29 + 4 * m.pitch - m.bottomTrim, accuracy: 0.5, what)
+            XCTAssertEqual(kb.debugRequestedHeight, 29 + Self.bar + 4 * m.pitch - m.bottomTrim, accuracy: 0.5, what)
             withExtendedLifetime(host) {}
         }
     }
@@ -478,7 +485,7 @@ final class StockSizeTests: XCTestCase {
                         kb.configureKeyAlternates(numbers: alts, symbols: false)
                         kb.debugRefreshChrome(); settle(kb)
                         let what = "gợi ý \(suggestions) phóng to \(preview) ký tự phụ \(alts)"
-                        let strip: CGFloat = suggestions ? 29 : 0
+                        let strip: CGFloat = suggestions ? 29 + Self.bar : 0
                         let head: CGFloat = (preview || alts) ? KeyLayout.balloonHeadroom : KeyLayout.minimalHeadroom
                         XCTAssertEqual(kb.debugRowsTop, max(strip, head), what)
                         let q = try XCTUnwrap(kb.debugLetterFrame("q"))

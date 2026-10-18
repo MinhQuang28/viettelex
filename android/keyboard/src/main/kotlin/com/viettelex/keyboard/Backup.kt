@@ -61,6 +61,8 @@ object BackupSettings {
         Spec(Keys.KEY_LABEL_SIZE, SettingKind.Choice(KeyLabelSize.DEFAULT.id, KeyLabelSize.IDS)),
         Spec(Keys.ROW_HEIGHT_ADJUST, SettingKind.IntRange(0, KeyboardSettings.ROW_HEIGHT_MIN..KeyboardSettings.ROW_HEIGHT_MAX)),
         Spec(Keys.KEYBOARD_RAISE, SettingKind.IntRange(0, 0..KeyboardSettings.KEYBOARD_RAISE_MAX)),
+        // "Chiều cao thanh gợi ý" ([SuggestionBarHeight]) — cùng khoá + id iOS.
+        Spec(Keys.SUGGESTION_BAR_HEIGHT, SettingKind.Choice(SuggestionBarHeight.DEFAULT.id, SuggestionBarHeight.IDS)),
         Spec(Keys.FLOATING_KEYBOARD, SettingKind.Bool(false)),
         Spec(Keys.SHORTCUTS_ENABLED, SettingKind.Bool(true)),
         Spec(Keys.ADD_TONES_CHIP, SettingKind.Bool(false)),

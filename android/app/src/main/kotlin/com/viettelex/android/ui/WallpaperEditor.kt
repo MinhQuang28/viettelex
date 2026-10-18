@@ -79,7 +79,10 @@ data class KeyboardFrame(val w: Int, val h: Int, val keysTop: Int, val keysH: In
                 rowHeightAdjust = prefs.getInt(Keys.ROW_HEIGHT_ADJUST, Prefs.D.rowHeightAdjust),
                 numberRow = prefs.getBoolean(Keys.NUMBER_ROW, Prefs.D.numberRow),
                 numberRowFull = prefs.getBoolean(Keys.NUMBER_ROW_FULL_HEIGHT, Prefs.D.numberRowFullHeight))
-            val stripDp = if (prefs.getBoolean(Keys.SHOW_SUGGESTIONS, Prefs.D.showSuggestions)) KeyLayout.OPEN_STRIP else 0f
+            // Strip mở theo "Chiều cao thanh gợi ý" (dọc: không kẹp).
+            val stripDp = if (prefs.getBoolean(Keys.SHOW_SUGGESTIONS, Prefs.D.showSuggestions))
+                com.viettelex.keyboard.SuggestionBarHeight.of(prefs.getString(Keys.SUGGESTION_BAR_HEIGHT, null))
+                    .openStripDp(landscapeCap = false) else 0f
             val strip = Math.round(stripDp * dm.density)
             val keys = Math.round(keyDp * dm.density)
             val measured = WallpaperMath.parseSize(
