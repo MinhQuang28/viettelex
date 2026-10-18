@@ -891,6 +891,8 @@ class KeyboardView(
         val special = KeyKind.isSpecial(k.kind) && k.kind != KeyKind.RETURN
         var face = when {
             k.kind == KeyKind.RETURN -> if (k.pressed) actionPressed else theme.action
+            // Màu nhấn người dùng chọn ⇒ ⇧ bật/Caps tô màu nhấn, glyph actionInk (accentShift); mặc định như cũ.
+            k.kind == KeyKind.SHIFT && theme.accentShift && shift != Shift.OFF -> theme.action
             k.kind == KeyKind.SHIFT && shift == Shift.CAPS -> theme.chip
             k.kind == KeyKind.EDIT && editSelecting && k.insert == "SELECT" -> theme.chip
             special -> if (k.pressed) specialPressed else theme.fnFill
@@ -943,7 +945,7 @@ class KeyboardView(
             KeyKind.PLANE, KeyKind.MORE -> drawLabel(c, k.label, cx, cy, controlPaint, controlOff, contentAlpha)
             KeyKind.SHIFT -> {
                 val id = when (shift) { Shift.CAPS -> ImeIcons.CAPS; Shift.ON -> ImeIcons.SHIFT_FILL; Shift.OFF -> ImeIcons.SHIFT }
-                icon(c, id, cx, cy, 22f, theme.fnInk, contentAlpha)
+                icon(c, id, cx, cy, 22f, if (theme.accentShift && shift != Shift.OFF) theme.actionInk else theme.fnInk, contentAlpha)
             }
             KeyKind.BACKSPACE -> {
                 if (k.pressed && !trackpad) {

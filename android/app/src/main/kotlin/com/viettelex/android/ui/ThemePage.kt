@@ -52,6 +52,7 @@ import com.viettelex.keyboard.KeyboardSettings
 import com.viettelex.keyboard.KeyboardTheme
 import com.viettelex.keyboard.KeyboardTransparency
 import com.viettelex.keyboard.KeyStyle
+import com.viettelex.keyboard.KeyStyleStore
 import com.viettelex.keyboard.Keys
 import com.viettelex.keyboard.ThemeGate
 import com.viettelex.keyboard.ThemePicker
@@ -170,7 +171,17 @@ internal fun loadThemeSettings(ctx: Context): ThemeSettings {
     return ThemeSettings.load { all[it] }
 }
 
-private fun saveThemeSettings(ctx: Context, s: ThemeSettings) {
+/**
+ * Chuyển đổi đã lưu MỘT lần (MainActivity.onCreate): khoá "Tuỳ chỉnh nâng cao" chung cũ → theme đang
+ * chọn, "Trắng hồng" → Hệ thống + màu nhấn hồng. Không có gì cũ ⇒ không ghi. Lặp lại vô hại. IME tự
+ * chuyển trong bộ nhớ nếu app chưa chạy.
+ */
+internal fun migrateThemeSettings(ctx: Context) {
+    val all = Prefs.of(ctx).all
+    if (ThemeSettings.needsMigration { all[it] }) saveThemeSettings(ctx, ThemeSettings.load { all[it] })
+}
+
+internal fun saveThemeSettings(ctx: Context, s: ThemeSettings) {
     Prefs.of(ctx).edit().apply {
         putString(Keys.KEYBOARD_THEME, s.theme.id)
         putBoolean(Keys.WALLPAPER_ENABLED, s.wallpaper)
@@ -180,10 +191,9 @@ private fun saveThemeSettings(ctx: Context, s: ThemeSettings) {
         s.crop?.let { putString(Keys.WALLPAPER_CROP, it.serialize()) } ?: remove(Keys.WALLPAPER_CROP)
         putInt(Keys.KEYBOARD_TRANSPARENCY, s.keyboardTransparency)
         putInt(Keys.KEY_LABEL_TRANSPARENCY, s.labelTransparency)
-        for ((k, v) in s.keyStyle.toMap()) when (v) {
-            is Int -> putInt(k, v)
-            is String -> putString(k, v)
-        }
+        // Tuỳ chỉnh nâng cao theo theme: một chuỗi JSON chuẩn; khoá chung cũ bỏ (đã chuyển vào chuỗi).
+        putString(Keys.KEY_STYLES, KeyStyleStore.serialize(s.keyStyles))
+        for (k in KeyStyleStore.LEGACY_KEYS) remove(k)
     }.apply()
 }
 
@@ -247,7 +257,7 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
 
     editor?.let { input ->
         WallpaperEditorDialog(input.image, input.crop, remember(input) { KeyboardFrame.portrait(ctx) },
-            palette = s.effectiveKeyStyle.applyColors(s.effectiveTheme.palette(dark) ?: previewPalette(KeyboardTheme.SYSTEM, dark)).overWallpaper()
+            palette = s.styled(s.effectiveTheme, previewPalette(s.effectiveTheme, dark)).overWallpaper()
                 .withTransparency(s.keyboardTransparency, s.labelTransparency, dark),
             initialDim = s.dim, initialBlur = s.blur,
             onCancel = { editor = null },
@@ -272,7 +282,7 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     SubPageHeader(FeaturePage.GiaoDien.title, onBack)
 
     val active = s.wallpaperActive(wall != null)
-    val pal = s.effectiveKeyStyle.applyColors(s.effectiveTheme.palette(dark) ?: previewPalette(KeyboardTheme.SYSTEM, dark))
+    val pal = s.styled(s.effectiveTheme, previewPalette(s.effectiveTheme, dark))
         .let { if (active) it.overWallpaper() else it }
         .withTransparency(s.keyboardTransparency, s.labelTransparency, dark)
     val raise by rememberIntPref(Keys.KEYBOARD_RAISE, Prefs.D.keyboardRaise)
@@ -291,7 +301,7 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     // Bộ theme dài (14) ⇒ chọn ở trang con "Chọn giao diện"; ở đây một dòng tóm tắt.
     VTSection(header = "Theme") {
         VTRow(onClick = { picking = true }) {
-            KeyboardPreview(previewPalette(s.theme, dark), null, 0, large = false, keyStyle = KeyStyle(corner = s.theme.defaultCorner),
+            KeyboardPreview(s.styled(s.theme, previewPalette(s.theme, dark)), null, 0, large = false, keyStyle = s.effectiveStyleFor(s.theme),
                 modifier = Modifier.width(56.dp).height(36.dp).clip(RoundedCornerShape(6.dp))
                     .border(1.dp, c.separator, RoundedCornerShape(6.dp)))
             Text(tr("Giao diện bàn phím"), style = VTType.body, color = c.label,
@@ -364,7 +374,7 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
         }
     }
 
-    AdvancedStyleSection(s.keyStyle, pal, onChange = { update(s.copy(keyStyle = it)) }, onOpenPlus = onOpenPlus)
+    AdvancedStyleSection(s.keyStyle, pal, onChange = { update(s.withKeyStyle(it)) }, onOpenPlus = onOpenPlus)
 
     // Tính Năng → Giao diện gộp luôn chiều cao hàng + logo (không thuộc "Khôi phục giao diện gốc").
     VTSection(header = tr("Bàn phím")) {
@@ -542,7 +552,8 @@ private fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSet
                             if (next != null) onSelect(next) else onOpenPlus()
                         }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                             Box {
-                                KeyboardPreview(previewPalette(t, dark), null, 0, large = false, keyStyle = KeyStyle(corner = t.defaultCorner),
+                                // Thẻ phản ánh tuỳ chỉnh riêng của theme đó (rẻ: vài phép màu, không ảnh).
+                                KeyboardPreview(s.styled(t, previewPalette(t, dark)), null, 0, large = false, keyStyle = s.effectiveStyleFor(t),
                                     modifier = Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(10.dp))
                                         .border(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.separator, RoundedCornerShape(10.dp)))
                                 if (selected) Text("✓", style = VTType.body, color = c.accent,

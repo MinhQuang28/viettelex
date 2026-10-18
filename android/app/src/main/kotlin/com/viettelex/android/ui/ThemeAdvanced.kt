@@ -50,7 +50,7 @@ internal fun AdvancedStyleSection(style: KeyStyle, palette: ThemePalette, onChan
     val c = LocalVT.current
     val allowed = ThemeGate.allowsAdvanced
     var open by rememberSaveable { mutableStateOf(false) }
-    VTSection(footer = tr("Màu chữ và màu nền phím, độ bo góc, cỡ chữ, phông và độ đậm. Mỗi màu dùng chung cho giao diện sáng lẫn tối; “Theo theme” trả về màu của theme.")) {
+    VTSection(footer = tr("Màu chữ, màu nền phím, màu nhấn, độ bo góc, cỡ chữ, phông và độ đậm — lưu riêng cho từng giao diện. Mỗi màu dùng chung cho sáng lẫn tối; “Theo theme” trả về màu của theme.")) {
         VTRow(onClick = { if (allowed) open = !open else onOpenPlus() }) {
             Text(tr("Tuỳ chỉnh nâng cao"), style = VTType.body, color = c.label)
             Text("Plus", style = VTType.footnote, color = Color.White,
@@ -64,6 +64,9 @@ internal fun AdvancedStyleSection(style: KeyStyle, palette: ThemePalette, onChan
         ColorRow(tr("Màu chữ trên phím"), style.labelColor, palette.keyInk) { onChange(style.copy(labelColor = it)) }
         RowDivider()
         ColorRow(tr("Màu nền phím"), style.fillColor, palette.keyFill) { onChange(style.copy(fillColor = it)) }
+        RowDivider()
+        // Nhập/hành động, ⇧ bật, vệt gõ vuốt — chữ trên nó tự đổi đen/trắng nếu cần.
+        ColorRow(tr("Màu nhấn"), style.accentColor, palette.action) { onChange(style.copy(accentColor = it)) }
         RowDivider()
         Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -106,7 +109,7 @@ internal fun AdvancedStyleSection(style: KeyStyle, palette: ThemePalette, onChan
             weight = { FontWeight(it.weight) }) { onChange(style.copy(weight = it)) }
         RowDivider()
         VTRow(onClick = if (style.isDefault) null else { { onChange(KeyStyle.DEFAULT) } }) {
-            Text(tr("Đặt lại tuỳ chỉnh nâng cao"), style = VTType.body, color = if (style.isDefault) c.secondary else c.red)
+            Text(tr("Đặt lại về mặc định của giao diện"), style = VTType.body, color = if (style.isDefault) c.secondary else c.red)
         }
     }
 }

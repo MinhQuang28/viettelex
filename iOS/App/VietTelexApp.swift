@@ -15,7 +15,11 @@ struct VietTelexApp: App {
         KeyGeometry.RowAdjust.migrateIfNeeded(UserDefaults(suiteName: "group.com.viettelex"),
                                               pad: UIDevice.current.userInterfaceIdiom == .pad,
                                               portraitWidth: min(screen.width, screen.height),
-                                              extraStateKeys: BackupSettings.all.map(\.key))
+                                              extraStateKeys: BackupSettings.all.map(\.key) + KeyStyleStore.legacyKeys)
+        // "Tuỳ chỉnh nâng cao" chung cũ → riêng theme đang chọn; "Trắng hồng" (đã bỏ) → Hệ thống +
+        // màu nhấn hồng. Một lần, lặp lại vô hại (ThemeSettings.migrateStored) — bàn phím tự chuyển
+        // trong bộ nhớ nếu app chưa chạy.
+        ThemeSettings.migrateStored(UserDefaults(suiteName: "group.com.viettelex"))
         // Ảnh emoji vẽ sẵn cho bàn phím (RAM-AUDIT.md §4b): dựng nền nếu thiếu/cũ.
         EmojiAtlasBuilder.ensureFresh()
         #if DEBUG

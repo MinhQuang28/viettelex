@@ -7,6 +7,7 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		2EADB038BF9A63A56A227EA6 /* PerThemeKeyStyleTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC2E388FF909A3DD4DE0C0E0 /* PerThemeKeyStyleTests.swift */; };
 		01B8210D0F9862246491F86C /* PlusConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0F66BB47D978962BA91434 /* PlusConfig.swift */; };
 		0222562F9A662E1780357942 /* EmojiPlane.swift in Sources */ = {isa = PBXBuildFile; fileRef = D705942B9BA084047E7A7EF1 /* EmojiPlane.swift */; };
 		02E1FBFA9896C3CD1F0AC050 /* RiengTuSection.swift in Sources */ = {isa = PBXBuildFile; fileRef = FDF03074145DE8EA1461687C /* RiengTuSection.swift */; };
@@ -426,6 +427,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		FC2E388FF909A3DD4DE0C0E0 /* PerThemeKeyStyleTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerThemeKeyStyleTests.swift; sourceTree = "<group>"; };
 		0129B5AA6C2F6547A9634969 /* PerfSwitchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PerfSwitchTests.swift; sourceTree = "<group>"; };
 		02937CC02BE49C39A5A7933D /* BackupFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFormat.swift; sourceTree = "<group>"; };
 		03130513F64077C5E7BBBE54 /* SwipeVocab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeVocab.swift; sourceTree = "<group>"; };
@@ -879,6 +881,7 @@
 				EF30CED4269435719F2F5392 /* PasteOfferOnceTests.swift */,
 				97ECEDAAFA381A793709FAE3 /* PerfSizeUXFixTests.swift */,
 				0129B5AA6C2F6547A9634969 /* PerfSwitchTests.swift */,
+				FC2E388FF909A3DD4DE0C0E0 /* PerThemeKeyStyleTests.swift */,
 				6EAFABBBF6544841D633BFD9 /* PlaneCacheLayoutTests.swift */,
 				E2A6BDCAE323FDEA73473DB7 /* PlanePolicyTests.swift */,
 				150EAA710911C53C0656FEBD /* PlusFeedback1015Tests.swift */,
@@ -1534,6 +1537,7 @@
 				0838D223301F8D5042A2F43D /* OneHandTests.swift in Sources */,
 				D59FEC004410CCD1216A4438 /* PasteOfferOnce.swift in Sources */,
 				EA30B87C4D7AE6B3A7AFFCB7 /* PasteOfferOnceTests.swift in Sources */,
+				2EADB038BF9A63A56A227EA6 /* PerThemeKeyStyleTests.swift in Sources */,
 				8B89B17286B3F485499B1548 /* PerfSizeUXFixTests.swift in Sources */,
 				B5C9CB675A5310946844B520 /* PerfSwitchTests.swift in Sources */,
 				4F177B14857E493A92E95B00 /* PlaneCacheLayoutTests.swift in Sources */,

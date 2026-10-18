@@ -81,6 +81,11 @@ data class ThemePalette(
     val functionInk: Int? = null,
     /** Hoạ tiết nền (tim / hoa) vẽ MỘT lần ở nền IME — null = nền phẳng. */
     val decoration: ThemeDecoration? = null,
+    /**
+     * Người dùng chọn "Màu nhấn" ([KeyStyle.accentColor]) ⇒ ⇧ bật/Caps tô [action] +
+     * [actionInk] (mặc định: Caps tô [chip]). Cùng ý nghĩa iOS `accentShift`.
+     */
+    val accentShift: Boolean = false,
 ) {
     val keyInk: Int get() = keyLabel ?: ink
     /** Nền phím chức năng (⇧ ⌫ 123 🌐 😊…). */
@@ -193,7 +198,8 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     BLACK_HEART("blackHeart", "Tim đen", true),
     GREEN_FLORAL("greenFloral", "Hoa xanh", true),
     SAGE("sage", "Xanh lá", true),
-    PURE_WHITE("pureWhite", "Trắng hồng", true),
+    // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
+    // Hệ thống + Màu nhấn D6336C ([KeyStyleStore.migrate]). Id lạ / đã bỏ luôn về Hệ thống ([of]).
     NEON("neon", "Neon", true),
     PINK("pink", "Hồng", true);
 
@@ -240,9 +246,6 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
             // Xanh lá: phím sáng, phím chức năng + phím cách màu xanh xô thơm (sage).
             SAGE -> if (systemDark) solid(0x161C15, 0x2A3328, 0x3A4A36, 0xE4EDE1, 0x5E7F55, function = 0x4A5E45)
                 else solid(0xE4EBE2, 0xFBFCFA, 0x93AB8C, 0x24331F, 0x5E7F55, function = 0xA9BFA3)
-            // Trắng hồng: trắng xám rất nhạt, icon/nhãn phím chức năng màu hồng, Nhập hồng.
-            PURE_WHITE -> if (systemDark) solid(0x1A1A1C, 0x2C2C2F, 0x3A3A3E, 0xFFFFFF, 0xD6336C, functionInk = 0xFF7AA8)
-                else solid(0xF4F4F6, 0xFFFFFF, 0xE8E8EC, 0x1C1C1E, 0xD6336C, functionInk = 0xC2255C)
             // Neon: luôn tối — nền gần đen, phím xanh mòng két sẫm viền cyan, chữ cyan.
             NEON -> solid(0x05080A, 0x0E2A2E, 0x15393E, 0x5FF5E8, 0x00BFB2, accentInk = 0x000000,
                 border = c.withAlpha(c.rgb(0x00E5D4), 0.7f))
@@ -400,9 +403,19 @@ data class ThemeSettings(
      * "Khôi phục giao diện gốc" giữ nguyên.
      */
     val crop: WallpaperCrop? = null,
-    /** "Tuỳ chỉnh nâng cao" (Plus) — lưu nguyên kể cả khi hết quyền; áp qua [effectiveKeyStyle]. */
-    val keyStyle: KeyStyle = KeyStyle.DEFAULT,
+    /**
+     * "Tuỳ chỉnh nâng cao" (Plus) RIÊNG từng theme: id theme → [KeyStyle]; theme chưa chỉnh không có
+     * mục. Lưu nguyên kể cả khi hết quyền; áp qua [effectiveKeyStyle]. Id lạ (bản mới hơn) giữ nguyên.
+     */
+    val keyStyles: Map<String, KeyStyle> = emptyMap(),
 ) {
+    /** Tuỳ chỉnh của theme ĐANG CHỌN (màn Giao diện đọc qua đây; ghi bằng [withKeyStyle]). */
+    val keyStyle: KeyStyle get() = styleFor(theme)
+    fun styleFor(t: KeyboardTheme): KeyStyle = keyStyles[t.id] ?: KeyStyle.DEFAULT
+    /** Đặt tuỳ chỉnh cho [t] (mặc định: theme đang chọn); mặc định ⇒ xoá mục ("Đặt lại về mặc định của giao diện"). */
+    fun withKeyStyle(st: KeyStyle, t: KeyboardTheme = theme): ThemeSettings =
+        copy(keyStyles = if (st.isDefault) keyStyles - t.id else keyStyles + (t.id to st))
+
     /**
      * "Khôi phục giao diện gốc": mọi chỉnh ở màn Giao diện về mặc định. Ảnh nền chỉ bỏ
      * chọn (file giữ để bật lại); version giữ nguyên (không vứt bitmap cache vô cớ).
@@ -413,17 +426,39 @@ data class ThemeSettings(
     val effectiveTheme: KeyboardTheme get() = if (ThemeGate.allows(theme)) theme else KeyboardTheme.SYSTEM
     fun wallpaperActive(fileExists: Boolean) = wallpaper && fileExists && ThemeGate.allowsWallpaper
     /** Tuỳ chỉnh nâng cao thực dùng: hết quyền Plus ⇒ mặc định (giá trị lưu giữ nguyên). */
-    val effectiveKeyStyle: KeyStyle get() = (if (ThemeGate.allowsAdvanced) keyStyle else KeyStyle.DEFAULT)
-        .let { s -> if (s.corner == null && effectiveTheme.defaultCorner != null) s.copy(corner = effectiveTheme.defaultCorner) else s }
+    val effectiveKeyStyle: KeyStyle get() = effectiveStyleFor(effectiveTheme)
+    /** Như [effectiveKeyStyle] cho theme [t] bất kỳ (thẻ "Chọn giao diện" xem trước tuỳ chỉnh riêng). */
+    fun effectiveStyleFor(t: KeyboardTheme): KeyStyle = (if (ThemeGate.allowsAdvanced) styleFor(t) else KeyStyle.DEFAULT)
+        .let { s -> if (s.corner == null && t.defaultCorner != null) s.copy(corner = t.defaultCorner) else s }
+
+    /** Theme + tuỳ chỉnh màu RIÊNG của nó (trước ảnh nền / độ trong suốt) — một lần lúc dựng theme. */
+    fun styled(t: KeyboardTheme, base: ThemePalette): ThemePalette =
+        effectiveStyleFor(t).let { it.applyAccent(it.applyColors(base)) }
 
     fun toMap(): Map<String, Any> = mapOf(Keys.KEYBOARD_THEME to theme.id, Keys.WALLPAPER_ENABLED to wallpaper,
         Keys.WALLPAPER_DIM to dim, Keys.WALLPAPER_BLUR to blur, Keys.WALLPAPER_VERSION to version,
-        Keys.KEYBOARD_TRANSPARENCY to keyboardTransparency, Keys.KEY_LABEL_TRANSPARENCY to labelTransparency) +
-        (crop?.let { mapOf(Keys.WALLPAPER_CROP to it.serialize()) } ?: emptyMap()) + keyStyle.toMap()
+        Keys.KEYBOARD_TRANSPARENCY to keyboardTransparency, Keys.KEY_LABEL_TRANSPARENCY to labelTransparency,
+        Keys.KEY_STYLES to KeyStyleStore.serialize(keyStyles)) +
+        (crop?.let { mapOf(Keys.WALLPAPER_CROP to it.serialize()) } ?: emptyMap())
 
     companion object {
-        fun load(get: (String) -> Any?) = ThemeSettings(
-            theme = KeyboardTheme.of(get(Keys.KEYBOARD_THEME) as? String),
+        /**
+         * Đọc + chuyển đổi trong bộ nhớ ([KeyStyleStore.migrate] — thuần; IME gọi mỗi lần dựng view).
+         * App ghi bản đã chuyển một lần ([needsMigration] ⇒ lưu lại, xoá khoá cũ).
+         */
+        fun load(get: (String) -> Any?): ThemeSettings {
+            val m = KeyStyleStore.migrate(get(Keys.KEYBOARD_THEME) as? String,
+                KeyStyleStore.parse(get(Keys.KEY_STYLES) as? String), KeyStyleStore.loadLegacy(get))
+            return loadWith(get, m)
+        }
+
+        /** Cần ghi bản chuyển đổi (khoá chung cũ còn / theme "Trắng hồng"). */
+        fun needsMigration(get: (String) -> Any?) =
+            KeyStyleStore.needsMigration(get(Keys.KEYBOARD_THEME) as? String, KeyStyleStore.hasLegacy(get))
+
+        private fun loadWith(get: (String) -> Any?, m: KeyStyleStore.Migrated) = ThemeSettings(
+            theme = KeyboardTheme.of(m.theme),
+            keyStyles = m.styles,
             wallpaper = get(Keys.WALLPAPER_ENABLED) as? Boolean ?: false,
             dim = ((get(Keys.WALLPAPER_DIM) as? Number)?.toInt() ?: 30).coerceIn(0, 80),
             blur = ((get(Keys.WALLPAPER_BLUR) as? Number)?.toInt() ?: 0).coerceIn(0, 20),
@@ -431,7 +466,6 @@ data class ThemeSettings(
             keyboardTransparency = KeyboardTransparency.clamp((get(Keys.KEYBOARD_TRANSPARENCY) as? Number)?.toInt() ?: 0),
             labelTransparency = KeyboardTransparency.clamp((get(Keys.KEY_LABEL_TRANSPARENCY) as? Number)?.toInt() ?: 0),
             crop = WallpaperCrop.parse(get(Keys.WALLPAPER_CROP) as? String),
-            keyStyle = KeyStyle.load(get),
         )
     }
 }

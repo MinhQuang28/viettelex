@@ -26,7 +26,7 @@ class ThemeSetTests {
     }
 
     private val newThemes = listOf(KeyboardTheme.BLACK_HEART, KeyboardTheme.GREEN_FLORAL, KeyboardTheme.SAGE,
-        KeyboardTheme.PURE_WHITE, KeyboardTheme.NEON, KeyboardTheme.PINK)
+        KeyboardTheme.NEON, KeyboardTheme.PINK)
     private val pastels = listOf(KeyboardTheme.PEACH, KeyboardTheme.MINT, KeyboardTheme.SKY, KeyboardTheme.LAVENDER)
 
     private fun fixtureLines(): List<List<String>> {
@@ -42,7 +42,7 @@ class ThemeSetTests {
         assertEquals(lines.first { it[0] == "order" }[1].split(','), KeyboardTheme.entries.map { it.id })
         assertEquals(lines.first { it[0] == "plus" }[1].split(','), KeyboardTheme.entries.filter { it.isPlus }.map { it.id })
         val rows = lines.filter { it[0] != "order" && it[0] != "plus" }
-        assertEquals(24, rows.size)
+        assertEquals(22, rows.size)
         for (r in rows) {
             val t = KeyboardTheme.entries.first { it.id == r[0] }
             val p = t.palette(r[1] == "1")!!
@@ -128,7 +128,7 @@ class ThemeSetTests {
     @Test fun pinkRoundedByDefaultButUserCornerWins() {
         assertEquals(70, ThemeSettings(theme = KeyboardTheme.PINK).effectiveKeyStyle.corner)
         assertNull(ThemeSettings(theme = KeyboardTheme.PEACH).effectiveKeyStyle.corner)
-        assertEquals(10, ThemeSettings(theme = KeyboardTheme.PINK, keyStyle = KeyStyle(corner = 10)).effectiveKeyStyle.corner)
+        assertEquals(10, ThemeSettings(theme = KeyboardTheme.PINK).withKeyStyle(KeyStyle(corner = 10)).effectiveKeyStyle.corner)
     }
 
     /** Hoạ tiết CHỈ ở khe giữa các hàng phím (bug ảnh 18/10: tim đè chữ gợi ý + ☰) — y hệt iOS. */

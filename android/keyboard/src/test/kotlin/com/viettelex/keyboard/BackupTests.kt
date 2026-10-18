@@ -31,7 +31,8 @@ class BackupTests {
             "autoRestore" to true, "liveSpellCheck" to true, "swipeTyping" to false, "swipeEnglish" to true,
             "hardwareTelex" to false, "showSuggestions" to true, "filterSensitive" to false,
             "templatesEnabled" to true, "showSpaceLogo" to true, "hapticFeedback" to false,
-            "numberRow" to false, "rowHeightAdjust" to 4, "shortcutsEnabled" to false),
+            "numberRow" to false, "rowHeightAdjust" to 4, "shortcutsEnabled" to false,
+            "keyStyles" to KeyStyleStoreTests.GOLDEN),   // Tuỳ chỉnh nâng cao theo theme
         shortcuts = mapOf("mn" to "mọi người", "vn" to "Việt Nam"),
         templates = listOf(TemplateItem("📍", "Mình đang trên đường tới"), TemplateItem("IP❓", "https://api.ipify.org")),
     )
@@ -61,7 +62,8 @@ class BackupTests {
         val p = BackupCodec.decode(fixture("backup-ios-v1"))
         assertEquals("ios", p.platform)
         assertEquals(Instant.parse("2026-09-27T08:00:00Z"), p.createdAt)
-        assertEquals(40, p.settings!!.size)             // emojiSuggest/pasteButton chỉ iOS, bị bỏ qua
+        assertEquals(41, p.settings!!.size)             // emojiSuggest/pasteButton chỉ iOS, bị bỏ qua
+        assertEquals(KeyStyleStoreTests.GOLDEN, p.settings!![Keys.KEY_STYLES])   // chuỗi chuẩn trùng iOS
         assertEquals(true, p.settings!![Keys.TEXT_TOOLS_ENABLED])
         assertEquals("wood", p.settings!![Keys.KEY_SOUND_STYLE])
         assertEquals(true, p.settings!![Keys.KEY_SOUND])
@@ -128,7 +130,8 @@ class BackupTests {
             "keyboardTransparency" to 250, "keyLabelTransparency" to 35,
             BackupPrefs.SHORTCUTS_KEY to "# VietTelex — bảng gõ tắt\nko: không\n")
         val p = BackupPrefs.snapshot({ prefs[it] }, listOf(TemplateItem("", "a")), null)
-        assertEquals(58, p.settings!!.size)   // +splitKeyboard (18/10/2026)
+        assertEquals(53, p.settings!!.size)   // +splitKeyboard; 6 khoá KeyStyle chung → 1 keyStyles (18/10/2026)
+        assertEquals("{}", p.settings!![Keys.KEY_STYLES])   // chưa chỉnh theme nào
         assertEquals(false, p.settings!![Keys.SPLIT_KEYBOARD])   // tách đôi: mặc định tắt
         assertEquals(0, p.settings!![Keys.SUGGESTION_COUNT])   // số từ gợi ý: mặc định Tự động
         assertEquals("medium", p.settings!![Keys.SUGGESTION_BAR_HEIGHT])   // chiều cao thanh gợi ý: mặc định Vừa

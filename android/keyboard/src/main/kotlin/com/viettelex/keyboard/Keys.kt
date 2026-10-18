@@ -166,6 +166,11 @@ object Keys {
     const val KEY_FONT_SCALE = "keyFontScale"
     const val KEY_LABEL_FONT = "keyLabelFont"
     const val KEY_LABEL_WEIGHT = "keyLabelWeight"
+    /**
+     * "Tuỳ chỉnh nâng cao" RIÊNG từng theme (từ 10/2026, thay bộ khoá chung ở trên — chỉ còn để chuyển
+     * đổi): String JSON chuẩn [KeyStyleStore], cùng khoá + định dạng iOS.
+     */
+    const val KEY_STYLES = "keyStyles"
     /** Lịch sử clipboard (mặc định TẮT — riêng tư). */
     const val CLIPBOARD_HISTORY = "clipboardHistory"
     /** "Giữ lịch sử clipboard": "1h" (mặc định) / "24h" / "7d" — [ClipboardTTL]. */

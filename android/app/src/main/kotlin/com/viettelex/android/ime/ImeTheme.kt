@@ -50,7 +50,8 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
             chip = ContextCompat.getColor(ctx, R.color.ime_chip),
             isDark = systemDark)
         // Tuỳ chỉnh nâng cao (Plus): màu chữ / nền phím — trước ảnh nền và độ trong suốt.
-        val styled = keyStyle.applyColors(base)
+        // + Màu nhấn (Nhập, ⇧ bật/Caps, vệt vuốt) — riêng theme đang dùng, giải MỘT lần ở đây.
+        val styled = keyStyle.applyAccent(keyStyle.applyColors(base))
         if (settings.wallpaperActive(wallpaperFile)) styled.overWallpaper() else styled
     }
     /** Sau hai thanh độ trong suốt (phím / ký tự) — áp một lần ở đây, không mỗi phím. */
@@ -60,7 +61,7 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val bg = palette.bg
     val keyFill = palette.keyFill
     val specialFill = palette.specialFill
-    /** Phím chức năng / phím cách / chữ-icon phím chức năng (= như cũ trừ theme tô riêng — Xanh lá, Trắng hồng). */
+    /** Phím chức năng / phím cách / chữ-icon phím chức năng (= như cũ trừ theme tô riêng — Xanh lá). */
     val fnFill = palette.fnFill
     val spaceFill = palette.spaceFill
     val fnInk = palette.fnInk
@@ -79,6 +80,8 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val actionInk = palette.actionInk
     /** Chip (thẻ Dán, highlight category emoji, nhấn slot gợi ý). */
     val chip = palette.chip
+    /** Người dùng chọn Màu nhấn ⇒ ⇧ bật/Caps tô [action] / [actionInk]. */
+    val accentShift = palette.accentShift
     val trail = palette.trail
     /** Viền phím (tương phản cao / kính) — null = không viền. */
     val keyBorder = palette.keyBorder

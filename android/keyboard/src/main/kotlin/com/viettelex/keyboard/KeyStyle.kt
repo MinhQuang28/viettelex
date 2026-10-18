@@ -1,13 +1,13 @@
 package com.viettelex.keyboard
 
 /*
- * "Tuỳ chỉnh nâng cao" (Plus) ở Cài đặt → Giao diện: màu chữ / nền phím, độ bo góc, cỡ chữ,
- * phông, độ đậm. Y hệt iOS (KeyStyle trong iOS/Keyboard/KeyboardTheme.swift) — cùng khoá prefs,
- * cùng giá trị canh, cùng id phông/độ đậm ⇒ sao lưu đi qua lại được.
+ * "Tuỳ chỉnh nâng cao" (Plus) ở Cài đặt → Giao diện: màu chữ / nền phím / màu nhấn, độ bo góc,
+ * cỡ chữ, phông, độ đậm — RIÊNG từng theme ([ThemeSettings.keyStyles], lưu bằng [KeyStyleStore]).
+ * Y hệt iOS (KeyStyle / KeyStyleStore trong iOS/Keyboard/KeyboardTheme.swift) — cùng khoá prefs,
+ * cùng chuỗi JSON, cùng id phông/độ đậm ⇒ sao lưu đi qua lại được.
  *
  * Màu: MỘT màu dùng cho cả sáng lẫn tối (đơn giản, đoán được); "Theo theme" = null.
- * Lưu bằng số nguyên có giá trị canh (-1 / 0 = mặc định). Áp lúc dựng theme / layout
- * (ImeTheme, KeyboardView.applyLabelSize) — 0 chi phí mỗi phím.
+ * Áp lúc dựng theme / layout (ImeTheme, KeyboardView.applyLabelSize) — 0 chi phí mỗi phím.
  */
 
 /** Phông nhãn phím — CHỈ phông hệ thống (không nhúng phông). Android không có "rounded" ⇒ mặc định. */
@@ -48,6 +48,8 @@ data class KeyStyle(
     /** 0xRRGGBB; null = theo theme. */
     val labelColor: Int? = null,
     val fillColor: Int? = null,
+    /** "Màu nhấn": phím Nhập/hành động, ⇧ bật/Caps, vệt gõ vuốt, glyph màu nhấn; null = theo theme. */
+    val accentColor: Int? = null,
     /** 0 = chữ nhật, 100 = tròn/viên thuốc (bán kính = nửa cạnh ngắn); null = mặc định. */
     val corner: Int? = null,
     /** 80…150 (% cỡ mặc định); null = mặc định (Android: theo "Cỡ chữ trên phím" Vừa/Lớn). */
@@ -58,11 +60,6 @@ data class KeyStyle(
     val isDefault: Boolean get() = this == DEFAULT
     /** Có đổi chữ (phông / độ đậm / cỡ) ⇒ bật đo + kẹp chữ. */
     val customizesLabels: Boolean get() = font != KeyLabelFont.DEFAULT || weight != KeyLabelWeight.REGULAR || fontScale != null
-
-    fun toMap(): Map<String, Any> = mapOf(
-        Keys.KEY_LABEL_COLOR to (labelColor ?: -1), Keys.KEY_FILL_COLOR to (fillColor ?: -1),
-        Keys.KEY_CORNER_RADIUS to (corner ?: -1), Keys.KEY_FONT_SCALE to (fontScale ?: 0),
-        Keys.KEY_LABEL_FONT to font.id, Keys.KEY_LABEL_WEIGHT to weight.id)
 
     /** Chữ cái / số / dấu câu; nhãn chức năng + icon; chữ phụ góc phím — khi đặt thanh trượt. */
     val letterScale: Float get() = (fontScale ?: 100) / 100f
@@ -98,19 +95,37 @@ data class KeyStyle(
             keyLabelPinned = labelColor != null)
     }
 
+    /**
+     * "Màu nhấn" thay màu nhấn của theme ở MỌI chỗ dùng: phím Nhập/hành động ([ThemePalette.action]),
+     * ⇧ bật/Caps ([ThemePalette.accentShift]), ô chọn ký tự phụ, con trỏ ô tìm emoji, vệt gõ
+     * vuốt, glyph màu nhấn của theme ([ThemePalette.functionInk]). Chữ trên nền nhấn giữ màu theme nếu
+     * ≥ 3:1, không thì đen/trắng ([KeyboardTransparency.readable]). Áp SAU [applyColors]. null ⇒ y như cũ.
+     */
+    fun applyAccent(p: ThemePalette): ThemePalette {
+        val a = accentColor ?: return p
+        val c = ThemeColor
+        val accent = c.rgb(a)
+        val fnInk = p.functionInk?.let {
+            KeyboardTransparency.readable(accent, c.over(p.fnFill, c.over(p.bg, KeyboardTransparency.systemBackdrop(p.isDark))))
+        }
+        return p.copy(action = accent, actionInk = accentInk(p.actionInk, accent), trail = c.withAlpha(accent, 0.6f),
+            accentShift = true, functionInk = fnInk)
+    }
+
     companion object {
         val DEFAULT = KeyStyle()
         const val FONT_SCALE_MIN = 80
         const val FONT_SCALE_MAX = 150
-        val COLOR_RANGE = -1..0xFFFFFF
-        val CORNER_RANGE = -1..100
-        val FONT_SCALE_RANGE = 0..FONT_SCALE_MAX
+
+        /** Chữ/icon trên nền nhấn: giữ [themeInk] nếu ≥ 3:1, không thì đen/trắng tương phản hơn. */
+        fun accentInk(themeInk: Int, accent: Int): Int = KeyboardTransparency.readable(themeInk, accent)
 
         fun parseColor(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it in 0..0xFFFFFF }
         fun parseCorner(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it >= 0 }?.coerceAtMost(100)
         fun parseFontScale(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it > 0 }?.coerceIn(FONT_SCALE_MIN, FONT_SCALE_MAX)
 
-        fun load(get: (String) -> Any?) = KeyStyle(
+        /** Bộ chung CŨ (≤ 1.5.12, khoá [Keys.KEY_LABEL_COLOR]…) — chỉ để chuyển đổi ([KeyStyleStore.loadLegacy]). */
+        fun loadLegacy(get: (String) -> Any?) = KeyStyle(
             labelColor = parseColor(get(Keys.KEY_LABEL_COLOR)),
             fillColor = parseColor(get(Keys.KEY_FILL_COLOR)),
             corner = parseCorner(get(Keys.KEY_CORNER_RADIUS)),

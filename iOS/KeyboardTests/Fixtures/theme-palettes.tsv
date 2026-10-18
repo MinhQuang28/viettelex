@@ -3,8 +3,8 @@
 # Màu: AARRGGBB (alpha cắt cụt a*255); '-' = không có. fn = nền phím chức năng + phím cách riêng;
 # fnInk = chữ/icon phím chức năng riêng; deco = hoạ tiết nền motif:màu. Hệ thống / Kính khác nhau theo
 # nền tảng (backdrop) nên không có ở đây.
-order	system,oled,contrast,peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,pureWhite,neon,pink
-plus	peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,pureWhite,neon,pink
+order	system,oled,contrast,peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink
+plus	peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink
 #theme	dark	bg	key	special	ink	accent	accentInk	border	fn	fnInk	deco
 oled	0	FF000000	FF1C1C1E	FF3A3A3C	FFFFFFFF	FF0A84FF	FFFFFFFF	-	-	-	-
 oled	1	FF000000	FF1C1C1E	FF3A3A3C	FFFFFFFF	FF0A84FF	FFFFFFFF	-	-	-	-
@@ -24,8 +24,6 @@ greenFloral	0	FFEEF6EF	FFFFFFFF	FFDCEEDF	FF256B42	FF2E8B57	FFFFFFFF	FF4CAF6E	-	-
 greenFloral	1	FF0F1D15	FF16291E	FF21392A	FF9EE0B6	FF2E8B57	FFFFFFFF	CC4CAF6E	-	-	flowers:474CAF6E
 sage	0	FFE4EBE2	FFFBFCFA	FF93AB8C	FF24331F	FF5E7F55	FFFFFFFF	-	FFA9BFA3	-	-
 sage	1	FF161C15	FF2A3328	FF3A4A36	FFE4EDE1	FF5E7F55	FFFFFFFF	-	FF4A5E45	-	-
-pureWhite	0	FFF4F4F6	FFFFFFFF	FFE8E8EC	FF1C1C1E	FFD6336C	FFFFFFFF	-	-	FFC2255C	-
-pureWhite	1	FF1A1A1C	FF2C2C2F	FF3A3A3E	FFFFFFFF	FFD6336C	FFFFFFFF	-	-	FFFF7AA8	-
 neon	0	FF05080A	FF0E2A2E	FF15393E	FF5FF5E8	FF00BFB2	FF000000	B200E5D4	-	-	-
 neon	1	FF05080A	FF0E2A2E	FF15393E	FF5FF5E8	FF00BFB2	FF000000	B200E5D4	-	-	-
 pink	0	FFFCDDE8	FFFFF5F9	FFF6B8CE	FF5A1F38	FFD94680	FFFFFFFF	-	-	-	-

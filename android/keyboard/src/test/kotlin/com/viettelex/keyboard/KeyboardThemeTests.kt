@@ -34,7 +34,7 @@ class KeyboardThemeTests {
 
     @Test fun sameIdsAsIOS() {
         assertEquals(listOf("system", "oled", "contrast", "peach", "mint", "sky", "lavender", "glass",
-            "blackHeart", "greenFloral", "sage", "pureWhite", "neon", "pink"),
+            "blackHeart", "greenFloral", "sage", "neon", "pink"),
             KeyboardTheme.entries.map { it.id })
     }
 

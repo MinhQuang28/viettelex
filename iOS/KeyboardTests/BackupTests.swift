@@ -25,6 +25,7 @@ final class BackupTests: XCTestCase {
         s["keyboardTransparency"] = .int(40); s["keyLabelTransparency"] = .int(20)
         s["uiLanguage"] = .string("en")
         s["keySound"] = .bool(true); s["keySoundVolume"] = .int(70); s["keySoundStyle"] = .string("wood")
+        s[KeyStyleStore.key] = .string(PerThemeKeyStyleTests.golden)   // Tuỳ chỉnh nâng cao theo theme
         return BackupPayload(
             createdAt: iso.date(from: "2026-09-27T08:00:00Z"), platform: "ios", settings: s,
             shortcuts: ["ko": "không", "stk": "số tài khoản", "đc": "được"],
@@ -67,7 +68,8 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(p.settings?["quickTelex"], .bool(true))
         XCTAssertEqual(p.settings?["hardwareTelex"], .bool(false))
         XCTAssertEqual(p.settings?["rowHeightAdjust"], .int(4))
-        XCTAssertEqual(p.settings?.count, 21)
+        XCTAssertEqual(p.settings?.count, 22)
+        XCTAssertEqual(p.settings?[KeyStyleStore.key], .string(PerThemeKeyStyleTests.golden))   // chuỗi chuẩn trùng Android
         XCTAssertEqual(p.settings?["shortcutsEnabled"], .bool(false))
         XCTAssertEqual(p.shortcuts, ["mn": "mọi người", "vn": "Việt Nam"])
         XCTAssertEqual(p.templates, [BackupTemplate(label: "📍", text: "Mình đang trên đường tới"),

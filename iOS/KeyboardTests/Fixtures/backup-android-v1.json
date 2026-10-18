@@ -11,6 +11,7 @@
     "freeMarking": true,
     "hapticFeedback": false,
     "hardwareTelex": false,
+    "keyStyles": "{\"pink\":{\"accent\":14037868,\"corner\":70},\"system\":{\"fill\":1056816,\"font\":\"mono\",\"label\":16723285,\"weight\":\"heavy\"}}",
     "liveSpellCheck": true,
     "modernTone": false,
     "numberRow": false,

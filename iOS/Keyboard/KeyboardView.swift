@@ -212,8 +212,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// Chữ/icon trên phím (đã áp độ trong suốt ký tự). Balloon/popup dùng `palette.ink`.
     private var ink: UIColor { palette.keyInk.ui }
     private func inkFaded(_ a: Double) -> UIColor { palette.keyInk.alpha(a).ui }
-    /// Phím chức năng + phím cách: nền / chữ-icon (= phím chữ trừ theme tô riêng — Xanh lá,
-    /// Trắng hồng). Đọc một lần lúc dựng phím.
+    /// Phím chức năng + phím cách: nền / chữ-icon (= phím chữ trừ theme tô riêng — Xanh lá).
+    /// Đọc một lần lúc dựng phím.
     private var fnFill: UIColor { palette.fnFill.ui }
     private var fnInk: UIColor { palette.fnInk.ui }
     /// Nền theme + ảnh nền + lớp phủ: 3 view phẳng dưới hàng phím (không blur,
@@ -1841,6 +1841,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
     /// Test: alpha ảnh nền + màu lớp phủ (độ trong suốt phím không được làm mất ảnh nền).
     var debugWallpaperLayer: (alpha: CGFloat, overlay: UIColor?) { (wallpaperView.alpha, wallpaperDim.backgroundColor) }
+    /// Test: palette đã giải (theme + tuỳ chỉnh riêng theme + độ trong suốt) — giải một lần mỗi lần hiện.
+    var debugPalette: KeyboardPalette { palette }
+    /// Test: nền + màu glyph phím ⇧ khi bật (màu nhấn nếu người dùng chọn).
+    var debugShiftOnColors: (fill: UIColor, ink: UIColor) { (shiftOnFill, shiftOnInk) }
     /// Test: hoạ tiết nền đang hiện (có path) hay không.
     var debugDecorationVisible: Bool {
         decorLayer.superlayer != nil && !decorLayer.isHidden && !themeBackdrop.isHidden && decorLayer.path != nil
@@ -1970,9 +1974,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
     private weak var capsKey: KeyButton?
     /// Shift ON = phím trắng glyph đen; phím trong suốt quá nửa thì glyph theo chữ phím.
-    private var shiftOnFill: UIColor { RGBA.white.alpha(palette.surfaceAlpha).ui }
+    /// "Màu nhấn" (Tuỳ chỉnh nâng cao) ⇒ phím ⇧ bật tô màu nhấn + chữ trên nhấn (palette.accentShift).
+    private var shiftOnFill: UIColor {
+        palette.accentShift ? palette.accent.ui : RGBA.white.alpha(palette.surfaceAlpha).ui
+    }
     private var shiftOnInk: UIColor {
-        palette.surfaceAlpha >= 0.5 ? RGBA.black.alpha(palette.keyInk.a).ui : ink
+        if palette.accentShift { return palette.accentInk.ui }
+        return palette.surfaceAlpha >= 0.5 ? RGBA.black.alpha(palette.keyInk.a).ui : ink
     }
 
 

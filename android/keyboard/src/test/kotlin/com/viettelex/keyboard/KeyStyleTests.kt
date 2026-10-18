@@ -35,7 +35,7 @@ class KeyStyleTests {
         val base = s.effectiveTheme.palette(dark) ?: ThemePalette(bg = c.rgb(0xEEF0F4), keyFill = c.WHITE,
             specialFill = c.rgb(0xD6DBE3), ink = c.rgb(0x1F1F1F), trail = c.rgb(0x0B57D0), balloon = c.WHITE,
             popup = c.WHITE, action = c.rgb(0x0B57D0), actionInk = c.WHITE, chip = c.rgb(0xD3E3FD), isDark = dark)
-        val styled = s.effectiveKeyStyle.applyColors(base)
+        val styled = s.styled(s.effectiveTheme, base)
         return (if (wallpaper) styled.overWallpaper() else styled)
             .withTransparency(s.keyboardTransparency, s.labelTransparency, dark)
     }
@@ -99,30 +99,27 @@ class KeyStyleTests {
     // ---- lưu / đọc / mặc định
 
     @Test fun settingsParsingAndDefaults() {
-        assertEquals(KeyStyle(), KeyStyle.load { null })
+        assertEquals(KeyStyle(), ThemeSettings.load { null }.keyStyle)
         assertTrue(KeyStyle().isDefault)
-        val m = custom.toMap()
-        assertEquals(custom, KeyStyle.load { m[it] })
-        val d = KeyStyle().toMap()                                  // giá trị canh
-        assertEquals(-1, d[Keys.KEY_LABEL_COLOR]); assertEquals(0, d[Keys.KEY_FONT_SCALE]); assertEquals(-1, d[Keys.KEY_CORNER_RADIUS])
-        assertEquals(KeyStyle(), KeyStyle.load { d[it] })
-        val junk = mapOf<String, Any>(Keys.KEY_LABEL_COLOR to 0x1000000, Keys.KEY_FILL_COLOR to -7, Keys.KEY_CORNER_RADIUS to 300,
-            Keys.KEY_FONT_SCALE to 30, Keys.KEY_LABEL_FONT to "comic-sans", Keys.KEY_LABEL_WEIGHT to "ultra")
-        val g = KeyStyle.load { junk[it] }
-        assertNull(g.labelColor); assertNull(g.fillColor)
+        assertEquals(custom, KeyStyleStore.parse(KeyStyleStore.serialize(mapOf("mint" to custom)))["mint"])
+        assertEquals("{}", KeyStyleStore.serialize(mapOf("mint" to KeyStyle())))   // mặc định ⇒ không có mục
+        // Rác / ngoài phạm vi (cùng luật khoá cũ).
+        val g = KeyStyleStore.parse("""{"mint":{"label":16777216,"fill":-7,"corner":300,"fontScale":30,"font":"comic-sans","weight":"ultra","accent":true}}""")["mint"]!!
+        assertNull(g.labelColor); assertNull(g.fillColor); assertNull(g.accentColor)
         assertEquals(100, g.corner); assertEquals(80, g.fontScale)
         assertEquals(KeyLabelFont.DEFAULT, g.font); assertEquals(KeyLabelWeight.REGULAR, g.weight)
-        assertEquals(150, KeyStyle.load { if (it == Keys.KEY_FONT_SCALE) 999 else null }.fontScale)
+        assertEquals(150, KeyStyleStore.parse("""{"mint":{"fontScale":999}}""")["mint"]!!.fontScale)
+        assertEquals(emptyMap<String, KeyStyle>(), KeyStyleStore.parse("not json"))
+        assertEquals(emptyMap<String, KeyStyle>(), KeyStyleStore.parse("""{"bad id!":{"corner":5},"ok":[1]}"""))
         // "rounded" từ iOS: giữ giá trị (khứ hồi), Android vẽ như mặc định.
-        assertEquals(KeyLabelFont.ROUNDED, KeyStyle.load { if (it == Keys.KEY_LABEL_FONT) "rounded" else null }.font)
+        assertEquals(KeyLabelFont.ROUNDED, KeyStyleStore.parse("""{"sky":{"font":"rounded"}}""")["sky"]!!.font)
         assertFalse(KeyLabelFont.ROUNDED.onAndroid)
         // Thuộc ThemeSettings: lưu cùng, "Khôi phục giao diện gốc" xoá.
-        val s = ThemeSettings(theme = KeyboardTheme.MINT, keyStyle = custom)
+        val s = ThemeSettings(theme = KeyboardTheme.MINT).withKeyStyle(custom)
         val all = s.toMap()
         assertEquals(custom, ThemeSettings.load { all[it] }.keyStyle)
         assertFalse(s.isDefault)
         assertEquals(KeyStyle(), s.resetToDefaults().keyStyle)
-        assertEquals(KeyStyle(), ThemeSettings.load { null }.keyStyle)
     }
 
     @Test fun sameKeysAndIdsAsIOS() {
@@ -135,8 +132,8 @@ class KeyStyleTests {
     // ---- cổng Plus
 
     @Test fun plusGatingStoredButInactiveRendersDefaults() {
-        val s = ThemeSettings(theme = KeyboardTheme.OLED, keyStyle = custom)
-        val plain = s.copy(keyStyle = KeyStyle())
+        val s = ThemeSettings(theme = KeyboardTheme.OLED).withKeyStyle(custom)
+        val plain = s.withKeyStyle(KeyStyle())
         lockPlus()
         assertFalse(ThemeGate.allowsAdvanced)
         assertEquals(KeyStyle(), s.effectiveKeyStyle)
@@ -154,14 +151,14 @@ class KeyStyleTests {
 
     @Test fun customColors() {
         for (t in KeyboardTheme.entries) for (dark in listOf(false, true)) for (fill in listOf(0x000000, 0xFFFFFF, 0xFFD60A, 0x203040)) {
-            val p = imePalette(ThemeSettings(theme = t, keyStyle = KeyStyle(fillColor = fill)), dark, false)
+            val p = imePalette(ThemeSettings(theme = t).withKeyStyle(KeyStyle(fillColor = fill)), dark, false)
             assertTrue("$t $dark ${Integer.toHexString(fill)}", c.contrast(p.keyInk, p.keyFill) >= KeyboardTransparency.MIN_LABEL_CONTRAST)
             assertTrue(c.contrast(p.ink, p.balloon) >= KeyboardTransparency.MIN_LABEL_CONTRAST)
             assertTrue(c.contrast(p.ink, p.popup) >= KeyboardTransparency.MIN_LABEL_CONTRAST)
         }
         // Chữ người dùng chọn: độ trong suốt phím 100% không lật sang đen/trắng.
-        val pinned = imePalette(ThemeSettings(theme = KeyboardTheme.PEACH, keyboardTransparency = 100,
-            keyStyle = KeyStyle(labelColor = 0x3366FF)), true, false)
+        val pinned = imePalette(ThemeSettings(theme = KeyboardTheme.PEACH, keyboardTransparency = 100)
+            .withKeyStyle(KeyStyle(labelColor = 0x3366FF)), true, false)
         assertEquals(c.rgb(0x3366FF), pinned.keyInk)
         val base = KeyboardTheme.MINT.palette(false)!!
         assertEquals(base, KeyStyle().applyColors(base))               // không tuỳ chỉnh ⇒ y như cũ
@@ -171,22 +168,18 @@ class KeyStyleTests {
 
     @Test fun backupIncludesKeyStyle() {
         val k = BackupSettings.byKey
-        assertEquals(SettingKind.IntRange(-1, -1..0xFFFFFF), k[Keys.KEY_LABEL_COLOR]?.kind)
-        assertEquals(SettingKind.IntRange(-1, -1..0xFFFFFF), k[Keys.KEY_FILL_COLOR]?.kind)
-        assertEquals(SettingKind.IntRange(-1, -1..100), k[Keys.KEY_CORNER_RADIUS]?.kind)
-        assertEquals(SettingKind.IntRange(0, 0..150), k[Keys.KEY_FONT_SCALE]?.kind)
-        assertEquals(SettingKind.Choice("default", setOf("default", "rounded", "serif", "mono", "condensed")), k[Keys.KEY_LABEL_FONT]?.kind)
-        assertEquals(SettingKind.Choice("regular", setOf("light", "regular", "medium", "bold", "heavy")), k[Keys.KEY_LABEL_WEIGHT]?.kind)
+        assertEquals(SettingKind.StyleMap, k[Keys.KEY_STYLES]?.kind)
+        for (key in KeyStyleStore.LEGACY_KEYS) assertNull("khoá chung cũ $key không còn sao lưu", k[key])
 
-        val prefs = custom.toMap()
+        val s = ThemeSettings(theme = KeyboardTheme.MINT).withKeyStyle(custom)
+            .withKeyStyle(KeyStyle(accentColor = 0xD6336C), KeyboardTheme.SYSTEM)
+        val prefs = s.toMap()
         val p = BackupPrefs.snapshot({ prefs[it] }, emptyList(), null)
-        assertEquals(0x102030, p.settings!![Keys.KEY_FILL_COLOR])
-        assertEquals("mono", p.settings!![Keys.KEY_LABEL_FONT])
+        assertEquals(KeyStyleStore.serialize(s.keyStyles), p.settings!![Keys.KEY_STYLES])
         val back = BackupCodec.decode(BackupCodec.encode(p)).settings!!
-        assertEquals(custom, KeyStyle.load { back[it] })
-        // Máy chưa từng chỉnh: xuất giá trị canh = mặc định.
+        assertEquals(s.keyStyles, ThemeSettings.load { back[it] }.keyStyles)
+        // Máy chưa từng chỉnh: xuất "{}".
         val fresh = BackupPrefs.snapshot({ null }, emptyList(), null).settings!!
-        assertEquals(-1, fresh[Keys.KEY_LABEL_COLOR]); assertEquals(0, fresh[Keys.KEY_FONT_SCALE])
-        assertEquals(KeyStyle(), KeyStyle.load { fresh[it] })
+        assertEquals("{}", fresh[Keys.KEY_STYLES])
     }
 }

@@ -24,6 +24,8 @@ enum BackupSettingKind: Equatable {
     case bool(Bool), int(Int, ClosedRange<Int>)
     /// Chuỗi trong tập giá trị cho phép (mặc định, cho phép) — giá trị lạ bị bỏ qua.
     case string(String, [String])
+    /// Chuỗi JSON "Tuỳ chỉnh nâng cao" theo theme (KeyStyleStore) — chuẩn hoá khi đọc/ghi, mặc định "{}".
+    case styleMap
 }
 
 /// Setting được sao lưu/đồng bộ. KHÔNG gồm: debugTouchLog, trạng thái nội bộ
@@ -85,15 +87,10 @@ enum BackupSettings {
         Spec(key: "autoSpaceAfterPunct", kind: .bool(false)),
         Spec(key: "keyboardTransparency", kind: .int(0, 0...100)),
         Spec(key: "keyLabelTransparency", kind: .int(0, 0...100)),
-        // "Tuỳ chỉnh nâng cao" (Plus, KeyStyle) — cùng khoá + giá trị canh với Android:
-        // màu 0xRRGGBB (-1 = theo theme), bo góc 0…100 (-1 = mặc định), cỡ chữ 80…150 (0 = mặc định).
-        Spec(key: KeyStyle.labelColorKey, kind: .int(-1, KeyStyle.colorRange)),
-        Spec(key: KeyStyle.fillColorKey, kind: .int(-1, KeyStyle.colorRange)),
-        Spec(key: KeyStyle.cornerKey, kind: .int(-1, KeyStyle.cornerRange)),
-        Spec(key: KeyStyle.fontScaleKey, kind: .int(0, KeyStyle.fontScaleRange)),
-        // Android không có "rounded" ⇒ bàn phím Android dùng mặc định (giá trị vẫn giữ).
-        Spec(key: KeyStyle.fontKey, kind: .string(KeyLabelFont.standard.rawValue, KeyLabelFont.allCases.map(\.rawValue))),
-        Spec(key: KeyStyle.weightKey, kind: .string(KeyLabelWeight.regular.rawValue, KeyLabelWeight.allCases.map(\.rawValue))),
+        // "Tuỳ chỉnh nâng cao" (Plus) RIÊNG từng theme — MỘT chuỗi JSON chuẩn (KeyStyleStore), cùng
+        // khoá + định dạng với Android. Khoá chung cũ (keyLabelColor…) không còn sao lưu: file cũ có
+        // chúng ⇒ bỏ qua như key lạ. "rounded" (chỉ iOS) vẫn giữ khi qua Android.
+        Spec(key: KeyStyleStore.key, kind: .styleMap),
         // "Nền theo hệ thống" từng theme có nền riêng (chỉ iOS dùng) — systemBackdropOled…
         Spec(key: "systemBackdropOled", kind: .bool(false)),
         Spec(key: "systemBackdropContrast", kind: .bool(false)),
@@ -104,7 +101,6 @@ enum BackupSettings {
         Spec(key: "systemBackdropBlackHeart", kind: .bool(false)),
         Spec(key: "systemBackdropGreenFloral", kind: .bool(false)),
         Spec(key: "systemBackdropSage", kind: .bool(false)),
-        Spec(key: "systemBackdropPureWhite", kind: .bool(false)),
         Spec(key: "systemBackdropNeon", kind: .bool(false)),
         Spec(key: "systemBackdropPink", kind: .bool(false)),
         // Ngôn ngữ giao diện app (L10n) — mặc định "vi", không theo máy.
@@ -133,6 +129,7 @@ enum SettingValue: Equatable {
         case .bool: return s == "true" ? .bool(true) : s == "false" ? .bool(false) : nil
         case .int(_, let r): return Int(s).map { .int(min(max($0, r.lowerBound), r.upperBound)) }
         case .string(_, let allowed): return allowed.contains(s) ? .string(s) : nil
+        case .styleMap: return KeyStyleStore.normalize(s).map(SettingValue.string)
         }
     }
 }
@@ -244,6 +241,8 @@ enum BackupCodec {
                     if let i = intValue(raw) { out[k] = .int(min(max(i, r.lowerBound), r.upperBound)) }
                 case .string(_, let allowed):
                     if let t = raw as? String, allowed.contains(t) { out[k] = .string(t) }
+                case .styleMap:
+                    if let t = raw as? String, let n = KeyStyleStore.normalize(t) { out[k] = .string(n) }
                 }
             }
             p.settings = out

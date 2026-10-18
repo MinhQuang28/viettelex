@@ -701,11 +701,12 @@ final class KeyStyleTests: XCTestCase {
     /// Bàn phím thật: chữ 150% phông đơn cách rất đậm trên máy hẹp — phím chữ vừa phím, bo tròn.
     @MainActor func testKeyboardViewAppliesStyleAtLayout() {
         let d = UserDefaultsProvider.shared
-        let keys = [KeyStyle.labelColorKey, KeyStyle.fillColorKey, KeyStyle.cornerKey, KeyStyle.fontScaleKey,
-                    KeyStyle.fontKey, KeyStyle.weightKey]
+        let keys = [ThemeSettings.themeKey, KeyStyleStore.key] + KeyStyleStore.legacyKeys
         let saved = keys.map { d?.object(forKey: $0) }
         defer { for (k, v) in zip(keys, saved) { d?.set(v, forKey: k) } }
-        Self.custom.save(d)
+        for k in KeyStyleStore.legacyKeys { d?.removeObject(forKey: k) }
+        d?.set(KeyboardTheme.system.rawValue, forKey: ThemeSettings.themeKey)
+        d?.set(KeyStyleStore.serialize(["system": Self.custom]), forKey: KeyStyleStore.key)
         let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }
         let host = UIView(frame: CGRect(x: 0, y: 0, width: 320, height: 500))
         host.addSubview(kb)
@@ -734,28 +735,19 @@ final class KeyStyleTests: XCTestCase {
         let suite = "keystyle-rt-\(UUID().uuidString)"
         let d = UserDefaults(suiteName: suite)!
         defer { d.removePersistentDomain(forName: suite) }
-        XCTAssertEqual(KeyStyle.load(d), KeyStyle())                 // trống ⇒ mặc định
+        XCTAssertEqual(ThemeSettings.load(d).keyStyle, KeyStyle())  // trống ⇒ mặc định
         XCTAssertTrue(KeyStyle().isDefault)
         XCTAssertFalse(KeyStyle().customizesLabels)
-        Self.custom.save(d)
-        XCTAssertEqual(KeyStyle.load(d), Self.custom)
-        KeyStyle().save(d)                                            // giá trị canh ⇒ mặc định
-        XCTAssertEqual(d.integer(forKey: KeyStyle.labelColorKey), -1)
-        XCTAssertEqual(d.integer(forKey: KeyStyle.fontScaleKey), 0)
-        XCTAssertEqual(KeyStyle.load(d), KeyStyle())
-        // Rác / ngoài phạm vi.
-        d.set(0x1000000, forKey: KeyStyle.labelColorKey)
-        d.set(-7, forKey: KeyStyle.fillColorKey)
-        d.set(300, forKey: KeyStyle.cornerKey)
-        d.set(30, forKey: KeyStyle.fontScaleKey)
-        d.set("comic-sans", forKey: KeyStyle.fontKey)
-        d.set("ultra", forKey: KeyStyle.weightKey)
-        let g = KeyStyle.load(d)
-        XCTAssertNil(g.labelColor); XCTAssertNil(g.fillColor)
-        XCTAssertEqual(g.corner, 100); XCTAssertEqual(g.fontScale, 80)
-        XCTAssertEqual(g.font, .standard); XCTAssertEqual(g.weight, .regular)
-        d.set(999, forKey: KeyStyle.fontScaleKey)
-        XCTAssertEqual(KeyStyle.load(d).fontScale, 150)
+        XCTAssertEqual(KeyStyleStore.parse(KeyStyleStore.serialize(["mint": Self.custom]))["mint"], Self.custom)
+        XCTAssertEqual(KeyStyleStore.serialize(["mint": KeyStyle()]), "{}")   // mặc định ⇒ không có mục
+        // Rác / ngoài phạm vi (cùng luật khoá cũ).
+        let g = KeyStyleStore.parse(#"{"mint":{"label":16777216,"fill":-7,"corner":300,"fontScale":30,"font":"comic-sans","weight":"ultra","accent":true}}"#)["mint"]
+        XCTAssertNil(g?.labelColor); XCTAssertNil(g?.fillColor); XCTAssertNil(g?.accentColor)
+        XCTAssertEqual(g?.corner, 100); XCTAssertEqual(g?.fontScale, 80)
+        XCTAssertEqual(g?.font, .standard); XCTAssertEqual(g?.weight, .regular)
+        XCTAssertEqual(KeyStyleStore.parse(#"{"mint":{"fontScale":999}}"#)["mint"]?.fontScale, 150)
+        XCTAssertEqual(KeyStyleStore.parse("not json"), [:])
+        XCTAssertEqual(KeyStyleStore.parse(#"{"bad id!":{"corner":5},"ok":[1]}"#), [:])
         // Thuộc ThemeSettings: lưu cùng, "Khôi phục giao diện gốc" xoá.
         var s = ThemeSettings(theme: .mint)
         s.keyStyle = Self.custom
@@ -814,32 +806,29 @@ final class KeyStyleTests: XCTestCase {
 
     func testBackupIncludesKeyStyle() {
         let specs = BackupSettings.byKey
-        XCTAssertEqual(specs[KeyStyle.labelColorKey]?.kind, .int(-1, -1...0xFFFFFF))
-        XCTAssertEqual(specs[KeyStyle.fillColorKey]?.kind, .int(-1, -1...0xFFFFFF))
-        XCTAssertEqual(specs[KeyStyle.cornerKey]?.kind, .int(-1, -1...100))
-        XCTAssertEqual(specs[KeyStyle.fontScaleKey]?.kind, .int(0, 0...150))
-        XCTAssertEqual(specs[KeyStyle.fontKey]?.kind, .string("default", ["default", "rounded", "serif", "mono", "condensed"]))
-        XCTAssertEqual(specs[KeyStyle.weightKey]?.kind, .string("regular", ["light", "regular", "medium", "bold", "heavy"]))
+        XCTAssertEqual(specs[KeyStyleStore.key]?.kind, .styleMap)
+        for k in KeyStyleStore.legacyKeys { XCTAssertNil(specs[k], "khoá chung cũ \(k) không còn sao lưu") }
 
         let a = "keystyle-bk-a-\(UUID().uuidString)", b = "keystyle-bk-b-\(UUID().uuidString)"
         let da = UserDefaults(suiteName: a)!, db = UserDefaults(suiteName: b)!
         defer { da.removePersistentDomain(forName: a); db.removePersistentDomain(forName: b) }
-        Self.custom.save(da)
+        var s = ThemeSettings(theme: .mint)
+        s.keyStyle = Self.custom
+        s.setStyle(KeyStyle(accentColor: 0xD6336C), for: .system)
+        s.save(da)
         let exported = BackupStore(defaults: da, containerURL: nil).settings()
-        XCTAssertEqual(exported[KeyStyle.fillColorKey], .int(0x102030))
-        XCTAssertEqual(exported[KeyStyle.fontKey], .string("mono"))
+        XCTAssertEqual(exported[KeyStyleStore.key], .string(KeyStyleStore.serialize(s.keyStyles)))
         BackupStore(defaults: db, containerURL: nil).setSettings(exported)
-        XCTAssertEqual(KeyStyle.load(db), Self.custom)
-        // Máy chưa từng chỉnh: xuất giá trị canh = mặc định.
+        XCTAssertEqual(ThemeSettings.load(db).keyStyles, s.keyStyles)
+        // Máy chưa từng chỉnh: xuất "{}".
         let fresh = BackupStore(defaults: UserDefaults(suiteName: "keystyle-empty-\(UUID().uuidString)")!,
                                 containerURL: nil).settings()
-        XCTAssertEqual(fresh[KeyStyle.labelColorKey], .int(-1))
-        XCTAssertEqual(fresh[KeyStyle.fontScaleKey], .int(0))
+        XCTAssertEqual(fresh[KeyStyleStore.key], .string("{}"))
     }
 }
 
 
-/// Bản tối của theme pastel + bộ theme 10/2026 (Tim đen, Hoa xanh, Xanh lá, Trắng hồng, Neon, Hồng):
+/// Bản tối của theme pastel + bộ theme 10/2026 (Tim đen, Hoa xanh, Xanh lá, Neon, Hồng):
 /// bảng màu chung với Android (Fixtures/theme-palettes.tsv), độ đọc được, cổng Plus, hoạ tiết nền rẻ,
 /// và đi cùng độ trong suốt / ảnh nền / Nền theo hệ thống / Tuỳ chỉnh nâng cao ở chế độ tối.
 final class ThemeSetTests: XCTestCase {
@@ -863,7 +852,7 @@ final class ThemeSetTests: XCTestCase {
         super.tearDown()
     }
 
-    static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .pureWhite, .neon, .pink]
+    static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .neon, .pink]
     static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
 
     // MARK: bảng màu chung iOS ↔ Android
@@ -899,7 +888,7 @@ final class ThemeSetTests: XCTestCase {
         let f = try fixture()
         XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
         XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
-        XCTAssertEqual(f.rows.count, 24)
+        XCTAssertEqual(f.rows.count, 22)
         for r in f.rows {
             let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
             let p = t.palette(systemDark: r.dark)
@@ -914,7 +903,7 @@ final class ThemeSetTests: XCTestCase {
     // MARK: bản tối
 
     func testDarkVariantsKeepHueFamilyAndAccent() {
-        for t in Self.pastels + [.greenFloral, .sage, .pureWhite, .pink] {
+        for t in Self.pastels + [.greenFloral, .sage, .pink] {
             let light = t.palette(systemDark: false), dark = t.palette(systemDark: true)
             XCTAssertNotEqual(light, dark, t.rawValue)
             XCTAssertFalse(light.isDark, t.rawValue)
@@ -924,7 +913,7 @@ final class ThemeSetTests: XCTestCase {
             XCTAssertEqual(light.accent, dark.accent, "\(t) giữ màu nhấn")
             // Cùng họ màu: kênh trội của nền tối = kênh trội của nền sáng (hồng / xanh / tím…).
             func dominant(_ c: RGBA) -> Int { [c.r, c.g, c.b].enumerated().max { $0.element < $1.element }!.offset }
-            if t != .pureWhite { XCTAssertEqual(dominant(light.background!), dominant(dark.background!), t.rawValue) }
+            XCTAssertEqual(dominant(light.background!), dominant(dark.background!), t.rawValue)
         }
     }
 

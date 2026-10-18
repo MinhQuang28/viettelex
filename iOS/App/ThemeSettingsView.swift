@@ -100,9 +100,9 @@ struct ThemeSettingsView: View {
                     ThemePickerView(settings: $settings, onChange: save)
                 } label: {
                     HStack(spacing: 12) {
-                        ThemePreview(palette: settings.theme.palette(systemDark: scheme == .dark),
+                        ThemePreview(palette: settings.cardPalette(for: settings.theme, systemDark: scheme == .dark),
                                      wallpaper: nil, dim: 0, large: false,
-                                     keyStyle: KeyStyle(corner: settings.theme.defaultCorner))
+                                     keyStyle: settings.effectiveStyle(for: settings.theme))
                             .frame(width: 56, height: 36)
                             .clipShape(RoundedRectangle(cornerRadius: 6))
                             .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
@@ -277,7 +277,7 @@ struct ThemeSettingsView: View {
                 }
             }
         } footer: {
-            Text(L("Màu chữ và màu nền phím, độ bo góc, cỡ chữ, phông và độ đậm. Mỗi màu dùng chung cho giao diện sáng lẫn tối; “Theo theme” trả về màu của theme."))
+            Text(L("Màu chữ, màu nền phím, màu nhấn, độ bo góc, cỡ chữ, phông và độ đậm — lưu riêng cho từng giao diện. Mỗi màu dùng chung cho sáng lẫn tối; “Theo theme” trả về màu của theme."))
         }
     }
 
@@ -286,6 +286,8 @@ struct ThemeSettingsView: View {
                                        wallpaperActive: settings.wallpaperActive(fileExists: hasWallpaperFile))
         colorRow(L("Màu chữ trên phím"), \.labelColor, current: palette.keyInk)
         colorRow(L("Màu nền phím"), \.fillColor, current: palette.keyFill)
+        // Nhập/hành động, ⇧ bật, vệt gõ vuốt — chữ trên nó tự đổi đen/trắng nếu cần.
+        colorRow(L("Màu nhấn"), \.accentColor, current: palette.accent)
         VStack(alignment: .leading) {
             HStack {
                 Text(settings.keyStyle.corner.map { L("Độ bo góc phím: %@%", $0) } ?? L("Độ bo góc phím: mặc định"))
@@ -329,7 +331,8 @@ struct ThemeSettingsView: View {
                                               set: { settings.keyStyle.weight = $0; save() })) {
             ForEach(KeyLabelWeight.allCases, id: \.self) { w in Text(w.title).tag(w) }
         }
-        Button(L("Đặt lại tuỳ chỉnh nâng cao"), role: .destructive) { settings.keyStyle = KeyStyle(); save() }
+        // Chỉ theme đang chọn — tuỳ chỉnh của theme khác giữ nguyên.
+        Button(L("Đặt lại về mặc định của giao diện"), role: .destructive) { settings.keyStyle = KeyStyle(); save() }
             .disabled(settings.keyStyle.isDefault)
     }
 
@@ -647,9 +650,10 @@ struct ThemePickerView: View {
             }
         } label: {
             VStack(spacing: 6) {
-                ThemePreview(palette: t.palette(systemDark: scheme == .dark),
+                // Thẻ phản ánh tuỳ chỉnh riêng của theme đó (rẻ: vài phép màu, không ảnh).
+                ThemePreview(palette: settings.cardPalette(for: t, systemDark: scheme == .dark),
                              wallpaper: nil, dim: 0, large: false,
-                             keyStyle: KeyStyle(corner: t.defaultCorner))
+                             keyStyle: settings.effectiveStyle(for: t))
                     .frame(height: 78)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10)

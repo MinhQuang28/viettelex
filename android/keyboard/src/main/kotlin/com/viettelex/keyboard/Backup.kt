@@ -25,6 +25,8 @@ sealed class SettingKind {
     data class IntRange(val default: Int, val range: kotlin.ranges.IntRange) : SettingKind()
     /** Chuỗi thuộc tập [allowed] (vd uiLanguage "vi"/"en"); giá trị lạ bỏ qua. */
     data class Choice(val default: String, val allowed: Set<String>) : SettingKind()
+    /** Chuỗi JSON "Tuỳ chỉnh nâng cao" theo theme ([KeyStyleStore]) — chuẩn hoá khi đọc/ghi, mặc định "{}". */
+    object StyleMap : SettingKind()
 }
 
 object BackupSettings {
@@ -83,14 +85,10 @@ object BackupSettings {
         Spec(Keys.AUTO_SPACE_AFTER_PUNCT, SettingKind.Bool(false)),
         Spec(Keys.KEYBOARD_TRANSPARENCY, SettingKind.IntRange(0, 0..100)),
         Spec(Keys.KEY_LABEL_TRANSPARENCY, SettingKind.IntRange(0, 0..100)),
-        // "Tuỳ chỉnh nâng cao" (Plus, [KeyStyle]) — cùng khoá + giá trị canh với iOS.
-        Spec(Keys.KEY_LABEL_COLOR, SettingKind.IntRange(-1, KeyStyle.COLOR_RANGE)),
-        Spec(Keys.KEY_FILL_COLOR, SettingKind.IntRange(-1, KeyStyle.COLOR_RANGE)),
-        Spec(Keys.KEY_CORNER_RADIUS, SettingKind.IntRange(-1, KeyStyle.CORNER_RANGE)),
-        Spec(Keys.KEY_FONT_SCALE, SettingKind.IntRange(0, KeyStyle.FONT_SCALE_RANGE)),
-        // "rounded" (chỉ iOS) vẫn nhận để khứ hồi; bàn phím Android vẽ như mặc định.
-        Spec(Keys.KEY_LABEL_FONT, SettingKind.Choice(KeyLabelFont.DEFAULT.id, KeyLabelFont.IDS)),
-        Spec(Keys.KEY_LABEL_WEIGHT, SettingKind.Choice(KeyLabelWeight.REGULAR.id, KeyLabelWeight.IDS)),
+        // "Tuỳ chỉnh nâng cao" (Plus) RIÊNG từng theme — MỘT chuỗi JSON chuẩn ([KeyStyleStore]), cùng khoá +
+        // định dạng iOS. Khoá chung cũ (keyLabelColor…) không còn sao lưu: file cũ có chúng ⇒ bỏ qua như
+        // key lạ. "rounded" (chỉ iOS) vẫn giữ để khứ hồi; bàn phím Android vẽ như mặc định.
+        Spec(Keys.KEY_STYLES, SettingKind.StyleMap),
         Spec(Keys.UI_LANGUAGE, SettingKind.Choice(L10n.DEFAULT, L10n.supported)),
         // Ngôn ngữ đích của Dịch trên máy (gói model KHÔNG đi theo — máy mới tải lại trong app).
         Spec(Keys.TRANSLATE_TARGET, SettingKind.Choice(TranslateLangs.DEFAULT_TARGET, TranslateLangs.TARGETS)),
@@ -184,6 +182,7 @@ object BackupCodec {
                     is SettingKind.Bool -> (raw as? Boolean)?.let { out[k] = it }
                     is SettingKind.IntRange -> intValue(raw)?.let { out[k] = it.coerceIn(kind.range) }
                     is SettingKind.Choice -> (raw as? String)?.takeIf { it in kind.allowed }?.let { out[k] = it }
+                    SettingKind.StyleMap -> (raw as? String)?.let(KeyStyleStore::normalize)?.let { out[k] = it }
                 }
             }
             out
@@ -274,6 +273,7 @@ object BackupPrefs {
             is SettingKind.Bool -> out[spec.key] = (read(spec.key) as? Boolean) ?: k.default
             is SettingKind.IntRange -> out[spec.key] = ((read(spec.key) as? Number)?.toInt() ?: k.default).coerceIn(k.range)
             is SettingKind.Choice -> out[spec.key] = (read(spec.key) as? String)?.takeIf { it in k.allowed } ?: k.default
+            SettingKind.StyleMap -> out[spec.key] = (read(spec.key) as? String)?.let(KeyStyleStore::normalize) ?: KeyStyleStore.EMPTY
         }
         return out
     }
