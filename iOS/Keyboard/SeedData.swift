@@ -2,12 +2,12 @@
 // Scripts/seed-curated.txt rồi chạy lại). Seed ban đầu cho UserLangModel (lần đầu chạy / sau khi
 // user bấm "Xoá từ đã học"). 797 âm tiết + 600 cặp từ corpus hội thoại
 // (OpenSubtitles v2024 + lát diễn đàn FineWeb-2 + Tatoeba — docs/DATA-SOURCES.md mục "SeedData") +
-// lớp chọn tay 339 từ / 333 cặp (chat/teencode, từ tiếng Anh cap ≤ 18, tên riêng, từ nhạy cảm).
+// lớp chọn tay 381 từ / 400 cặp (chat/teencode, từ tiếng Anh cap ≤ 18, tên riêng, từ nhạy cảm).
 // Weight log-scale 50·(c/c_max)^0.3, max 50 — user gõ thật (+1/lần, accepted +2) sẽ vượt seed sau
 // vài ngày; decay tuần làm seed mờ dần.
 import Foundation
 
-// PERF: computed var (không phải stored let) — literal ~2000 entries chỉ build
+// PERF: computed var (không phải stored let) — literal ~2100 entries chỉ build
 // khi thật sự seed (store trống), giải phóng ngay sau đó thay vì găm
 // ~150-250KB suốt đời keyboard; seedIfEmpty nhận @autoclosure nên store đã có
 // dữ liệu thì literal không bao giờ được build.
@@ -118,18 +118,19 @@ enum SeedData {
         "hihi": 12, "oke": 12, "hehe": 10, "okay": 10, "ừm": 10, "check": 8, "hello": 8, "huhu": 8,
         "ib": 8, "rep": 8, "sorry": 8, "thanks": 8, "uhm": 8, "good": 7, "meeting": 7, "team": 7,
         "update": 7, "bye": 6, "deadline": 6, "file": 6, "game": 6, "happy": 6, "link": 6, "love": 6,
-        "okie": 6, "ship": 6, "thank": 6, "yes": 6, "birthday": 5, "call": 5, "chat": 5, "chill": 5,
-        "confirm": 5, "email": 5, "like": 5, "morning": 5, "nice": 5, "night": 5, "project": 5, "task": 5,
-        "test": 5, "uk": 5, "app": 4, "clip": 4, "demo": 4, "feedback": 4, "fix": 4, "free": 4,
-        "full": 4, "grab": 4, "kaka": 4, "mail": 4, "meet": 4, "miss": 4, "new": 4, "off": 4,
-        "order": 4, "plan": 4, "report": 4, "review": 4, "share": 4, "shop": 4, "support": 4, "sđt": 4,
-        "time": 4, "vd": 4, "video": 4, "wifi": 4, "wow": 4, "zalo": 4, "add": 3, "best": 3,
-        "book": 3, "cafe": 3, "cmt": 3, "content": 3, "cool": 3, "data": 3, "face": 3, "follow": 3,
-        "form": 3, "gym": 3, "hot": 3, "inbox": 3, "live": 3, "lol": 3, "menu": 3, "party": 3,
-        "phone": 3, "please": 3, "post": 3, "pro": 3, "reply": 3, "sale": 3, "see": 3, "size": 3,
-        "start": 3, "stt": 3, "top": 3, "trip": 3, "vip": 3, "voucher": 3, "web": 3, "welcome": 3,
-        "care": 2, "combo": 2, "date": 2, "flex": 2, "kb": 2, "max": 2, "old": 2, "oops": 2,
-        "part": 2, "relax": 2, "stop": 2, "store": 2, "story": 2, "vibe": 2, "view": 2,
+        "okie": 6, "ship": 6, "thank": 6, "you": 8, "it": 5, "yes": 6, "birthday": 5, "call": 5,
+        "chat": 5, "chill": 5, "confirm": 5, "email": 5, "like": 5, "morning": 5, "nice": 5, "night": 5,
+        "project": 5, "task": 5, "test": 5, "uk": 5, "app": 4, "clip": 4, "demo": 4, "feedback": 4,
+        "fix": 4, "free": 4, "full": 4, "grab": 4, "kaka": 4, "mail": 4, "meet": 4, "miss": 4,
+        "new": 4, "off": 4, "order": 4, "plan": 4, "report": 4, "review": 4, "share": 4, "shop": 4,
+        "support": 4, "sđt": 4, "time": 4, "vd": 4, "video": 4, "wifi": 4, "wow": 4, "zalo": 4,
+        "add": 3, "best": 3, "book": 3, "cafe": 3, "cmt": 3, "content": 3, "cool": 3, "data": 3,
+        "face": 3, "follow": 3, "form": 3, "gym": 3, "hot": 3, "inbox": 3, "live": 3, "lol": 3,
+        "menu": 3, "party": 3, "phone": 3, "please": 3, "post": 3, "pro": 3, "reply": 3, "sale": 3,
+        "see": 3, "size": 3, "start": 3, "stt": 3, "top": 3, "trip": 3, "vip": 3, "voucher": 3,
+        "web": 3, "welcome": 3, "care": 2, "combo": 2, "date": 2, "flex": 2, "kb": 2, "max": 2,
+        "old": 2, "oops": 2, "part": 2, "relax": 2, "stop": 2, "store": 2, "story": 2, "vibe": 2,
+        "view": 2,
         // — bổ sung 2026-07-24: địa danh VN/quốc tế, thương hiệu, tech —
         "gòn": 12, "hà": 12, "sài": 12, "nẵng": 10, "đà": 10, "dương": 8, "facebook": 8, "google": 8,
         "huế": 8, "hàn": 8, "hải": 8, "long": 8, "lạt": 8, "màn": 8, "nga": 8, "phím": 8,
@@ -164,7 +165,12 @@ enum SeedData {
         "vãi": 10, "cmnr": 5, "chửi": 8, "cướp": 6, "hiếp": 3, "trộm": 5, "fuck": 5, "shit": 5,
         "lừa": 7, "đểu": 5, "xạo": 6, "lồn": 5, "địt": 5, "đụ": 4, "đĩ": 4, "tml": 5,
         "sml": 5, "dâm": 4, "dê": 4, "tĩu": 3, "thối": 5, "um": 3, "rắm": 4, "sấp": 4,
-        "ngu": 8, "si": 4, "đần": 4, "độn": 3, "tha": 4, "má": 8,
+        "ngu": 8, "si": 4, "đần": 4, "độn": 3, "tha": 4, "má": 8, "cặc": 4, "buồi": 3,
+        "đéo": 5, "nứng": 3, "chịch": 3, "trym": 2, "loz": 3, "cmm": 3, "cmn": 3, "đmm": 3,
+        "dmm": 3, "đcmm": 2, "dcmm": 2, "clm": 2, "clg": 2, "vcc": 2, "dume": 2, "motherfucker": 3,
+        "asshole": 3, "bullshit": 4, "dick": 3, "dickhead": 2, "pussy": 3, "bastard": 3, "dumbass": 3, "fucking": 4,
+        "fucked": 3, "fucker": 2, "shitty": 2, "stfu": 3, "damn": 4, "piss": 3, "cl": 4, "dcm": 3,
+        "đkm": 3, "dkm": 3, "điếm": 3, "buscu": 2, "bitch": 4, "wtf": 4,
     ] }
 
     static var bigrams: [(String, String, Int)] { [
@@ -362,6 +368,19 @@ enum SeedData {
         ("bố", "mày", 7), ("con", "đĩ", 4), ("thằng", "mặt", 4), ("mặt", "lồn", 4), ("dâm", "dê", 4),
         ("tục", "tĩu", 4), ("cả", "lồn", 4), ("đụ", "má", 4), ("má", "mày", 4), ("thối", "um", 3),
         ("đánh", "rắm", 4), ("sấp", "mặt", 5), ("ngu", "si", 4), ("đần", "độn", 4), ("thối", "tha", 4),
-        ("khốn", "nạn", 6), ("mất", "dạy", 4),
+        ("khốn", "nạn", 6), ("mất", "dạy", 4), ("bú", "lồn", 4), ("bú", "cặc", 4), ("bú", "buồi", 3),
+        ("liếm", "lồn", 4), ("liếm", "buồi", 3), ("móc", "lồn", 3), ("nứng", "lồn", 3), ("hãm", "lồn", 3),
+        ("cái", "lồn", 4), ("thằng", "lồn", 3), ("như", "lồn", 3), ("địt", "nhau", 4), ("đụ", "nhau", 3),
+        ("đụ", "mẹ", 4), ("chịch", "nhau", 4), ("sờ", "trym", 2), ("đầu", "buồi", 4), ("đầu", "cặc", 3),
+        ("mặt", "cặc", 3), ("vãi", "cặc", 4), ("con", "cặc", 3), ("như", "cặc", 3), ("vãi", "cứt", 4),
+        ("đồ", "đĩ", 3), ("hiếp", "dâm", 4), ("đéo", "biết", 5), ("đéo", "hiểu", 4), ("đéo", "cần", 4),
+        ("đéo", "có", 4), ("đéo", "phải", 4), ("đéo", "gì", 3), ("cái", "đéo", 4), ("thế", "đéo", 3),
+        ("đm", "mày", 4), ("đcm", "mày", 3), ("đẹp", "vl", 3), ("hay", "vl", 3), ("fuck", "off", 4),
+        ("holy", "shit", 4), ("oh", "shit", 3), ("damn", "it", 4), ("piss", "off", 3), ("hãm", "hiếp", 3),
+        ("lăng", "nhăng", 4), ("lăng", "loàn", 3), ("vãi", "đái", 3), ("thằng", "chó", 3), ("đồ", "chó", 3),
+        ("óc", "chó", 4), ("chó", "chết", 3), ("chó", "má", 3), ("như", "chó", 3), ("thằng", "ngu", 4),
+        ("đồ", "ngu", 4), ("thằng", "khốn", 3), ("đồ", "khốn", 3), ("thằng", "điên", 3), ("đồ", "điên", 3),
+        ("mẹ", "mày", 3), ("con", "gà", 4), ("nâng", "bi", 2), ("nâng", "cấp", 5), ("nâng", "cao", 5),
+        ("sờ", "vào", 4), ("sờ", "chim", 2), ("sờ", "cu", 2), ("rờ", "cu", 2),
     ] }
 }

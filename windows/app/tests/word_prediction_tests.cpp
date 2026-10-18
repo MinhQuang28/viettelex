@@ -245,6 +245,23 @@ TEST(prediction_macos_assertions) {
         for (const auto& w : split(cands(t, t, t), '|')) CHECK(w.empty() || !predict::isSensitive(U(w)));
 }
 
+// = macOS testVulgarPairsGatedByFilter: the vulgar seed pairs added 18/10/2026 (bú lồn, đầu buồi…)
+// never surface with the filter on; English vulgar words (absent from enlexicon) only with it off.
+TEST(prediction_vulgar_pairs_gated_by_filter) {
+    for (const char* p : {"bú ", "liếm ", "móc ", "nứng ", "đầu ", "cái ", "thằng ", "con ", "như ", "vãi ", "mặt ", "sờ ", "hãm "})
+        for (const auto& w : split(cands(p), '|')) CHECK(w.empty() || !predict::isSensitive(U(w)));
+    CHECK_EQ(cands("bú "), std::string());
+    CHECK(split(cands("bú ", "", "", false, false), '|')[0] == "lồn");
+    CHECK(cands("motherf", "motherf", "motherf", true).find("motherfucker") == std::string::npos);
+    CHECK(split(cands("motherf", "motherf", "motherf", true, false), '|')[0] == "motherfucker");
+    CHECK(split(cands("Fuc", "Fuc", "Fuc", true, false), '|')[0] == "Fuck");
+    CHECK(split(cands("holy ", "", "", true, false), '|')[0] == "shit");
+    CHECK_EQ(cands("holy ", "", "", true), std::string());
+    CHECK(predict::isEnglishVulgar(U("Bullshit")) && predict::isSensitive(U("bullshit")) && !predict::isSensitive(U("damn")));
+    const std::vector<std::pair<std::u32string, int>> en = {{U("full"), 200}, {U("fun"), 120}};
+    CHECK_EQ(join(predict::withVulgarEnglish(en, U("fu"))), std::string("full|fuck|fucking|fucked|fucker|fun"));
+}
+
 // Phil 16/10/2026: "Tên " -> "gọi" was a one-word bigram guess. The static LM needs two
 // context words AND a trigram row; one context word only through an iOS seed pair.
 TEST(prediction_next_word_needs_two_word_trigram_or_seed) {

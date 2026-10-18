@@ -101,6 +101,11 @@ bool casingEvidence(const std::u32string& word, const std::u32string& prev);
 // SuggestionCase.display(w, shift: .off, typed:).
 std::u32string suggestionCase(const std::u32string& w, const std::u32string& typed);
 bool isSensitive(const std::u32string& w);  // SensitiveWords.set (lowercased)
+bool isEnglishVulgar(const std::u32string& w);  // SensitiveWords.english (lowercased)
+// PredictionLogic.withVulgarEnglish: filter OFF — merge the English vulgar words (absent from
+// enlexicon) starting with `typed` into (word, lexicon freq) hits at SensitiveWords.englishFreq.
+std::vector<std::u32string> withVulgarEnglish(const std::vector<std::pair<std::u32string, int>>& en,
+                                              const std::u32string& typed);
 // SeedData.unigrams count (0 if absent).
 int seedCount(const std::string& utf8Lower);
 // SeedNextData (seed_next.inc): UserLangModel.nextWords(after: prev, limit: 24) of a new iOS

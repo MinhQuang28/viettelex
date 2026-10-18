@@ -235,8 +235,8 @@ class SeedDataTests {
 
     @Test fun testSeedSizesMatchIOS() {
         val s = SeedData.load()
-        assertEquals(1139, s.unigrams.size)
-        assertEquals(933, s.bigrams.size)
+        assertEquals(1181, s.unigrams.size)
+        assertEquals(1000, s.bigrams.size)
     }
 }
 
@@ -275,6 +275,31 @@ class SensitiveWordsTests {
         assertEquals(listOf("vui", "cảm"), SensitiveWords.filter(words, true))
         assertEquals(words, SensitiveWords.filter(words, false))
         assertEquals(listOf("cướp", "giết"), SensitiveWords.filter(listOf("cướp", "giết"), true))
+    }
+}
+
+/** Song sinh iOS SensitiveWordsTests.testSeedVulgarPairsGated: cặp tục bổ sung 18/10/2026 nằm trong seed
+ *  nhưng bật lọc thì từ kế tiếp không bao giờ là từ nhạy cảm. */
+class SeedVulgarPairsTests {
+    @Before fun setUp() = TestAssets.install()
+
+    @Test fun testSeedVulgarPairsGated() {
+        for (w in SensitiveWords.set) assertTrue("từ lọc thiếu trong seed: $w", (SeedData.unigrams[w] ?: 0) > 0)
+        assertFalse("từ nhẹ không lọc", "damn" in SensitiveWords.set)
+        val m = UserLangModel()
+        m.isKnownWord = { VNSuggest.contains(it) }
+        m.seedIfEmpty(SeedData.unigrams, SeedData.bigrams)
+        for (prev in SeedData.bigrams.map { it.first }.toSet()) {
+            val on = SensitiveWords.filter(m.nextWords(prev, limit = 24), true)
+            assertTrue("$prev: $on", on.none { it.lowercase() in SensitiveWords.set })
+        }
+        assertEquals(emptyList<String>(), SensitiveWords.filter(m.nextWords("bú", limit = 6), true))
+        assertEquals("lồn", m.nextWords("bú", limit = 6).first())
+        assertEquals(listOf("tiên", "tư"), SensitiveWords.filter(m.nextWords("đầu", limit = 3), true))
+        assertEquals(listOf("vào"), m.nextWords("sờ", limit = 1))
+        assertEquals(listOf("cao"), m.nextWords("nâng", limit = 1))
+        assertEquals(listOf("you"), m.nextWords("thank", limit = 1))
+        assertEquals(emptyList<String>(), SensitiveWords.filter(m.nextWords("holy", limit = 3), true))
     }
 }
 

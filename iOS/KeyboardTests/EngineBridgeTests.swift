@@ -319,6 +319,28 @@ final class SensitiveWordsTests: XCTestCase {
         // từ bạo lực phổ thông KHÔNG bị lọc (từ vựng đời thường/báo chí)
         XCTAssertEqual(SensitiveWords.filter(["cướp", "giết"], enabled: true), ["cướp", "giết"])
     }
+
+    /// Cặp tục/tình dục bổ sung 18/10/2026 (bú lồn, địt nhau, đéo biết, holy shit…): nằm trong seed nhưng
+    /// bật lọc (mặc định) thì từ kế tiếp KHÔNG BAO GIỜ là từ nhạy cảm; tắt lọc mới hiện.
+    func testSeedVulgarPairsGated() {
+        XCTAssertTrue(Set(SensitiveWords.english).isSubset(of: SensitiveWords.set))
+        for w in SensitiveWords.set { XCTAssertGreaterThan(SeedData.unigrams[w] ?? 0, 0, "từ lọc thiếu trong seed: \(w)") }
+        XCTAssertFalse(SensitiveWords.set.contains("damn"), "từ nhẹ không lọc")
+        let m = UserLangModel(appGroup: nil)
+        m.isKnownWord = { VNSuggest.contains($0) }
+        m.seedIfEmpty(unigrams: SeedData.unigrams, bigrams: SeedData.bigrams)
+        for prev in Set(SeedData.bigrams.map(\.0)) {
+            let on = SensitiveWords.filter(m.nextWords(after: prev, limit: 24), enabled: true)
+            XCTAssertTrue(on.allSatisfy { !SensitiveWords.set.contains($0.lowercased()) }, "\(prev): \(on)")
+        }
+        XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "bú", limit: 6), enabled: true), [])
+        XCTAssertEqual(m.nextWords(after: "bú", limit: 6).first, "lồn")
+        XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "đầu", limit: 3), enabled: true), ["tiên", "tư"])
+        XCTAssertEqual(m.nextWords(after: "sờ", limit: 1), ["vào"], "chim/cu không đứng đầu sau sờ")
+        XCTAssertEqual(m.nextWords(after: "nâng", limit: 1), ["cao"], "bi không đứng đầu sau nâng")
+        XCTAssertEqual(m.nextWords(after: "thank", limit: 1), ["you"])
+        XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "holy", limit: 3), enabled: true), [])
+    }
 }
 
 final class SeedOrderTests: XCTestCase {
