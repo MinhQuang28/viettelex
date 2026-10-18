@@ -129,6 +129,12 @@ final class TelexInputController: IMKInputController {
     private var edgeEchoBackspaces = 0
     private var edgeEchoChunks: [String] = []
     private var edgeEchoStampNs: UInt64 = 0
+    /// Return/Tab/Esc mình nuốt + re-post sau khi chốt từ, và phím thật vượt lên trước
+    /// bản sao đó — xem RepostOrder (field 18/10/2026: "- abc" ⏎ "- def" → "- abc- " ⏎ "def").
+    private var repostOrder = RepostOrder()
+    /// ≠ nil: bản re-post đầu hàng còn chờ hẹn giờ (web editor marked, 60ms) — phím vượt
+    /// xếp ở đây và chỉ được post SAU khi Return/Tab đó đã post.
+    private var repostHeld: [(key: CGKeyCode, flags: CGEventFlags)]?
 
     // Consecutive failed in-place read-back probes per bundleID. A single failure is
     // usually the app being busy during the probe, not a real incompatibility, so we
@@ -323,6 +329,23 @@ final class TelexInputController: IMKInputController {
         guard event.type == .keyDown,
               let client = sender as? IMKTextInput else { return false }
 
+        // Phím thật tới khi bản re-post Return/Tab của mình chưa quay lại = app đã xếp nó
+        // TRƯỚC Return ⇒ nuốt, post lại sau bản sao (RepostOrder). Trước MỌI xử lý khác:
+        // phím này chưa được phép đụng tới văn bản / trạng thái (gợi ý, dấu cách vừa nhận…).
+        var repostedUserKey = false
+        if !repostOrder.isEmpty {
+            let magic = SyntheticKeyboard.isSyntheticMagic(event)
+            switch repostOrder.classify(keyCode: event.keyCode, synthetic: magic,
+                                        nowNs: DispatchTime.now().uptimeNanoseconds) {
+            case .overtook:
+                if holdBehindRepost(event) { return true }
+            case .userKeyEcho:
+                repostedUserKey = magic      // bản sao nguồn riêng còn magic: vẫn là phím của user
+            case .boundaryEcho, .normal:
+                break
+            }
+        }
+
         // Bảng Công cụ đang mở mà phím vẫn tới IME ⇒ user gõ tiếp: đóng (một lần đọc
         // static khi không có panel).
         if TextToolsPanel.current != nil {
@@ -385,7 +408,7 @@ final class TelexInputController: IMKInputController {
                 + "srcPid=\(srcPid) myPid=\(getpid())")
         }
 
-        if synth {
+        if synth, !repostedUserKey {
             // An edge-burst echo that arrived with its magic INTACT (older macOS)
             // must still spend its slot, or the budget wedges and eats a real key.
             if event.keyCode == kDelete, edgeEchoBackspaces > 0 { edgeEchoBackspaces -= 1 }
@@ -870,11 +893,15 @@ final class TelexInputController: IMKInputController {
                 if let ms = Self.boundaryRepostDelayMs(markedWebField: markedNow
                                                         && FocusedFieldDetector.wantsMarkedField) {
                     logDecision("boundary re-post hoãn \(ms)ms (marked web editor)")
-                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(ms)) {
+                    repostOrder.expect(.boundary(event.keyCode), nowNs: DispatchTime.now().uptimeNanoseconds)
+                    repostHeld = repostHeld ?? []
+                    DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(ms)) { [weak self] in
                         SyntheticKeyboard.postBoundaryKey(key, flags: flags)
+                        self?.flushHeldBehindRepost()
                     }
                 } else {
                     SyntheticKeyboard.postBoundaryCopy(of: cg)
+                    repostOrder.expect(.boundary(event.keyCode), nowNs: DispatchTime.now().uptimeNanoseconds)
                 }
                 return true
             }
@@ -2096,6 +2123,35 @@ final class TelexInputController: IMKInputController {
         return true
     }
 
+    // MARK: - Thứ tự phím quanh bản re-post Return/Tab (RepostOrder)
+
+    /// Phím thật vượt bản re-post: nuốt và post lại SAU nó (hoặc xếp hàng nếu bản re-post
+    /// còn chờ hẹn giờ). false = không post được (không Trợ năng) ⇒ xử lý phím như thường.
+    private func holdBehindRepost(_ event: NSEvent) -> Bool {
+        guard Accessibility.isTrusted else { repostOrder.reset(); repostHeld = nil; return false }
+        let key = CGKeyCode(event.keyCode)
+        // Cờ của NSEvent (cùng vị trí bit với CGEventFlags) hợp với cờ CGEvent: một trong hai
+        // có thể thiếu Shift tuỳ nguồn sự kiện — mất Shift thì "*" thành "8".
+        let nsFlags = CGEventFlags(rawValue: UInt64(event.modifierFlags
+            .intersection(.deviceIndependentFlagsMask).rawValue))
+        let flags = (event.cgEvent?.flags ?? []).union(nsFlags)
+        if repostHeld != nil {
+            repostHeld?.append((key, flags))
+        } else if !SyntheticKeyboard.postKeyCopy(key, flags: flags) {
+            return false
+        }
+        repostOrder.expect(.userKey(event.keyCode), nowNs: DispatchTime.now().uptimeNanoseconds)
+        logDecision("repost-order: key \(event.keyCode) overtook the boundary re-post → re-posted behind it")
+        return true
+    }
+
+    /// Hẹn giờ re-post (web editor marked) vừa post Return/Tab: giờ mới tới các phím vượt.
+    private func flushHeldBehindRepost() {
+        let held = repostHeld ?? []
+        repostHeld = nil
+        for k in held { SyntheticKeyboard.postKeyCopy(k.key, flags: k.flags) }
+    }
+
     // MARK: - Cài đặt Nhập văn bản của macOS (SystemAutoText.swift)
 
     /// Phím cách thứ hai (dấu chấm khi nhấn đúp) hoặc "-" thứ hai ("--" → "—") khi
@@ -3305,5 +3361,71 @@ private func isBracket(_ c: UInt8) -> Bool {
         return true
     default:
         return false
+    }
+}
+
+/// Thứ tự phím quanh một lần nuốt + re-post Return/Tab/Esc (TelexInputController, nhánh
+/// `rewrote` của phím ranh giới). Field 18/10/2026: "- abc" ⏎ "- def" ra "- abc- " ⏎ "def"
+/// (dấu cách cuối dòng 1 trước Enter thì không bị — khi đó engine rỗng, Enter không bị
+/// nuốt). Bản sao đi vào CUỐI hàng sự kiện, nhưng phím user gõ tiếp có thể ĐÃ nằm trong
+/// hàng của app (app đang chờ handle() của Enter trả lời; web editor marked còn hoãn 60ms)
+/// ⇒ app nhận "-", " " rồi mới tới Return. Cách giữ thứ tự: mọi phím thật tới khi bản sao
+/// còn chờ = "vượt" ⇒ nuốt và post lại sau nó; bản sao quay lại (đúng keycode đầu hàng)
+/// đi tiếp như thường. Hàng tự xoá sau `staleNs` không thấy bản sao (bị hệ thống bỏ) —
+/// không bao giờ kẹt bàn phím. Pure — AppTests ghim.
+struct RepostOrder: Equatable {
+    enum Entry: Equatable {
+        case boundary(UInt16)   // Return/Tab/Esc mình re-post
+        case userKey(UInt16)    // phím thật đã vượt, mình post lại sau bản sao
+        var keyCode: UInt16 {
+            switch self { case let .boundary(k), let .userKey(k): return k }
+        }
+    }
+    enum Verdict: Equatable { case normal, boundaryEcho, userKeyEcho, overtook }
+
+    /// Đầu hàng chờ quá lâu ⇒ bản sao đã mất: bỏ cả hàng (tính từ lúc ĐẦU hàng được post,
+    /// không phải phím vượt gần nhất — phím vượt liên tục không được giữ hàng sống mãi).
+    static let staleNs: UInt64 = 500_000_000
+    /// Trần an toàn: hơn chừng này phím vượt thì chắc chắn có gì sai — buông, gõ như thường.
+    static let maxAwaiting = 16
+    private(set) var awaiting: [Entry] = []
+    private var headNs: UInt64 = 0
+
+    var isEmpty: Bool { awaiting.isEmpty }
+
+    mutating func expect(_ e: Entry, nowNs: UInt64) {
+        if awaiting.isEmpty { headNs = nowNs }
+        awaiting.append(e)
+    }
+
+    mutating func reset() { awaiting.removeAll() }
+
+    /// `synthetic` = phím mang magic (bản sao nguồn riêng còn nguyên magic — macOS cũ):
+    /// chỉ khớp hàng mới tính, không bao giờ là "vượt" (echo burst của mình).
+    mutating func classify(keyCode: UInt16, synthetic: Bool, nowNs: UInt64) -> Verdict {
+        guard let head = awaiting.first else { return .normal }
+        if nowNs &- headNs > Self.staleNs || awaiting.count >= Self.maxAwaiting {
+            awaiting.removeAll()
+            return .normal
+        }
+        if keyCode == head.keyCode {
+            pop(nowNs)
+            if case .userKey = head { return .userKeyEcho }
+            return .boundaryEcho
+        }
+        // Bản sao phím vượt quay lại mà Return/Tab đầu hàng chưa thấy ⇒ bản sao đó đã
+        // mất (hoặc app nhận nó theo đường khác): bỏ đầu hàng, KHÔNG post lại lần nữa
+        // (macOS 26 xoá magic — không có cách nào khác nhận ra echo của chính mình; post
+        // lại sẽ thành vòng lặp).
+        if awaiting.count > 1, case .userKey(let k) = awaiting[1], k == keyCode {
+            pop(nowNs); pop(nowNs)
+            return .userKeyEcho
+        }
+        return synthetic ? .normal : .overtook
+    }
+
+    private mutating func pop(_ nowNs: UInt64) {
+        awaiting.removeFirst()
+        headNs = nowNs
     }
 }
