@@ -259,6 +259,18 @@ object KeyLayout {
     internal val SYM2 = listOf("/", "£", "€", "¥", "^", "°", "=", "{", "}", "\\")
     internal val SYM3 = listOf("%", "©", "®", "™", "✓", "[", "]", "<", ">")
 
+    /**
+     * Hàng ký tự (10 phím) TRÊN hàng 3 của plane ?123 / =\<. Tắt hàng số: [NUM1, NUM2] / [SYM1, SYM2]
+     * như cũ. Bật hàng số: hàng đầu là ĐÚNG hàng số plane chữ (1…0) + 2 hàng ký hiệu ⇒ 5 hàng cùng khung
+     * plane chữ; plane ?123 mượn hàng đầu plane =\< (SYM1) — không ký tự nào lặp trong một plane.
+     */
+    fun symbolicRows(numbers: Boolean, numberRow: Boolean): List<List<String>> = when {
+        !numberRow && numbers -> listOf(NUM1, NUM2)
+        !numberRow -> listOf(SYM1, SYM2)
+        numbers -> listOf(NUM1, NUM2, SYM1)
+        else -> listOf(NUM1, SYM1, SYM2)
+    }
+
     fun build(c: LayoutConfig): List<LaidKey> {
         // Một tay: dựng plane ở bề ngang hẹp rồi dời — mọi hình học (router, tâm phím gõ
         // vuốt, bước vuốt ⌫) tự đúng, không nhánh riêng.
@@ -282,7 +294,22 @@ object KeyLayout {
                 thirdRow(out, c, u, letters = true, y0 = y0)
                 bottomRow(out, c, y0 + 3 * u, u, planeKey = "?123", clearInsteadOfEmoji = false)
             }
-            Plane.NUMBERS, Plane.SYMBOLS -> {
+            Plane.NUMBERS, Plane.SYMBOLS -> if (c.numberRow) {
+                // Bật hàng số (field report 18/10/2026: "hàng phím số khi bấm chuyển lại bị mất dẫn
+                // đến hụt hàng… khoảng cách phím không cân đối, toàn bấm nhầm"): trước đây 4 hàng
+                // giãn cả vùng phím (đã cao thêm hàng số) ⇒ mọi hàng cao ~1,2×, hàng 1…0 nhảy chỗ.
+                // Giờ: ĐÚNG hàng số của plane chữ (cùng khung) + [symbolicRows] + hàng 3 + hàng đáy,
+                // mọi hàng cao y hệt plane chữ.
+                val u = rowUnit(c.keyAreaPx, true, c.density, c.numberRowFull)
+                val y0 = numberRowHeight(u, ROW_GAP * c.density, c.numberRowFull)
+                val rows = symbolicRows(c.plane == Plane.NUMBERS, numberRow = true)
+                equalRow(out, rows[0], KeyKind.CHAR, c, 0, y0, 0f)
+                equalRow(out, rows[1], KeyKind.CHAR, c, 0, u, 0f, y0)
+                equalRow(out, rows[2], KeyKind.CHAR, c, 1, u, 0f, y0)
+                thirdRow(out, c, u, letters = false, y0 = y0)
+                bottomRow(out, c, y0 + 3 * u, u, planeKey = if (c.kind.padPlane != null) "123" else "ABC",
+                    clearInsteadOfEmoji = false)
+            } else {
                 val num = c.plane == Plane.NUMBERS
                 equalRow(out, if (num) NUM1 else SYM1, KeyKind.CHAR, c, 0, rowH, 0f)
                 equalRow(out, if (num) NUM2 else SYM2, KeyKind.CHAR, c, 1, rowH, 0f)

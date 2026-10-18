@@ -114,12 +114,76 @@ class NumberRowTest {
         assertTrue(KeyLayout.hit(keys, Plane.LETTERS, seven.centerX, gapY, 4f, d) != null)
     }
 
-    @Test fun numbersPlaneKeepsFourRowsFillingArea() {
-        val keys = build(Plane.NUMBERS, true)
-        val rowH = H5 / 4f
+    /** Tắt hàng số: plane 123 vẫn 4 hàng đều như cũ. */
+    @Test fun numbersPlaneWithoutNumberRowUnchanged() {
+        val keys = build(Plane.NUMBERS, false)
         val one = keys.first { it.label == "1" }
-        near(one.top, KeyLayout.ROW_MARGIN_V); near(one.bottom, rowH - KeyLayout.ROW_MARGIN_V)
-        assertEquals(1, keys.count { it.label == "1" })
+        near(one.top, KeyLayout.ROW_MARGIN_V); near(one.bottom, H4 / 4f - KeyLayout.ROW_MARGIN_V)
+        assertEquals(KeyLayout.symbolicRows(true, false), listOf(KeyLayout.NUM1, KeyLayout.NUM2))
+        assertEquals(KeyLayout.symbolicRows(false, false), listOf(KeyLayout.SYM1, KeyLayout.SYM2))
+    }
+
+    /** Dải dọc (top, bottom) của từng hàng phím trong một plane. */
+    private fun rowBands(keys: List<LaidKey>) =
+        keys.map { Math.round(it.top * 100) to Math.round(it.bottom * 100) }.distinct().sortedBy { it.first }
+
+    /**
+     * Field report 18/10/2026 ("hàng phím số khi bấm shift lại bị mất dẫn đến hụt hàng… khoảng cách
+     * các phím ko cân đối khi chuyển dễ bị bấm nhầm"): bật hàng số, chuyển ABC ↔ ?123 ↔ =\< phải giữ
+     * ĐÚNG 5 hàng cùng dải dọc, hàng 1…0 đứng yên (cùng khung), phím hàng 3 / hàng đáy không nhảy dọc.
+     * Trước đây ?123 = 4 hàng giãn cả vùng ⇒ "1" cao ~1,2×, mọi hàng dời.
+     */
+    @Test fun numbersAndSymbolsPlanesKeepLettersRowGeometry() {
+        for (full in listOf(false, true)) for (tablet in listOf(false, true)) for (dens in listOf(1f, 2.75f))
+        for (side in listOf(OneHandSide.OFF, OneHandSide.RIGHT)) {
+            if (tablet && side != OneHandSide.OFF) continue
+            val tag = "full=$full tablet=$tablet d=$dens $side"
+            val h = KeyLayout.keyAreaDp(tablet, false, 0, numberRow = true, numberRowFull = full) * dens
+            fun b(p: Plane) = KeyLayout.build(LayoutConfig(p, W * dens, h, dens, tablet = tablet,
+                numberRow = true, numberRowFull = full, oneHand = side))
+            val letters = b(Plane.LETTERS)
+            val bands = rowBands(letters)
+            assertEquals(tag, 5, bands.size)
+            val digits = letters.filter { it.label in KeyLayout.NUM1 && it.kind == KeyKind.CHAR }
+            assertEquals(tag, 10, digits.size)
+            for (p in listOf(Plane.NUMBERS, Plane.SYMBOLS)) {
+                val keys = b(p)
+                assertEquals("$tag $p", bands, rowBands(keys))
+                for (dk in digits) {
+                    val o = keys.single { it.label == dk.label }
+                    near(o.left, dk.left); near(o.top, dk.top); near(o.right, dk.right); near(o.bottom, dk.bottom)
+                }
+                // ⌫ / hàng đáy cùng chỗ như plane chữ (ngón đã quen vị trí).
+                for (kind in listOf(KeyKind.BACKSPACE, KeyKind.SPACE, KeyKind.RETURN)) {
+                    val a = letters.first { it.kind == kind }; val o = keys.first { it.kind == kind }
+                    near(o.top, a.top, 0.05f); near(o.bottom, a.bottom, 0.05f)
+                }
+                // Không ký tự nào lặp trong một plane.
+                val typed = keys.filter { it.kind == KeyKind.CHAR || it.kind == KeyKind.PUNCT }.map { it.insert }
+                assertEquals("$tag $p dup", typed.size, typed.toSet().size)
+            }
+        }
+    }
+
+    /** Shift không bao giờ đổi hàng số: phím số có nhãn hoa = nhãn thường (không thành !@#), và
+     *  KeyLayout.build không phụ thuộc shift ⇒ khung phím y hệt ở mọi trạng thái Shift. */
+    @Test fun shiftNeverChangesNumberRow() {
+        for (p in listOf(Plane.LETTERS, Plane.NUMBERS, Plane.SYMBOLS))
+            for (k in build(p, true).filter { it.label in KeyLayout.NUM1 })
+                assertEquals(k.label, k.upper)
+    }
+
+    @Test fun symbolicRowsWithNumberRow() {
+        val all = (KeyLayout.NUM1 + KeyLayout.NUM2 + KeyLayout.NUM3 + KeyLayout.SYM1 + KeyLayout.SYM2 + KeyLayout.SYM3).toSet()
+        val on = mutableSetOf<String>()
+        for (num in listOf(true, false)) {
+            val rows = KeyLayout.symbolicRows(num, true)
+            assertEquals(3, rows.size)
+            assertEquals(KeyLayout.NUM1, rows[0])
+            rows.forEach { assertEquals(10, it.size) }
+            on += rows.flatten() + (if (num) KeyLayout.NUM3 else KeyLayout.SYM3)
+        }
+        assertEquals("không mất ký tự nào so với 4 hàng", all, on)
     }
 
     @Test fun templatesBottomRowIsOneStandardRow() {
@@ -165,12 +229,12 @@ class NumberRowTest {
         }
     }
 
-    /** Plane 123 / tìm emoji / mẫu câu với hàng số đủ cao: 123 giữ 4 hàng giãn đều, emoji tìm giữ tỉ lệ 1:1, mẫu câu hàng đáy = 1 hàng. */
+    /** Plane 123 / tìm emoji / mẫu câu với hàng số đủ cao: 123 = 5 hàng bằng nhau như plane chữ, emoji tìm giữ tỉ lệ 1:1, mẫu câu hàng đáy = 1 hàng. */
     @Test fun fullHeightOtherPlanes() {
         val h = KeyLayout.keyAreaDp(false, false, 0, numberRow = true, numberRowFull = true)   // 280
         fun b(p: Plane) = KeyLayout.build(LayoutConfig(p, W, h, d, numberRow = true, numberRowFull = true))
         val one = b(Plane.NUMBERS).first { it.label == "1" }
-        near(one.bottom, h / 4f - KeyLayout.ROW_MARGIN_V)
+        near(one.bottom, h / 5f - KeyLayout.ROW_MARGIN_V)
         val search = b(Plane.EMOJI_SEARCH)
         near(search.first { it.label == "1" }.height, search.first { it.label == "q" }.height)
         near(b(Plane.TEMPLATES).first { it.kind == KeyKind.SPACE }.top, h - 56f + KeyLayout.BOTTOM_ROW_TOP, 0.05f)

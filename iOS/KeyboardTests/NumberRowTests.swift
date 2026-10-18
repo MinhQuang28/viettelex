@@ -122,11 +122,125 @@ final class NumberRowTests: XCTestCase {
 
     @MainActor func testNumbersPlaneKeepsFourRows() {
         let (kb, _) = makeKeyboard(numberRow: true)
+        // iPad: plane số stock (đã có hàng tab 1…0) — chưa đổi, xem báo cáo field 18/10/2026.
+        guard isPad else { return }
         kb.debugSetPlane(numbers: true)
         kb.layoutIfNeeded()
         let rows = kb.debugRowFrames()
         XCTAssertEqual(rows.count, 4)
         for r in rows { XCTAssertEqual(r.height, rows[0].height, accuracy: 0.5) }
+    }
+
+    // MARK: field report 18/10/2026 — "hàng phím số khi bấm shift lại bị mất dẫn đến hụt hàng,
+    // khoảng cách các phím ko cân đối khi chuyển dễ bị bấm nhầm".
+
+    /// Khung mọi nút phím + phím chữ (toạ độ kb) — so trước/sau một thao tác.
+    @MainActor private func keyFrames(_ kb: KeyboardView) -> [CGRect] {
+        kb.debugAllKeyButtons().map { kb.convert($0.bounds, from: $0) }
+    }
+    @MainActor private func assertSameFrames(_ a: [CGRect], _ b: [CGRect], _ what: String,
+                                             file: StaticString = #filePath, line: UInt = #line) {
+        XCTAssertEqual(a.count, b.count, what, file: file, line: line)
+        for (x, y) in zip(a, b) {
+            XCTAssertEqual(x.minX, y.minX, accuracy: 0.5, what, file: file, line: line)
+            XCTAssertEqual(x.minY, y.minY, accuracy: 0.5, what, file: file, line: line)
+            XCTAssertEqual(x.width, y.width, accuracy: 0.5, what, file: file, line: line)
+            XCTAssertEqual(x.height, y.height, accuracy: 0.5, what, file: file, line: line)
+        }
+    }
+
+    /// Shift / Caps Lock ở plane chữ KHÔNG được đổi số hàng, cao hàng hay vị trí phím nào
+    /// (kể cả hàng số, cả khi hàng số cao bằng hàng chữ).
+    @MainActor func testShiftAndCapsNeverMoveKeys() throws {
+        for (nr, full) in [(false, false), (true, false), (true, true)] {
+            let what = "numberRow=\(nr) full=\(full)"
+            let (kb, host) = makeKeyboard(numberRow: nr)
+            kb.numberRowFullHeight = full
+            kb.setNeedsLayout(); kb.layoutIfNeeded()
+            let rows0 = kb.debugRowFrames(), keys0 = keyFrames(kb)
+            let digits0 = KeyLayout.digits.compactMap { kb.debugKeyButton($0).map { kb.convert($0.bounds, from: $0) } }
+            XCTAssertEqual(digits0.count, nr ? 10 : 0, what)
+            let shift = try XCTUnwrap(kb.debugControl("Shift"), what)
+            // Mặc định ON (đầu câu) → chạm: OFF → chạm nhanh 2 lần: Caps Lock.
+            for step in ["off", "on", "caps"] {
+                shift.sendActions(for: .touchDown)
+                shift.sendActions(for: .touchUpInside)
+                kb.setNeedsLayout(); kb.layoutIfNeeded()
+                assertSameFrames(kb.debugRowFrames(), rows0, "\(what) rows after \(step)")
+                assertSameFrames(keyFrames(kb), keys0, "\(what) keys after \(step)")
+                let digits = KeyLayout.digits.compactMap { kb.debugKeyButton($0).map { kb.convert($0.bounds, from: $0) } }
+                assertSameFrames(digits, digits0, "\(what) digits after \(step)")
+                // Hàng số vẫn là chữ số (không đổi sang !@#).
+                if nr { XCTAssertEqual(kb.debugRowLabels().first, KeyLayout.digits, what) }
+            }
+            withExtendedLifetime(host) {}
+        }
+    }
+
+    /// Pure: bật hàng số ⇒ plane 123 / #+= iPhone có đúng hàng 1…0 + 2 hàng ký hiệu; không ký tự
+    /// nào lặp trong một plane (kể cả hàng 3 . , ? ! '). Tắt ⇒ như cũ.
+    func testPhoneSymbolicRowsWithNumberRow() {
+        XCTAssertEqual(KeyLayout.phoneSymbolicRows(numbers: true, numberRow: false), KeyLayout.phoneNumberRows)
+        XCTAssertEqual(KeyLayout.phoneSymbolicRows(numbers: false, numberRow: false), KeyLayout.phoneSymbolRows)
+        XCTAssertEqual(KeyLayout.phoneNumberRows.first, KeyLayout.digits)
+        for numbers in [true, false] {
+            let rows = KeyLayout.phoneSymbolicRows(numbers: numbers, numberRow: true)
+            XCTAssertEqual(rows.count, 3)
+            XCTAssertEqual(rows.first, KeyLayout.digits, "hàng số giữ nguyên chữ số")
+            for r in rows { XCTAssertEqual(r.count, 10) }
+            let all = rows.flatMap { $0 } + [".", ",", "?", "!", "'"]
+            XCTAssertEqual(Set(all).count, all.count, "numbers=\(numbers): ký tự lặp")
+        }
+        // Không mất ký tự nào so với bản 4 hàng.
+        let on = Set(KeyLayout.phoneSymbolicRows(numbers: true, numberRow: true).flatMap { $0 }
+            + KeyLayout.phoneSymbolicRows(numbers: false, numberRow: true).flatMap { $0 })
+        let off = Set((KeyLayout.phoneNumberRows + KeyLayout.phoneSymbolRows).flatMap { $0 })
+        XCTAssertTrue(off.isSubset(of: on))
+    }
+
+    /// Chuyển ABC ↔ 123 ↔ #+= khi bật hàng số: cùng 5 hàng, cùng chiều cao từng hàng, hàng 1…0
+    /// đứng YÊN (cùng khung) — trước đây plane số 4 hàng giãn ra cả vùng ⇒ mọi phím nhảy dọc.
+    @MainActor func testNumbersPlaneKeepsLettersRowGeometry() throws {
+        guard !isPad else { return }
+        for full in [false, true] {
+            let what = "full=\(full)"
+            let (kb, host) = makeKeyboard(numberRow: true)
+            kb.numberRowFullHeight = full
+            kb.setNeedsLayout(); kb.layoutIfNeeded()
+            let rows0 = kb.debugRowFrames()
+            XCTAssertEqual(rows0.count, 5, what)
+            let digits0 = KeyLayout.digits.compactMap { kb.debugKeyButton($0).map { kb.convert($0.bounds, from: $0) } }
+            XCTAssertEqual(digits0.count, 10, what)
+            for symbols in [false, true, false] {      // lần 2 sang 123: từ planeCache
+                kb.debugSetPlane(numbers: true)
+                if symbols {
+                    let more = try XCTUnwrap(kb.debugControl("Ký hiệu"), what)
+                    more.sendActions(for: .touchDown)
+                }
+                kb.setNeedsLayout(); kb.layoutIfNeeded()
+                let plane = "\(what) plane=\(kb.debugPlaneName)"
+                XCTAssertEqual(kb.debugPlaneName, symbols ? "symbols" : "numbers")
+                assertSameFrames(kb.debugRowFrames(), rows0, "\(plane) rows")
+                XCTAssertEqual(kb.debugRowLabels().first, KeyLayout.digits, plane)
+                let digits = KeyLayout.digits.compactMap { kb.debugKeyButton($0).map { kb.convert($0.bounds, from: $0) } }
+                assertSameFrames(digits, digits0, "\(plane) digits")
+                kb.debugSetPlane(numbers: false)
+                kb.setNeedsLayout(); kb.layoutIfNeeded()
+                assertSameFrames(kb.debugRowFrames(), rows0, "\(plane) back to letters")
+            }
+            withExtendedLifetime(host) {}
+        }
+    }
+
+    /// Tắt hàng số: plane số giữ 4 hàng như cũ (không đổi gì khi tính năng tắt).
+    @MainActor func testNumbersPlaneWithoutNumberRowUnchanged() {
+        let (kb, host) = makeKeyboard(numberRow: false)
+        let rows0 = kb.debugRowFrames()
+        kb.debugSetPlane(numbers: true)
+        kb.setNeedsLayout(); kb.layoutIfNeeded()
+        XCTAssertEqual(kb.debugRowFrames().count, 4)
+        assertSameFrames(kb.debugRowFrames(), rows0, "no number row")
+        withExtendedLifetime(host) {}
     }
 
     @MainActor func testToggleOffRestoresLayout() {

@@ -2102,12 +2102,12 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         #endif
         switch plane {
         case .letters: buildLetters()
-        case .numbers where builtSplit: buildSplitPlane(rows: Self.numberRows, moreKey: "#+=", altKey: "ABC")
-        case .symbols where builtSplit: buildSplitPlane(rows: Self.symbolRows, moreKey: "123", altKey: "ABC")
+        case .numbers where builtSplit: buildSplitPlane(rows: numberRows, moreKey: "#+=", altKey: "ABC")
+        case .symbols where builtSplit: buildSplitPlane(rows: symbolRows, moreKey: "123", altKey: "ABC")
         case .numbers where Self.isPad: buildPadSymbolic(numbers: true)
         case .symbols where Self.isPad: buildPadSymbolic(numbers: false)
-        case .numbers: buildPlane(rows: Self.numberRows, moreKey: "#+=", altKey: "ABC")
-        case .symbols: buildPlane(rows: Self.symbolRows, moreKey: "123", altKey: "ABC")
+        case .numbers: buildPlane(rows: numberRows, moreKey: "#+=", altKey: "ABC")
+        case .symbols: buildPlane(rows: symbolRows, moreKey: "123", altKey: "ABC")
         case .emoji: buildEmoji()
         case .templates: buildTemplates()
         case .emojiSearch: buildEmojiSearch()
@@ -2653,17 +2653,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         return true
     }
 
-    /// Plane 123 / #+= iPhone (và bàn tách đôi).
-    private static let numberRows: [[String]] = [
-        ["1","2","3","4","5","6","7","8","9","0"],
-        // $ ở đúng chỗ bàn phím EN (user 2026-07-23); ₫ chuyển sang plane #+=
-        ["-","/",":",";","(",")","$","&","@","\""],
-    ]
-    private static let symbolRows: [[String]] = [
-        ["[","]","{","}","#","%","^","*","+","="],
-        // 3 currencies: EUR, CNY, VND (₫ thế chỗ JPY của layout EN)
-        ["_","\\","|","~","<",">","€","¥","₫","•"],
-    ]
+    /// Plane 123 / #+= iPhone (và bàn tách đôi) — KeyLayout.phoneSymbolicRows: bật hàng số ⇒
+    /// thêm đúng hàng 1…0 của plane chữ (5 hàng, không nhảy hàng khi chuyển 123/ABC).
+    private var numberRows: [[String]] { KeyLayout.phoneSymbolicRows(numbers: true, numberRow: numberRowEnabled) }
+    private var symbolRows: [[String]] { KeyLayout.phoneSymbolicRows(numbers: false, numberRow: numberRowEnabled) }
     /// Phím #+= / 123 đầu hàng 3 plane số / ký hiệu.
     private func makeMoreKey(_ moreKey: String) -> KeyButton {
         let more = controlButton(title: moreKey, fire: .down) { [weak self] in
@@ -2677,8 +2670,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
 
     private func buildPlane(rows planeRows: [[String]], moreKey: String, altKey: String) {
-        rowsContainer.addArrangedSubview(row(planeRows[0].map { textButton($0) }))
-        rowsContainer.addArrangedSubview(row(planeRows[1].map { textButton($0) }))
+        for r in planeRows { rowsContainer.addArrangedSubview(row(r.map { textButton($0) })) }
         let more = makeMoreKey(moreKey)
         var third: [UIView] = [more]
         third += [".",",","?","!","'"].map { textButton($0) }
@@ -3225,7 +3217,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// Lưới 3×4 như stock: 1 2 3 / 4 5 6 / 7 8 9 / [góc] 0 ⌫. Hàng phẳng (không lồng) ⇒
     /// router khe (nearestControl) / một tay / bottomTrim dùng chung đường plane thường.
     private func buildKeypad() {
-        guard let style = keypadStyle else { return buildPlane(rows: Self.numberRows, moreKey: "#+=", altKey: "ABC") }
+        guard let style = keypadStyle else { return buildPlane(rows: numberRows, moreKey: "#+=", altKey: "ABC") }
         indentedRow = nil
         keypadLabels = []
         keypadLandscape = nil

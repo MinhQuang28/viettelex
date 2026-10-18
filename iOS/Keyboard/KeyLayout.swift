@@ -25,6 +25,30 @@ enum KeyLayout {
         [Key(id: "-", units: 1.31)] + letters("1234567890") + [Key(id: "=", units: nil)]
     static let digits = "1234567890".map { String($0) }
 
+    /// Plane 123 / #+= iPhone (và bàn tách đôi): các hàng ký tự TRÊN hàng [#+=|123] . , ? ! ' ⌫.
+    static let phoneNumberRows: [[String]] = [
+        digits,
+        // $ ở đúng chỗ bàn phím EN (user 2026-07-23); ₫ chuyển sang plane #+=
+        ["-","/",":",";","(",")","$","&","@","\""],
+    ]
+    static let phoneSymbolRows: [[String]] = [
+        ["[","]","{","}","#","%","^","*","+","="],
+        // 3 currencies: EUR, CNY, VND (₫ thế chỗ JPY của layout EN)
+        ["_","\\","|","~","<",">","€","¥","₫","•"],
+    ]
+    /// Hàng ký tự plane 123 / #+= iPhone. Bật hàng số (field report 18/10/2026: "hàng phím số
+    /// khi bấm chuyển lại bị mất dẫn đến hụt hàng… khoảng cách các phím không cân đối, toàn bấm
+    /// nhầm"): trước đây plane số giữ 4 hàng trong vùng phím đã cao thêm hàng số ⇒ mọi hàng cao
+    /// ~1,2×, hàng 1…0 nhảy chỗ, mọi phím dời dọc khi chạm 123/ABC. Giờ plane số / ký hiệu có
+    /// ĐÚNG hàng số của plane chữ (1…0, cùng khung) + 2 hàng ký hiệu + hàng 3 + hàng đáy ⇒ 5 hàng
+    /// cao y hệt plane chữ. Hàng ký hiệu thêm của plane 123 = hàng đầu plane #+= (không lặp ký tự
+    /// trong một plane).
+    static func phoneSymbolicRows(numbers: Bool, numberRow: Bool) -> [[String]] {
+        guard numberRow else { return numbers ? phoneNumberRows : phoneSymbolRows }
+        return numbers ? [digits, phoneNumberRows[1], phoneSymbolRows[0]]
+                       : [digits, phoneSymbolRows[0], phoneSymbolRows[1]]
+    }
+
     /// Hàng số thấp hơn hàng chữ như Gboard — tổng bàn phím tăng ít. Tỉ lệ tính trên PHÍM
     /// (không tính khe rowGap phía trên mỗi hàng). Trước 12/10/2026: 0.75 × cả HÀNG (khe
     /// 10 + phím) ⇒ phím số chỉ 30.5pt cạnh phím chữ 44 dọc (69%), 20pt cạnh 30 ngang —
