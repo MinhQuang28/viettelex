@@ -27,13 +27,14 @@ class KeyboardThemeTests {
     // ---- token
 
     @Test fun compactSetSystemDefault() {
-        assertTrue(KeyboardTheme.entries.size in 6..8)
+        assertTrue(KeyboardTheme.entries.size in 6..16)
         assertEquals(KeyboardTheme.SYSTEM, ThemeSettings().theme)
         assertNull("Hệ thống dùng màu Material You trong resources", KeyboardTheme.SYSTEM.palette(false))
     }
 
     @Test fun sameIdsAsIOS() {
-        assertEquals(listOf("system", "oled", "contrast", "peach", "mint", "sky", "lavender", "glass"),
+        assertEquals(listOf("system", "oled", "contrast", "peach", "mint", "sky", "lavender", "glass",
+            "blackHeart", "greenFloral", "sage", "pureWhite", "neon", "pink"),
             KeyboardTheme.entries.map { it.id })
     }
 
@@ -123,7 +124,7 @@ class KeyboardThemeTests {
     }
 
     @Test fun loadClampsGarbage() {
-        val m = mapOf<String, Any>(Keys.KEYBOARD_THEME to "neon", Keys.WALLPAPER_DIM to 500, Keys.WALLPAPER_BLUR to -2,
+        val m = mapOf<String, Any>(Keys.KEYBOARD_THEME to "neon-pink-unknown", Keys.WALLPAPER_DIM to 500, Keys.WALLPAPER_BLUR to -2,
             Keys.KEYBOARD_TRANSPARENCY to 180, Keys.KEY_LABEL_TRANSPARENCY to -9)
         val s = ThemeSettings.load { m[it] }
         assertEquals(100, s.keyboardTransparency)
@@ -182,9 +183,13 @@ class KeyboardThemeTests {
 
     /** Nền trong suốt lộ app khác tông → chữ tự đổi đen/trắng; mức nhỏ không được lật màu. */
     @Test fun labelsStayReadableWhenBackgroundGoesClear() {
-        val peachDark = KeyboardTheme.PEACH.palette(true)!!.withTransparency(100, 0, true)
-        assertEquals(ThemeColor.WHITE, peachDark.keyInk)
-        assertTrue(peachDark.isDark)
+        // Chữ tối của theme sáng trên nền tối (cơ chế đổi đen/trắng).
+        val lightOnDark = KeyboardTheme.PEACH.palette(false)!!.withTransparency(100, 0, true)
+        assertEquals(ThemeColor.WHITE, lightOnDark.keyInk)
+        assertTrue(lightOnDark.isDark)
+        // Hồng đào TỐI (chữ sáng) trên nền tối: vẫn đọc được ⇒ giữ màu theme.
+        val peachDark = KeyboardTheme.PEACH.palette(true)!!
+        assertEquals(peachDark.ink, peachDark.withTransparency(100, 0, true).keyInk)
         val peachLight = KeyboardTheme.PEACH.palette(false)!!
         assertEquals(peachLight.ink, peachLight.withTransparency(100, 0, false).keyInk)
         for ((p, dark) in allPalettes()) {

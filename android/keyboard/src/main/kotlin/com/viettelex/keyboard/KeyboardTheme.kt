@@ -72,8 +72,22 @@ data class ThemePalette(
     val surfaceAlpha: Float = 1f,
     /** Chữ trên phím do người dùng chọn ([KeyStyle]) — độ trong suốt không đổi sang đen/trắng. */
     val keyLabelPinned: Boolean = false,
+    /**
+     * Nền phím chức năng + phím cách khi theme tô riêng (Xanh lá); null = như cũ ([specialFill] cho
+     * phím chức năng, [keyFill] cho phím cách). Cùng ý nghĩa iOS `functionFill`.
+     */
+    val functionFill: Int? = null,
+    /** Chữ/icon phím chức năng (ĐỤC; alpha theo [labelAlpha] lúc vẽ) — null = [keyInk]. Trắng hồng. */
+    val functionInk: Int? = null,
+    /** Hoạ tiết nền (tim / hoa) vẽ MỘT lần ở nền IME — null = nền phẳng. */
+    val decoration: ThemeDecoration? = null,
 ) {
     val keyInk: Int get() = keyLabel ?: ink
+    /** Nền phím chức năng (⇧ ⌫ 123 🌐 😊…). */
+    val fnFill: Int get() = functionFill ?: specialFill
+    /** Nền phím cách. */
+    val spaceFill: Int get() = functionFill ?: keyFill
+    val fnInk: Int get() = functionInk ?: keyInk
 
     /** Lớp phủ ảnh nền: đen cho theme tối, trắng cho theme sáng. */
     val wallpaperOverlay: Int get() = if (isDark) ThemeColor.BLACK else ThemeColor.WHITE
@@ -99,7 +113,8 @@ data class ThemePalette(
             while (a < 1f && ThemeColor.contrast(ink, ThemeColor.over(ThemeColor.withAlpha(solid, a), worst)) < 4.5) a += 0.05f
             return ThemeColor.withAlpha(solid, a.coerceAtMost(1f))
         }
-        return copy(keyFill = legible(keyFill), specialFill = legible(specialFill), bgBottom = null, wallpaper = true)
+        return copy(keyFill = legible(keyFill), specialFill = legible(specialFill), functionFill = functionFill?.let(::legible),
+            bgBottom = null, wallpaper = true, decoration = null)
     }
 
     companion object { const val WALLPAPER_KEY_ALPHA = 0.8f }
@@ -149,13 +164,15 @@ fun ThemePalette.withTransparency(keyboard: Int, labels: Int, systemDark: Boolea
         val c = ThemeColor
         fun f(x: Int) = c.withAlpha(x, s)
         p = p.copy(bg = f(bg), bgBottom = bgBottom?.let(::f), keyFill = f(keyFill), specialFill = f(specialFill),
-            action = f(action), chip = f(chip), keyBorder = keyBorder?.let(::f), surfaceAlpha = s)
+            action = f(action), chip = f(chip), keyBorder = keyBorder?.let(::f), surfaceAlpha = s,
+            functionFill = functionFill?.let(::f), decoration = decoration?.let { it.copy(color = f(it.color)) })
         // Nền thật sau chữ ≈ lớp nền mới trên cửa sổ app. Ảnh nền vẫn hiện nguyên ⇒ ước lượng
         // bằng tông lớp phủ (tối cho theme tối, sáng cho theme sáng).
         val sys = t.systemBackdrop(systemDark)
         val behind = c.over(if (wallpaper) wallpaperOverlay else p.bg, sys)
         val label = if (keyLabelPinned) ink else t.readable(ink, c.over(p.keyFill, behind))
-        p = p.copy(keyLabel = label, actionInk = t.readable(actionInk, c.over(p.action, behind)),
+        val fnInk = if (keyLabelPinned) functionInk else functionInk?.let { t.readable(it, c.over(p.fnFill, behind)) }
+        p = p.copy(keyLabel = label, functionInk = fnInk, actionInk = t.readable(actionInk, c.over(p.action, behind)),
             isDark = if (label != ink) c.luminance(label) > 0.5 else isDark)
     }
     return p
@@ -170,7 +187,18 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     MINT("mint", "Bạc hà", true),
     SKY("sky", "Trời xanh", true),
     LAVENDER("lavender", "Oải hương", true),
-    GLASS("glass", "Kính", true);
+    GLASS("glass", "Kính", true),
+    // Bộ 10/2026 (gợi ý từ các theme cộng đồng được thích nhất — thiết kế riêng, không dùng tài sản
+    // của ai, không nhân vật có thương hiệu). id = giá trị lưu, trùng rawValue iOS.
+    BLACK_HEART("blackHeart", "Tim đen", true),
+    GREEN_FLORAL("greenFloral", "Hoa xanh", true),
+    SAGE("sage", "Xanh lá", true),
+    PURE_WHITE("pureWhite", "Trắng hồng", true),
+    NEON("neon", "Neon", true),
+    PINK("pink", "Hồng", true);
+
+    /** Bo góc mặc định (% như [KeyStyle.corner]) khi người dùng chưa chỉnh — null = bo stock. iOS cùng giá trị. */
+    val defaultCorner: Int? get() = if (this == PINK) 70 else null
 
     /** Tên hiển thị theo ngôn ngữ giao diện ([L10n]); [viTitle] = khoá dịch. */
     val title: String get() = tr(viTitle)
@@ -191,10 +219,36 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
                 ink = c.WHITE, trail = c.rgb(0xFFD60A), balloon = c.rgb(0x141414), popup = c.rgb(0x141414),
                 action = c.rgb(0xFFD60A), actionInk = c.BLACK, chip = c.rgb(0x4D4D4D),
                 keyBorder = c.withAlpha(c.WHITE, 0.85f), isDark = true)
-            PEACH -> pastel(0xFBE3E1, 0xFFF8F7, 0xF1C4BF, 0x4A2226, 0xC2505A)
-            MINT -> pastel(0xD9F2E7, 0xF6FFFA, 0xAFDDC9, 0x173B30, 0x1F7A5C)
-            SKY -> pastel(0xDAE9F8, 0xF6FAFF, 0xB3CFEE, 0x14304C, 0x2C6BB8)
-            LAVENDER -> pastel(0xE8E2F6, 0xFBF9FF, 0xCBBFEA, 0x2C2345, 0x6A48C4)
+            // Pastel: sáng = bảng cũ; tối = cùng họ màu, nền + phím sẫm ngả màu, chữ sáng, giữ màu nhấn.
+            PEACH -> if (systemDark) solid(0x2A1A1C, 0x45292D, 0x5C3A3F, 0xFBE3E1, 0xC2505A)
+                else solid(0xFBE3E1, 0xFFF8F7, 0xF1C4BF, 0x4A2226, 0xC2505A)
+            MINT -> if (systemDark) solid(0x10241D, 0x1D3B30, 0x2A5244, 0xD9F2E7, 0x1F7A5C)
+                else solid(0xD9F2E7, 0xF6FFFA, 0xAFDDC9, 0x173B30, 0x1F7A5C)
+            SKY -> if (systemDark) solid(0x111E2E, 0x1E324A, 0x2B4566, 0xDAE9F8, 0x2C6BB8)
+                else solid(0xDAE9F8, 0xF6FAFF, 0xB3CFEE, 0x14304C, 0x2C6BB8)
+            LAVENDER -> if (systemDark) solid(0x1C1830, 0x2E2848, 0x403862, 0xE8E2F6, 0x6A48C4)
+                else solid(0xE8E2F6, 0xFBF9FF, 0xCBBFEA, 0x2C2345, 0x6A48C4)
+            // Tim đen: luôn tối — nền đen, chữ trắng, tim hồng nhỏ vẽ một lần ở nền.
+            BLACK_HEART -> solid(0x000000, 0x1A1A1A, 0x333333, 0xFFFFFF, 0xE63E7A,
+                decoration = ThemeDecoration(ThemeDecoration.HEARTS, c.withAlpha(c.rgb(0xFF6FA3), 0.55f)))
+            // Hoa xanh: phím trắng viền xanh mảnh, chữ xanh, hoa nhỏ mờ ở nền.
+            GREEN_FLORAL -> if (systemDark) solid(0x0F1D15, 0x16291E, 0x21392A, 0x9EE0B6, 0x2E8B57,
+                border = c.withAlpha(c.rgb(0x4CAF6E), 0.8f),
+                decoration = ThemeDecoration(ThemeDecoration.FLOWERS, c.withAlpha(c.rgb(0x4CAF6E), 0.28f)))
+            else solid(0xEEF6EF, 0xFFFFFF, 0xDCEEDF, 0x256B42, 0x2E8B57, border = c.rgb(0x4CAF6E),
+                decoration = ThemeDecoration(ThemeDecoration.FLOWERS, c.withAlpha(c.rgb(0x6DBE8A), 0.35f)))
+            // Xanh lá: phím sáng, phím chức năng + phím cách màu xanh xô thơm (sage).
+            SAGE -> if (systemDark) solid(0x161C15, 0x2A3328, 0x3A4A36, 0xE4EDE1, 0x5E7F55, function = 0x4A5E45)
+                else solid(0xE4EBE2, 0xFBFCFA, 0x93AB8C, 0x24331F, 0x5E7F55, function = 0xA9BFA3)
+            // Trắng hồng: trắng xám rất nhạt, icon/nhãn phím chức năng màu hồng, Nhập hồng.
+            PURE_WHITE -> if (systemDark) solid(0x1A1A1C, 0x2C2C2F, 0x3A3A3E, 0xFFFFFF, 0xD6336C, functionInk = 0xFF7AA8)
+                else solid(0xF4F4F6, 0xFFFFFF, 0xE8E8EC, 0x1C1C1E, 0xD6336C, functionInk = 0xC2255C)
+            // Neon: luôn tối — nền gần đen, phím xanh mòng két sẫm viền cyan, chữ cyan.
+            NEON -> solid(0x05080A, 0x0E2A2E, 0x15393E, 0x5FF5E8, 0x00BFB2, accentInk = 0x000000,
+                border = c.withAlpha(c.rgb(0x00E5D4), 0.7f))
+            // Hồng: hồng pastel, phím bo tròn ([defaultCorner]).
+            PINK -> if (systemDark) solid(0x2B1520, 0x472335, 0x5E2F46, 0xFCDDE8, 0xD94680)
+                else solid(0xFCDDE8, 0xFFF5F9, 0xF6B8CE, 0x5A1F38, 0xD94680)
             // Android không có backdrop mờ sau cửa sổ IME → giả lập: gradient dịu +
             // phím trắng bán trong + viền sáng mảnh.
             GLASS -> if (systemDark) ThemePalette(bg = c.rgb(0x2B3040), bgBottom = c.rgb(0x16181F),
@@ -213,14 +267,86 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     companion object {
         fun of(id: String?): KeyboardTheme = entries.firstOrNull { it.id == id } ?: SYSTEM
 
-        private fun pastel(bg: Int, key: Int, special: Int, ink: Int, accent: Int): ThemePalette {
+        /** Theme nền đục một màu — y hệt iOS `KeyboardTheme.solid`. */
+        private fun solid(bg: Int, key: Int, special: Int, ink: Int, accent: Int, accentInk: Int = 0xFFFFFF,
+                          border: Int? = null, function: Int? = null, functionInk: Int? = null,
+                          decoration: ThemeDecoration? = null): ThemePalette {
             val c = ThemeColor
             return ThemePalette(bg = c.rgb(bg), keyFill = c.rgb(key), specialFill = c.rgb(special),
                 ink = c.rgb(ink), trail = c.withAlpha(c.rgb(accent), 0.6f), balloon = c.rgb(key),
-                popup = c.rgb(key), action = c.rgb(accent), actionInk = c.WHITE, chip = c.rgb(special),
-                isDark = false)
+                popup = c.rgb(key), action = c.rgb(accent), actionInk = c.rgb(accentInk), chip = c.rgb(special),
+                keyBorder = border, isDark = c.luminance(c.rgb(ink)) > 0.5,
+                functionFill = function?.let(c::rgb), functionInk = functionInk?.let(c::rgb), decoration = decoration)
         }
     }
+}
+
+/**
+ * Hoạ tiết nền theme (Tim đen: tim; Hoa xanh: hoa) — MỘT Path vẽ trong Drawable nền IME (display
+ * list ghi một lần, chỉ dựng lại khi đổi cỡ). 0 chi phí mỗi phím, không ảnh. Hình học y hệt iOS
+ * (KeyboardDecoration trong iOS/Keyboard/KeyboardTheme.swift), đơn vị dp.
+ */
+data class ThemeDecoration(val motif: String, val color: Int) {
+    companion object {
+        const val HEARTS = "hearts"
+        const val FLOWERS = "flowers"
+        const val STEP_X = 64.0
+        const val STEP_Y = 52.0
+        const val MOTIF_SIZE = 8.0
+        const val INSET = 14.0
+        const val MAX_MOTIFS = 120
+
+        /** Tâm motif (dp) phủ vùng w×h dp — lưới so le, tất định. Mảng [x0, y0, x1, y1, …]. */
+        fun placements(w: Double, h: Double): DoubleArray {
+            if (w <= 2 * INSET || h <= 2 * INSET) return DoubleArray(0)
+            fun grid(k: Double): List<Double> {
+                val out = ArrayList<Double>()
+                var row = 0
+                var y = INSET + MOTIF_SIZE / 2
+                while (y <= h - INSET) {
+                    var x = INSET + MOTIF_SIZE / 2 + if (row % 2 == 1) STEP_X * k / 2 else 0.0
+                    while (x <= w - INSET) { out.add(x); out.add(y); x += STEP_X * k }
+                    y += STEP_Y * k; row++
+                }
+                return out
+            }
+            var k = 1.0
+            var pts = grid(k)
+            while (pts.size / 2 > MAX_MOTIFS) { k *= 1.15; pts = grid(k) }
+            return pts.toDoubleArray()
+        }
+
+        /**
+         * Đường tim theo đơn vị motif (tâm 0,0; y xuống): điểm đầu rồi 6 đoạn cubic
+         * (c1x, c1y, c2x, c2y, x, y) — y hệt iOS.
+         */
+        val HEART_START = doubleArrayOf(0.0, 0.45)
+        val HEART_CUBICS = arrayOf(
+            doubleArrayOf(-0.35, 0.2, -0.5, 0.0, -0.5, -0.18),
+            doubleArrayOf(-0.5, -0.38, -0.36, -0.5, -0.22, -0.5),
+            doubleArrayOf(-0.1, -0.5, -0.03, -0.43, 0.0, -0.33),
+            doubleArrayOf(0.03, -0.43, 0.1, -0.5, 0.22, -0.5),
+            doubleArrayOf(0.36, -0.5, 0.5, -0.38, 0.5, -0.18),
+            doubleArrayOf(0.5, 0.0, 0.35, 0.2, 0.0, 0.45),
+        )
+
+        /** Hoa: 5 cánh tròn (tâm, bán kính) không chồng nhau + nhuỵ — [cx, cy, r] theo đơn vị motif. */
+        val FLOWER_CIRCLES: List<DoubleArray> = (0 until 5).map { i ->
+            val a = i * 2 * Math.PI / 5 - Math.PI / 2
+            doubleArrayOf(0.32 * Math.cos(a), 0.32 * Math.sin(a), 0.18)
+        } + listOf(doubleArrayOf(0.0, 0.0, 0.12))
+    }
+}
+
+/** Trang "Chọn giao diện" (logic thuần — test JVM; iOS: ThemePicker trong KeyboardTheme.swift). */
+object ThemePicker {
+    data class Section(val title: String, val themes: List<KeyboardTheme>)
+    /** "Miễn phí" (Hệ thống, OLED, Tương phản cao) rồi "Plus" (còn lại), giữ thứ tự khai báo. */
+    val sections: List<Section> get() = listOf(
+        Section("Miễn phí", KeyboardTheme.entries.filter { !it.isPlus }),
+        Section("Plus", KeyboardTheme.entries.filter { it.isPlus }))
+    /** Chạm thẻ: chọn ngay nếu được phép; theme Plus bị khoá ⇒ null (IME/app không đổi gì). */
+    fun select(t: KeyboardTheme, s: ThemeSettings): ThemeSettings? = if (ThemeGate.allows(t)) s.copy(theme = t) else null
 }
 
 /**
@@ -265,7 +391,8 @@ data class ThemeSettings(
     val effectiveTheme: KeyboardTheme get() = if (ThemeGate.allows(theme)) theme else KeyboardTheme.SYSTEM
     fun wallpaperActive(fileExists: Boolean) = wallpaper && fileExists && ThemeGate.allowsWallpaper
     /** Tuỳ chỉnh nâng cao thực dùng: hết quyền Plus ⇒ mặc định (giá trị lưu giữ nguyên). */
-    val effectiveKeyStyle: KeyStyle get() = if (ThemeGate.allowsAdvanced) keyStyle else KeyStyle.DEFAULT
+    val effectiveKeyStyle: KeyStyle get() = (if (ThemeGate.allowsAdvanced) keyStyle else KeyStyle.DEFAULT)
+        .let { s -> if (s.corner == null && effectiveTheme.defaultCorner != null) s.copy(corner = effectiveTheme.defaultCorner) else s }
 
     fun toMap(): Map<String, Any> = mapOf(Keys.KEYBOARD_THEME to theme.id, Keys.WALLPAPER_ENABLED to wallpaper,
         Keys.WALLPAPER_DIM to dim, Keys.WALLPAPER_BLUR to blur, Keys.WALLPAPER_VERSION to version,

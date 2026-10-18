@@ -115,6 +115,7 @@
 		45143ADE3A7BEAE0B4841933 /* NumberChipsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7FCB71A2846557F9B5442F7 /* NumberChipsTests.swift */; };
 		4518F1378037764E853AA99B /* KeyHitBiasTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1AF0B5D15512A88DDB6CFF7 /* KeyHitBiasTests.swift */; };
 		4569D97A1018CAFF39BC9E3D /* KeyGeometry.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBCB7D7DAA868C8FB4B96C87 /* KeyGeometry.swift */; };
+		4589D85E320CAA7B02565FC4 /* theme-palettes.tsv in Resources */ = {isa = PBXBuildFile; fileRef = 037514BDA1AB2DB4CB67E97F /* theme-palettes.tsv */; };
 		467594276DC8BAEF5AC22F0E /* chat-cases.txt in Resources */ = {isa = PBXBuildFile; fileRef = F79F82B042565CDF4CA8558E /* chat-cases.txt */; };
 		47D0834606BB8E66AB2213D1 /* ScrollEdgeEffectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD24780DBDAEB07E6645C3E /* ScrollEdgeEffectTests.swift */; };
 		47E7F5A4D1C2F4DB41A97D74 /* SwipeVocabTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32954DB2D38C5B9675E4964D /* SwipeVocabTests.swift */; };
@@ -429,6 +430,7 @@
 		02937CC02BE49C39A5A7933D /* BackupFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackupFormat.swift; sourceTree = "<group>"; };
 		03130513F64077C5E7BBBE54 /* SwipeVocab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeVocab.swift; sourceTree = "<group>"; };
 		031628D00865BDD8F533A0B7 /* VNIBridgeTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VNIBridgeTests.swift; sourceTree = "<group>"; };
+		037514BDA1AB2DB4CB67E97F /* theme-palettes.tsv */ = {isa = PBXFileReference; path = "theme-palettes.tsv"; sourceTree = "<group>"; };
 		03B539001F2CE763F663710B /* VietTelexApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = VietTelexApp.swift; sourceTree = "<group>"; };
 		0599154D3A43772DC7456968 /* WordDeleteTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WordDeleteTests.swift; sourceTree = "<group>"; };
 		07973B1798B754A6DDA969C3 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
@@ -768,6 +770,7 @@
 				5E8B28C264666A6160445981 /* swipe-traces-sample.json */,
 				A91699D6082AF81FEF6F5B6E /* swipe-vocab.tsv */,
 				8CCBF78039DA75E228D4CDC2 /* text-tools.txt */,
+				037514BDA1AB2DB4CB67E97F /* theme-palettes.tsv */,
 				208D0B979D689BDA140031CD /* userlm-legacy-android-v1.bin */,
 				B588D27FC630D28D8CAA5CB1 /* userlm-legacy-ios.plist */,
 				F19DD98199410F2E9E9DAE24 /* userlm-vtl2-case.bin */,
@@ -1269,6 +1272,7 @@
 				8230AC1E2000E3632E55037B /* swipe-traces-sample.json in Resources */,
 				88960DD0C4E0E5721DE369DC /* swipe-vocab.tsv in Resources */,
 				03B12CE64D361D1987537103 /* text-tools.txt in Resources */,
+				4589D85E320CAA7B02565FC4 /* theme-palettes.tsv in Resources */,
 				E0A2DD33986C1D3ED43EA245 /* userlm-legacy-android-v1.bin in Resources */,
 				F3CD769E5BE2D6A260542902 /* userlm-legacy-ios.plist in Resources */,
 				82AF205821C99C760466EB34 /* userlm-vtl2-case.bin in Resources */,

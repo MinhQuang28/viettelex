@@ -101,6 +101,12 @@ enum BackupSettings {
         Spec(key: "systemBackdropMint", kind: .bool(false)),
         Spec(key: "systemBackdropSky", kind: .bool(false)),
         Spec(key: "systemBackdropLavender", kind: .bool(false)),
+        Spec(key: "systemBackdropBlackHeart", kind: .bool(false)),
+        Spec(key: "systemBackdropGreenFloral", kind: .bool(false)),
+        Spec(key: "systemBackdropSage", kind: .bool(false)),
+        Spec(key: "systemBackdropPureWhite", kind: .bool(false)),
+        Spec(key: "systemBackdropNeon", kind: .bool(false)),
+        Spec(key: "systemBackdropPink", kind: .bool(false)),
         // Ngôn ngữ giao diện app (L10n) — mặc định "vi", không theo máy.
         Spec(key: "uiLanguage", kind: .string("vi", ["vi", "en"])),
         // Dịch trên máy (Plus): ngôn ngữ đích — chỉ iOS dùng.

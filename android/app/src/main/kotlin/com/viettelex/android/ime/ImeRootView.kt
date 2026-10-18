@@ -49,8 +49,11 @@ class ImeRootView(
     /** Nền theme (màu / gradient kính) — nền view khi dính đáy, vẽ tay trong khung khi thả nổi. */
     private val bgDrawable: android.graphics.drawable.Drawable = theme.palette.bgBottom.let { bottom ->
         // Kính giả lập: gradient dọc (GradientDrawable — vẽ phẳng, không blur).
+        val decoration = theme.palette.decoration
         if (wallpaperFile == null && bottom != null) android.graphics.drawable.GradientDrawable(
             android.graphics.drawable.GradientDrawable.Orientation.TOP_BOTTOM, intArrayOf(theme.bg, bottom))
+        // Tim đen / Hoa xanh: hoạ tiết là MỘT Path trong nền (vẽ khi nền đổi, không mỗi phím).
+        else if (wallpaperFile == null && decoration != null) ThemeDecorDrawable(theme.bg, decoration, theme.density)
         else android.graphics.drawable.ColorDrawable(theme.bg)
     }
 

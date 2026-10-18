@@ -95,12 +95,22 @@ struct ThemeSettingsView: View {
             }
 
             Section {
-                LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 12)], spacing: 12) {
-                    ForEach(KeyboardTheme.allCases, id: \.self) { t in
-                        themeTile(t)
+                // Bộ theme dài (14) ⇒ chọn ở trang con "Chọn giao diện"; ở đây một dòng tóm tắt.
+                NavigationLink {
+                    ThemePickerView(settings: $settings, onChange: save)
+                } label: {
+                    HStack(spacing: 12) {
+                        ThemePreview(palette: settings.theme.palette(systemDark: scheme == .dark),
+                                     wallpaper: nil, dim: 0, large: false,
+                                     keyStyle: KeyStyle(corner: settings.theme.defaultCorner))
+                            .frame(width: 56, height: 36)
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                            .overlay(RoundedRectangle(cornerRadius: 6).stroke(Color.secondary.opacity(0.3), lineWidth: 1))
+                        Text(L("Giao diện bàn phím"))
+                        Spacer()
+                        Text(settings.effectiveTheme.title).foregroundStyle(.secondary).lineLimit(1)
                     }
                 }
-                .padding(.vertical, 6)
                 if settings.theme.hasOwnBackground {
                     Toggle(isOn: systemBackdropBinding) {
                         VStack(alignment: .leading, spacing: 2) {
@@ -353,34 +363,6 @@ struct ThemeSettingsView: View {
             .foregroundStyle(.white)
     }
 
-    private func themeTile(_ t: KeyboardTheme) -> some View {
-        let selected = settings.theme == t
-        let locked = !ThemeGate.allows(t)
-        return Button {
-            guard !locked else { return }
-            settings.theme = t
-            save()
-        } label: {
-            VStack(spacing: 6) {
-                ThemePreview(palette: t.palette(systemDark: scheme == .dark),
-                             wallpaper: nil, dim: 0, large: false)
-                    .frame(height: 64)
-                    .clipShape(RoundedRectangle(cornerRadius: 10))
-                    .overlay(RoundedRectangle(cornerRadius: 10)
-                        .stroke(selected ? Color.accentColor : Color.secondary.opacity(0.3),
-                                lineWidth: selected ? 3 : 1))
-                HStack(spacing: 3) {
-                    Text(t.title).font(.caption).lineLimit(1)
-                    if t.isPlus { plusBadge }
-                }
-                .foregroundStyle(.primary)
-            }
-            .opacity(locked ? 0.5 : 1)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(t.title + (selected ? L(", đang chọn") : ""))
-    }
-
     private func binding(_ kp: WritableKeyPath<ThemeSettings, Bool>) -> Binding<Bool> {
         Binding(get: { settings[keyPath: kp] }, set: { settings[keyPath: kp] = $0; save() })
     }
@@ -535,6 +517,7 @@ struct ThemePreview: View {
             ZStack {
                 if !keysOnly { systemBackdrop }
                 if !keysOnly, let bg = palette.background { Color(bg.ui) }
+                if !keysOnly, let d = palette.decoration { decoration(d, in: geo.size) }
                 if let wallpaper {
                     // Ảnh nền không theo độ trong suốt phím (KeyboardPalette.wallpaperLayer).
                     let wl = palette.wallpaperLayer(dim: dim)
@@ -560,6 +543,14 @@ struct ThemePreview: View {
         }
     }
 
+    /// Hoạ tiết nền theo đúng hình học bàn phím thật (KeyboardDecoration), thu theo bề ngang
+    /// bàn phím iPhone 390pt để bản thu nhỏ trông như bàn phím thật.
+    private func decoration(_ d: KeyboardDecoration, in size: CGSize) -> some View {
+        let k = max(size.width, 1) / 390
+        let path = d.path(in: CGSize(width: 390, height: size.height / k))
+        return Path(path).applying(CGAffineTransform(scaleX: k, y: k)).fill(Color(d.color.ui))
+    }
+
     private func keys(in size: CGSize) -> some View {
         let gap: CGFloat = large ? 5 : 2
         let pad: CGFloat = large ? 6 : 3
@@ -575,8 +566,9 @@ struct ThemePreview: View {
                 }
             }
             HStack(spacing: gap) {
-                key(large ? "123" : "", w: keyW * 2, h: keyH, r: radius, fill: palette.specialFill)
-                key(large ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius)
+                key(large ? "123" : "", w: keyW * 2, h: keyH, r: radius,
+                    fill: palette.functionFill ?? palette.specialFill, ink: palette.fnInk)
+                key(large ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius, fill: palette.fnFill)
                 key(large ? "return" : "", w: keyW * 2 + gap, h: keyH, r: radius, fill: palette.accent,
                     ink: palette.accentInk)
             }
@@ -599,5 +591,79 @@ struct ThemePreview: View {
             .overlay(Text(label).font(font).minimumScaleFactor(0.5).lineLimit(1)
                 .foregroundColor(Color((ink ?? palette.keyInk).ui)))
             .frame(width: max(w, 1), height: max(h, 1))
+    }
+}
+
+/// "Chọn giao diện": lưới 2 cột thẻ xem trước (vẽ bằng token theme, không ảnh), chia "Miễn phí" /
+/// "Plus". Chạm là chọn ngay và ở lại trang (thẻ đang chọn có viền + dấu ✓). Theme Plus bị khoá:
+/// mờ + nhãn Plus, chạm không chọn (cổng PlusGate như cũ), lối mua Plus ở đầu trang.
+struct ThemePickerView: View {
+    @Binding var settings: ThemeSettings
+    let onChange: () -> Void
+    @Environment(\.colorScheme) private var scheme
+
+    private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
+
+    var body: some View {
+        List {
+            if !ThemeGate.allowsWallpaper {
+                Section {
+                    PlusEntryRow()
+                } footer: {
+                    Text(L("Theme có nhãn Plus và ảnh nền thuộc VietTelex Plus. Hệ thống, Tối OLED và Tương phản cao luôn miễn phí."))
+                }
+            }
+            ForEach(ThemePicker.sections, id: \.title) { section in
+                Section {
+                    LazyVGrid(columns: columns, spacing: 14) {
+                        ForEach(section.themes, id: \.self) { card($0) }
+                    }
+                    .padding(.vertical, 6)
+                } header: { Text(L(section.title)) }
+            }
+        }
+        .navigationTitle(L("Chọn giao diện"))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    private func card(_ t: KeyboardTheme) -> some View {
+        let selected = settings.theme == t
+        let locked = !ThemeGate.allows(t)
+        return Button {
+            guard let next = ThemePicker.select(t, in: settings) else { return }
+            settings = next
+            onChange()
+        } label: {
+            VStack(spacing: 6) {
+                ThemePreview(palette: t.palette(systemDark: scheme == .dark),
+                             wallpaper: nil, dim: 0, large: false,
+                             keyStyle: KeyStyle(corner: t.defaultCorner))
+                    .frame(height: 78)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .stroke(selected ? Color.accentColor : Color.secondary.opacity(0.3),
+                                lineWidth: selected ? 3 : 1))
+                    .overlay(alignment: .topTrailing) {
+                        if selected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.white, Color.accentColor).font(.title3).padding(4)
+                        }
+                    }
+                HStack(spacing: 4) {
+                    Text(t.title).font(.footnote).lineLimit(1)
+                    if t.isPlus && locked {
+                        Text("Plus").font(.caption2.weight(.bold))
+                            .padding(.horizontal, 5).padding(.vertical, 1)
+                            .background(Capsule().fill(Color.orange.opacity(0.85)))
+                            .foregroundStyle(.white)
+                    }
+                }
+                .foregroundStyle(.primary)
+            }
+            .opacity(locked ? 0.5 : 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(t.title + (selected ? L(", đang chọn") : "") + (locked ? " · Plus" : ""))
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 }

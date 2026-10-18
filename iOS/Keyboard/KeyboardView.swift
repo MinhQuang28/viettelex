@@ -212,11 +212,19 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// Chữ/icon trên phím (đã áp độ trong suốt ký tự). Balloon/popup dùng `palette.ink`.
     private var ink: UIColor { palette.keyInk.ui }
     private func inkFaded(_ a: Double) -> UIColor { palette.keyInk.alpha(a).ui }
+    /// Phím chức năng + phím cách: nền / chữ-icon (= phím chữ trừ theme tô riêng — Xanh lá,
+    /// Trắng hồng). Đọc một lần lúc dựng phím.
+    private var fnFill: UIColor { palette.fnFill.ui }
+    private var fnInk: UIColor { palette.fnInk.ui }
     /// Nền theme + ảnh nền + lớp phủ: 3 view phẳng dưới hàng phím (không blur,
     /// không bóng). Ẩn hết ở theme nền trong suốt → giữ touchableClear như cũ.
     private let themeBackdrop = UIView()
     private let wallpaperView = UIImageView()
     private let wallpaperDim = UIView()
+    /// Hoạ tiết nền (Tim đen / Hoa xanh): MỘT CAShapeLayer trong themeBackdrop, path dựng lại chỉ
+    /// khi đổi cỡ — rasterize một lần, không vẽ gì mỗi phím / mỗi lần gõ.
+    private let decorLayer = CAShapeLayer()
+    private var decorPathSize: CGSize = .zero
     private var wallpaperActive = false
     private var wallpaperLoadedFor: CGSize = .zero
 
@@ -1747,6 +1755,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         let clear = themeSettings.clearBackground(systemDark: systemDark, wallpaperActive: wallpaperActive)
         themeBackdrop.backgroundColor = clear ? nil : palette.background?.ui
         themeBackdrop.isHidden = clear || palette.background == nil
+        applyDecoration(hidden: clear)
         // Nền tự vẽ: bo 2 góc trên theo khung kính bàn phím iOS 26+ (không còn góc vuông đen
         // chồng lên góc bo xám của hệ thống). cornerRadius trên view lá màu phẳng / ảnh ⇒ không
         // offscreen pass.
@@ -1780,6 +1789,34 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         for v in [themeBackdrop, wallpaperView, wallpaperDim] where v.superview === self && v.frame != bounds {
             v.frame = bounds
         }
+        layoutDecoration()
+    }
+
+    /// Hoạ tiết theme: bật/tắt + màu (mỗi lần đổi theme / sáng-tối). Không theme nào có hoạ tiết
+    /// ⇒ layer chưa từng được thêm (0 chi phí như trước).
+    private func applyDecoration(hidden: Bool) {
+        guard let d = palette.decoration, !hidden else {
+            if decorLayer.superlayer != nil { decorLayer.isHidden = true }
+            return
+        }
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        if decorLayer.superlayer == nil { themeBackdrop.layer.addSublayer(decorLayer) }
+        decorLayer.isHidden = false
+        decorLayer.fillColor = d.color.ui.cgColor
+        decorPathSize = .zero                     // motif có thể đã đổi → dựng lại path
+        CATransaction.commit()
+        layoutDecoration()
+    }
+
+    private func layoutDecoration() {
+        guard let d = palette.decoration, decorLayer.superlayer != nil, !decorLayer.isHidden else { return }
+        let size = themeBackdrop.bounds.size
+        guard size.width > 0, size.height > 0, size != decorPathSize else { return }
+        decorPathSize = size
+        CATransaction.begin(); CATransaction.setDisableActions(true)
+        decorLayer.frame = CGRect(origin: .zero, size: size)
+        decorLayer.path = d.path(in: size)
+        CATransaction.commit()
     }
     #if DEBUG
     /// Test: frame nền theme / ảnh nền / lớp phủ + bán kính bo.
@@ -1788,6 +1825,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
     /// Test: alpha ảnh nền + màu lớp phủ (độ trong suốt phím không được làm mất ảnh nền).
     var debugWallpaperLayer: (alpha: CGFloat, overlay: UIColor?) { (wallpaperView.alpha, wallpaperDim.backgroundColor) }
+    /// Test: hoạ tiết nền đang hiện (có path) hay không.
+    var debugDecorationVisible: Bool {
+        decorLayer.superlayer != nil && !decorLayer.isHidden && !themeBackdrop.isHidden && decorLayer.path != nil
+    }
     #endif
 
     /// Giải ảnh nền ở đúng cỡ view, ngoài main thread (ImageIO thumbnail).
@@ -1890,8 +1931,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             b.setImage(UIImage(systemName: symbol), for: .normal)
             // Shift ON/CAPS = phím đảo màu (nền trắng, glyph đen) như stock —
             // cả dark mode, nếu không ON và OFF trông y hệt nhau.
-            let fill = shift != .off ? shiftOnFill : plainFill
-            b.tintColor = shift != .off ? shiftOnInk : ink
+            let fill = shift != .off ? shiftOnFill : fnFill
+            b.tintColor = shift != .off ? shiftOnInk : fnInk
             b.normalBackground = fill
             // ⇧ đổi trạng thái ở touchDown — ngón còn đè thì giữ nền sẫm, nhả tay mới về nền mới.
             if !((b as? KeyButton)?.pressShown ?? false) { b.backgroundColor = fill }
@@ -2560,12 +2601,12 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// Phím chức năng iPad kiểu stock: nền trắng như phím chữ (đè thì sẫm), icon /
     /// nhãn dạt góc dưới trái hoặc phải.
     private func padCorner(_ b: KeyButton, left: Bool) {
-        b.backgroundColor = plainFill
-        b.normalBackground = plainFill
+        b.backgroundColor = fnFill
+        b.normalBackground = fnFill
         b.pressedBackground = specialFill
         // Cỡ nhãn/icon + lề góc theo hướng máy: KeyGeometry.Typography.Pad (KeyButton.padRole).
         b.padRole = .corner(left: left)
-        let ink = self.ink
+        let ink = self.fnInk
         b.tintColor = ink            // icon (tab/⇪/⇧/⌫/return…) đậm, không xanh/mờ
         b.setTitleColor(ink, for: .normal)
     }
@@ -2897,7 +2938,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             ret.setImage(UIImage(systemName: "return.left",
                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)), for: .normal)
             // Đậm như stock iOS 26+ (trước: mờ 0.16 ngang logo Vᴛ — khó thấy).
-            ret.tintColor = ink
+            ret.tintColor = fnInk
         } else {
             // Return dạng HÀNH ĐỘNG (go/search/send/done…): nút XANH nổi bật +
             // chữ trắng như stock (Safari search…), thay vì xám lẫn phím thường.
@@ -2938,7 +2979,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         let globe = baseButton(title: "", special: true)
         globe.setImage(UIImage(systemName: "globe",
             withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)), for: .normal)
-        globe.tintColor = ink
+        globe.tintColor = fnInk
         globe.accessibilityLabel = L("Bàn phím tiếp theo")
         if Self.isPad { globe.padRole = .icon }
         globe.addAction(UIAction { _ in Self.clickModifier() }, for: .touchDown)
@@ -2967,7 +3008,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             self.emojiABCSlot = .init(minX: r.minX, maxX: r.maxX,
                                       top: self.rowsContainer.frame.maxY - r.minY)
         }, for: .touchDown)
-        emojiBtn.tintColor = ink
+        emojiBtn.tintColor = fnInk
         emojiBtn.accessibilityLabel = "Emoji"
         return emojiBtn
     }
@@ -2976,8 +3017,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// tiên mép với ","). Bàn tách đôi có thêm một phím cách phụ bên trái, cùng hành vi gõ.
     private func makeSpaceKey(primary: Bool) -> KeyButton {
         let space = baseButton(title: "", special: true)
-        space.backgroundColor = plainFill
-        space.normalBackground = plainFill
+        space.backgroundColor = fnFill
+        space.normalBackground = fnFill
         space.pressedBackground = specialFill      // space sẫm lại khi đè
         space.accessibilityLabel = L("Dấu cách")
         if primary { spaceBar = space; installSpaceMark(on: space) }
@@ -3074,7 +3115,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             }
             clear.setImage(UIImage(systemName: "trash",
                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)), for: .normal)
-            clear.tintColor = ink
+            clear.tintColor = fnInk
             clear.accessibilityLabel = L("Xoá ô nhập")
             emojiBtn = clear
         } else {
@@ -3158,7 +3199,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             let d = baseButton(title: "", special: true)
             d.setImage(UIImage(systemName: "keyboard.chevron.compact.down",
                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 17, weight: .regular)), for: .normal)
-            d.tintColor = ink
+            d.tintColor = fnInk
             d.accessibilityLabel = L("Ẩn bàn phím")
             d.padRole = .icon
             d.addAction(UIAction { _ in Self.clickModifier() }, for: .touchDown)
@@ -3688,9 +3729,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             b.layer.borderWidth = 1
             b.layer.borderColor = border.ui.cgColor
         }
-        b.setTitleColor(ink, for: .normal)
-        // iOS 26+: MỌI phím cùng nền (phím chức năng không còn xám) — 26/09/2026.
-        b.backgroundColor = plainFill
+        b.setTitleColor(special ? fnInk : ink, for: .normal)
+        // iOS 26+: MỌI phím cùng nền (phím chức năng không còn xám) — 26/09/2026. Theme tô phím
+        // chức năng riêng (Xanh lá) ⇒ fnFill.
+        b.backgroundColor = special ? fnFill : plainFill
         b.normalBackground = b.backgroundColor
         // Pressed state cho phím chức năng: swap màu phẳng, KHÔNG
         // UIView.animate — animation per-touch trên main thread là latency
@@ -4107,7 +4149,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             b.backgroundColor = shiftOnFill
             b.tintColor = shiftOnInk
         } else {
-            b.tintColor = ink
+            b.tintColor = fnInk
         }
         b.normalBackground = b.backgroundColor
         shiftKeys.append(b)
@@ -4131,7 +4173,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         b.setImage(UIImage(systemName: "delete.left"), for: .normal)
         if Self.isPad { b.padRole = .icon }   // icon cỡ stock iPad (Typography.Pad)
         b.setImage(UIImage(systemName: "delete.left.fill"), for: .highlighted)
-        b.tintColor = ink
+        b.tintColor = fnInk
         b.accessibilityLabel = L("Xoá")
         // touchDown xoá 1 ký tự như cũ; kéo ngang → vuốt xoá theo từ (xem MARK dưới).
         b.addTarget(self, action: #selector(backspaceDown(_:event:)), for: .touchDown)

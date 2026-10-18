@@ -60,6 +60,10 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val bg = palette.bg
     val keyFill = palette.keyFill
     val specialFill = palette.specialFill
+    /** Phím chức năng / phím cách / chữ-icon phím chức năng (= như cũ trừ theme tô riêng — Xanh lá, Trắng hồng). */
+    val fnFill = palette.fnFill
+    val spaceFill = palette.spaceFill
+    val fnInk = palette.fnInk
     /** Chữ/icon trên phím, strip, pane (đã đổi đen/trắng nếu nền trong suốt lộ nền khác tông). */
     val ink = palette.keyInk
     /** Chữ balloon/popup — nền balloon không trong suốt nên giữ màu theme gốc. */

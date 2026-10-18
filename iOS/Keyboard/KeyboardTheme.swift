@@ -72,13 +72,24 @@ struct KeyboardPalette: Equatable {
     /// nil = `isDark`. Khác `isDark` khi theme tự vẽ phím nhưng nền theo hệ thống.
     var surfaceDark: Bool? = nil
 
+    /// Nền phím CHỨC NĂNG + phím cách (⇧ ⌫ 123 🌐 😊 return thường) — nil = `keyFill` (iOS 26+:
+    /// mọi phím cùng nền). Chỉ theme tô phím chức năng riêng (Xanh lá) đặt. Android cùng ý nghĩa.
+    var functionFill: RGBA? = nil
+    /// Chữ/icon trên phím chức năng (đã áp độ trong suốt ký tự) — nil = `keyInk`. Trắng hồng.
+    var functionInk: RGBA? = nil
+    /// Hoạ tiết vẽ MỘT lần vào lớp nền (tim / hoa) — nil = nền phẳng. Không vẽ gì mỗi phím.
+    var decoration: KeyboardDecoration? = nil
+
     var keyInk: RGBA { keyLabel ?? ink }
+    var fnFill: RGBA { functionFill ?? keyFill }
+    var fnInk: RGBA { functionInk ?? keyInk }
 
     /// "Nền theo hệ thống": bỏ nền theme (vật liệu bàn phím hệ thống lộ ra, cùng màu dải
     /// 🌐/🎤), GIỮ màu phím. Chữ thanh gợi ý đổi đen/trắng nếu không đọc được trên nền đó.
     func onSystemBackdrop(systemDark: Bool) -> KeyboardPalette {
         var p = self
         p.background = nil
+        p.decoration = nil
         p.barInk = KeyboardTransparency.readable(barInk, on: KeyboardTransparency.systemBackdrop(dark: systemDark))
         p.surfaceDark = systemDark
         return p
@@ -101,7 +112,9 @@ struct KeyboardPalette: Equatable {
         var p = self
         p.keyFill = legible(keyFill)
         p.specialFill = legible(specialFill)
+        p.functionFill = functionFill.map(legible)
         p.background = nil
+        p.decoration = nil
         return p
     }
     /// Màu lớp phủ ảnh nền: tối cho theme tối, sáng cho theme sáng.
@@ -161,17 +174,23 @@ extension KeyboardPalette {
             p.specialFill = specialFill.alpha(s)
             p.accent = accent.alpha(s)
             p.keyBorder = keyBorder?.alpha(s)
+            p.functionFill = functionFill?.alpha(s)
+            if let d = decoration { p.decoration?.color = d.color.alpha(s) }
             // Nền thật sau chữ ≈ lớp nền mới trên backdrop hệ thống. Ảnh nền vẫn hiện nguyên
             // ⇒ ước lượng bằng tông lớp phủ (tối cho theme tối, sáng cho theme sáng).
             let sys = T.systemBackdrop(dark: systemDark)
             let behind = (wallpaper ? wallpaperOverlay : p.background)?.over(sys) ?? sys
-            if !keyLabelPinned { label = T.readable(ink, on: p.keyFill.over(behind)) }
+            if !keyLabelPinned {
+                label = T.readable(ink, on: p.keyFill.over(behind))
+                p.functionInk = functionInk.map { T.readable($0, on: p.fnFill.over(behind)) }
+            }
             p.barInk = T.readable(barInk, on: behind)
             p.accentInk = T.readable(accentInk, on: p.accent.over(behind))
             if label != ink { p.isDark = label.luminance > 0.5 }
         }
         let la = T.alpha(l)
         p.keyLabel = label.alpha(la)
+        p.functionInk = p.functionInk?.alpha(la)
         p.accentInk = p.accentInk.alpha(la)
         return p
     }
@@ -179,6 +198,9 @@ extension KeyboardPalette {
 
 enum KeyboardTheme: String, CaseIterable {
     case system, oled, contrast, peach, mint, sky, lavender, glass
+    // Bộ 10/2026 (gợi ý từ các theme cộng đồng được thích nhất — thiết kế riêng, không dùng tài
+    // sản của ai, không nhân vật có thương hiệu). rawValue = giá trị lưu, trùng id Android.
+    case blackHeart, greenFloral, sage, pureWhite, neon, pink
 
     var title: String {
         switch self {
@@ -190,8 +212,18 @@ enum KeyboardTheme: String, CaseIterable {
         case .sky: return L("Trời xanh")
         case .lavender: return L("Oải hương")
         case .glass: return L("Kính")
+        case .blackHeart: return L("Tim đen")
+        case .greenFloral: return L("Hoa xanh")
+        case .sage: return L("Xanh lá")
+        case .pureWhite: return L("Trắng hồng")
+        case .neon: return L("Neon")
+        case .pink: return L("Hồng")
         }
     }
+
+    /// Bo góc mặc định của theme (% như KeyStyle.corner) khi người dùng chưa chỉnh — nil = bo stock.
+    /// "Hồng": phím tròn trịa. Android cùng giá trị.
+    var defaultCorner: Int? { self == .pink ? 70 : nil }
 
     /// Theme tự vẽ nền (OLED, tương phản cao, pastel) — có tuỳ chọn "Nền theo hệ thống".
     /// Hệ thống / Kính vốn trong suốt.
@@ -208,7 +240,8 @@ enum KeyboardTheme: String, CaseIterable {
     var isPlus: Bool {
         switch self {
         case .system, .oled, .contrast: return false
-        case .peach, .mint, .sky, .lavender, .glass: return true
+        case .peach, .mint, .sky, .lavender, .glass,
+             .blackHeart, .greenFloral, .sage, .pureWhite, .neon, .pink: return true
         }
     }
 
@@ -246,18 +279,60 @@ enum KeyboardTheme: String, CaseIterable {
                                    balloon: RGBA(hex: 0x141414),
                                    accent: RGBA(hex: 0xFFD60A), accentInk: .black,
                                    keyBorder: RGBA.white.alpha(0.85), isDark: true)
+        // Pastel: sáng = bảng cũ; tối = cùng họ màu, nền + phím sẫm ngả màu, chữ sáng, giữ màu nhấn
+        // (trước 10/2026 pastel không đổi theo chế độ tối).
         case .peach:
-            return Self.pastel(bg: 0xFBE3E1, key: 0xFFF8F7, special: 0xF1C4BF,
-                               ink: 0x4A2226, accent: 0xC2505A)
+            return systemDark
+                ? Self.solid(bg: 0x2A1A1C, key: 0x45292D, special: 0x5C3A3F, ink: 0xFBE3E1, accent: 0xC2505A)
+                : Self.solid(bg: 0xFBE3E1, key: 0xFFF8F7, special: 0xF1C4BF, ink: 0x4A2226, accent: 0xC2505A)
         case .mint:
-            return Self.pastel(bg: 0xD9F2E7, key: 0xF6FFFA, special: 0xAFDDC9,
-                               ink: 0x173B30, accent: 0x1F7A5C)
+            return systemDark
+                ? Self.solid(bg: 0x10241D, key: 0x1D3B30, special: 0x2A5244, ink: 0xD9F2E7, accent: 0x1F7A5C)
+                : Self.solid(bg: 0xD9F2E7, key: 0xF6FFFA, special: 0xAFDDC9, ink: 0x173B30, accent: 0x1F7A5C)
         case .sky:
-            return Self.pastel(bg: 0xDAE9F8, key: 0xF6FAFF, special: 0xB3CFEE,
-                               ink: 0x14304C, accent: 0x2C6BB8)
+            return systemDark
+                ? Self.solid(bg: 0x111E2E, key: 0x1E324A, special: 0x2B4566, ink: 0xDAE9F8, accent: 0x2C6BB8)
+                : Self.solid(bg: 0xDAE9F8, key: 0xF6FAFF, special: 0xB3CFEE, ink: 0x14304C, accent: 0x2C6BB8)
         case .lavender:
-            return Self.pastel(bg: 0xE8E2F6, key: 0xFBF9FF, special: 0xCBBFEA,
-                               ink: 0x2C2345, accent: 0x6A48C4)
+            return systemDark
+                ? Self.solid(bg: 0x1C1830, key: 0x2E2848, special: 0x403862, ink: 0xE8E2F6, accent: 0x6A48C4)
+                : Self.solid(bg: 0xE8E2F6, key: 0xFBF9FF, special: 0xCBBFEA, ink: 0x2C2345, accent: 0x6A48C4)
+        // Tim đen: luôn tối — nền đen, chữ trắng, tim hồng nhỏ vẽ một lần ở lớp nền.
+        case .blackHeart:
+            return Self.solid(bg: 0x000000, key: 0x1A1A1A, special: 0x333333, ink: 0xFFFFFF, accent: 0xE63E7A,
+                              decoration: KeyboardDecoration(motif: .hearts, color: RGBA(hex: 0xFF6FA3, alpha: 0.55)))
+        // Hoa xanh: phím trắng viền xanh mảnh, chữ xanh, hoa nhỏ mờ ở nền.
+        case .greenFloral:
+            return systemDark
+                ? Self.solid(bg: 0x0F1D15, key: 0x16291E, special: 0x21392A, ink: 0x9EE0B6, accent: 0x2E8B57,
+                             border: RGBA(hex: 0x4CAF6E, alpha: 0.8),
+                             decoration: KeyboardDecoration(motif: .flowers, color: RGBA(hex: 0x4CAF6E, alpha: 0.28)))
+                : Self.solid(bg: 0xEEF6EF, key: 0xFFFFFF, special: 0xDCEEDF, ink: 0x256B42, accent: 0x2E8B57,
+                             border: RGBA(hex: 0x4CAF6E),
+                             decoration: KeyboardDecoration(motif: .flowers, color: RGBA(hex: 0x6DBE8A, alpha: 0.35)))
+        // Xanh lá: phím sáng, phím chức năng + phím cách màu xanh xô thơm (sage).
+        case .sage:
+            return systemDark
+                ? Self.solid(bg: 0x161C15, key: 0x2A3328, special: 0x3A4A36, ink: 0xE4EDE1, accent: 0x5E7F55,
+                             function: 0x4A5E45)
+                : Self.solid(bg: 0xE4EBE2, key: 0xFBFCFA, special: 0x93AB8C, ink: 0x24331F, accent: 0x5E7F55,
+                             function: 0xA9BFA3)
+        // Trắng hồng: trắng xám rất nhạt, icon/nhãn phím chức năng (Nhập, ⇧, ⌫…) màu hồng.
+        case .pureWhite:
+            return systemDark
+                ? Self.solid(bg: 0x1A1A1C, key: 0x2C2C2F, special: 0x3A3A3E, ink: 0xFFFFFF, accent: 0xD6336C,
+                             functionInk: 0xFF7AA8)
+                : Self.solid(bg: 0xF4F4F6, key: 0xFFFFFF, special: 0xE8E8EC, ink: 0x1C1C1E, accent: 0xD6336C,
+                             functionInk: 0xC2255C)
+        // Neon: luôn tối — nền gần đen, phím xanh mòng két sẫm viền cyan, chữ cyan.
+        case .neon:
+            return Self.solid(bg: 0x05080A, key: 0x0E2A2E, special: 0x15393E, ink: 0x5FF5E8, accent: 0x00BFB2,
+                              accentInk: 0x000000, border: RGBA(hex: 0x00E5D4, alpha: 0.7))
+        // Hồng: hồng pastel, phím bo tròn (defaultCorner).
+        case .pink:
+            return systemDark
+                ? Self.solid(bg: 0x2B1520, key: 0x472335, special: 0x5E2F46, ink: 0xFCDDE8, accent: 0xD94680)
+                : Self.solid(bg: 0xFCDDE8, key: 0xFFF5F9, special: 0xF6B8CE, ink: 0x5A1F38, accent: 0xD94680)
         case .glass:
             // Nền trong suốt: backdrop mờ của hệ thống lộ ra (miễn phí, không
             // blur tự vẽ); phím trắng bán trong kiểu Liquid Glass.
@@ -276,14 +351,103 @@ enum KeyboardTheme: String, CaseIterable {
         }
     }
 
-    private static func pastel(bg: UInt32, key: UInt32, special: UInt32,
-                               ink: UInt32, accent: UInt32) -> KeyboardPalette {
-        let a = RGBA(hex: accent)
-        return KeyboardPalette(background: RGBA(hex: bg), keyFill: RGBA(hex: key),
-                               specialFill: RGBA(hex: special), ink: RGBA(hex: ink),
-                               trail: a.alpha(0.6), barInk: RGBA(hex: ink),
-                               balloon: RGBA(hex: key), accent: a, accentInk: .white,
-                               keyBorder: nil, isDark: false)
+    /// Theme nền đục một màu (pastel, Tim đen, Neon…). `special` = phím khi đè (iOS) / phím chức
+    /// năng (Android); `function` = nền phím chức năng + phím cách nếu theme tô riêng.
+    private static func solid(bg: UInt32, key: UInt32, special: UInt32, ink: UInt32, accent: UInt32,
+                              accentInk: UInt32 = 0xFFFFFF, border: RGBA? = nil, function: UInt32? = nil,
+                              functionInk: UInt32? = nil, decoration: KeyboardDecoration? = nil) -> KeyboardPalette {
+        let a = RGBA(hex: accent), i = RGBA(hex: ink)
+        var p = KeyboardPalette(background: RGBA(hex: bg), keyFill: RGBA(hex: key),
+                                specialFill: RGBA(hex: special), ink: i,
+                                trail: a.alpha(0.6), barInk: i,
+                                balloon: RGBA(hex: key), accent: a, accentInk: RGBA(hex: accentInk),
+                                keyBorder: border, isDark: i.luminance > 0.5)
+        p.functionFill = function.map { RGBA(hex: $0) }
+        p.functionInk = functionInk.map { RGBA(hex: $0) }
+        p.decoration = decoration
+        return p
+    }
+}
+
+/// Hoạ tiết nền theme (Tim đen: tim; Hoa xanh: hoa) — MỘT path vẽ một lần vào lớp nền
+/// (CAShapeLayer iOS / Drawable Android), dựng lại chỉ khi đổi cỡ bàn phím. 0 chi phí mỗi phím,
+/// không ảnh. Hình học thuần (test được); Android giữ y hệt (ThemeDecoration trong KeyboardTheme.kt).
+struct KeyboardDecoration: Equatable {
+    enum Motif: String { case hearts, flowers }
+    var motif: Motif
+    var color: RGBA
+
+    /// Lưới so le (pt / dp): bước ngang / dọc, cỡ motif, lề trong (tránh góc bo của nền).
+    static let stepX = 64.0, stepY = 52.0, motifSize = 8.0, inset = 14.0
+    /// Trần số motif — bàn phím rộng (iPad) giãn lưới thay vì vẽ thêm.
+    static let maxMotifs = 120
+
+    /// Tâm motif phủ vùng w×h (tất định: cùng cỡ ⇒ cùng hình).
+    static func placements(width w: Double, height h: Double) -> [(x: Double, y: Double)] {
+        guard w > 2 * inset, h > 2 * inset else { return [] }
+        func grid(_ k: Double) -> [(x: Double, y: Double)] {
+            var out: [(x: Double, y: Double)] = []
+            var row = 0
+            var y = inset + motifSize / 2
+            while y <= h - inset {
+                var x = inset + motifSize / 2 + (row % 2 == 1 ? stepX * k / 2 : 0)
+                while x <= w - inset { out.append((x, y)); x += stepX * k }
+                y += stepY * k; row += 1
+            }
+            return out
+        }
+        var k = 1.0
+        var pts = grid(k)
+        while pts.count > maxMotifs { k *= 1.15; pts = grid(k) }
+        return pts
+    }
+
+    /// Path mọi motif trong vùng `size` (gốc trên-trái, y xuống).
+    func path(in size: CGSize) -> CGPath {
+        let path = CGMutablePath()
+        let s = CGFloat(Self.motifSize)
+        for c in Self.placements(width: Double(size.width), height: Double(size.height)) {
+            let o = CGPoint(x: c.x, y: c.y)
+            func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: o.x + x * s, y: o.y + y * s) }
+            switch motif {
+            case .hearts:
+                path.move(to: p(0, 0.45))
+                path.addCurve(to: p(-0.5, -0.18), control1: p(-0.35, 0.2), control2: p(-0.5, 0))
+                path.addCurve(to: p(-0.22, -0.5), control1: p(-0.5, -0.38), control2: p(-0.36, -0.5))
+                path.addCurve(to: p(0, -0.33), control1: p(-0.1, -0.5), control2: p(-0.03, -0.43))
+                path.addCurve(to: p(0.22, -0.5), control1: p(0.03, -0.43), control2: p(0.1, -0.5))
+                path.addCurve(to: p(0.5, -0.18), control1: p(0.36, -0.5), control2: p(0.5, -0.38))
+                path.addCurve(to: p(0, 0.45), control1: p(0.5, 0), control2: p(0.35, 0.2))
+                path.closeSubpath()
+            case .flowers:
+                // 5 cánh tròn không chồng nhau + nhuỵ — tô nonzero, không cần lớp thứ hai.
+                for i in 0..<5 {
+                    let a = Double(i) * 2 * .pi / 5 - .pi / 2
+                    let r: CGFloat = 0.18
+                    let cx = CGFloat(0.32 * cos(a)), cy = CGFloat(0.32 * sin(a))
+                    path.addEllipse(in: CGRect(origin: p(cx - r, cy - r), size: CGSize(width: 2 * r * s, height: 2 * r * s)))
+                }
+                path.addEllipse(in: CGRect(origin: p(-0.12, -0.12), size: CGSize(width: 0.24 * s, height: 0.24 * s)))
+            }
+        }
+        return path
+    }
+}
+
+/// Trang "Chọn giao diện" (logic thuần — test được; Android: ThemePicker trong KeyboardTheme.kt).
+enum ThemePicker {
+    struct Section { let title: String; let themes: [KeyboardTheme] }
+    /// "Miễn phí" (Hệ thống, OLED, Tương phản cao) rồi "Plus" (còn lại), giữ thứ tự khai báo.
+    static var sections: [Section] {
+        [Section(title: LK("Miễn phí"), themes: KeyboardTheme.allCases.filter { !$0.isPlus }),
+         Section(title: "Plus", themes: KeyboardTheme.allCases.filter(\.isPlus))]
+    }
+    /// Chạm thẻ: chọn ngay nếu được phép; theme Plus bị khoá ⇒ nil (không đổi gì).
+    static func select(_ t: KeyboardTheme, in s: ThemeSettings) -> ThemeSettings? {
+        guard ThemeGate.allows(t) else { return nil }
+        var n = s
+        n.theme = t
+        return n
     }
 }
 
@@ -368,7 +532,12 @@ struct ThemeSettings: Equatable {
     var effectiveTheme: KeyboardTheme { ThemeGate.allows(theme) ? theme : .system }
     /// Tuỳ chỉnh nâng cao thực dùng: hết quyền Plus ⇒ mặc định (giá trị lưu giữ nguyên để
     /// mua lại là có lại).
-    var effectiveKeyStyle: KeyStyle { ThemeGate.allowsAdvanced ? keyStyle : .default }
+    /// Bo góc chưa chỉnh ⇒ bo mặc định của theme (Hồng: tròn trịa).
+    var effectiveKeyStyle: KeyStyle {
+        var s = ThemeGate.allowsAdvanced ? keyStyle : .default
+        if s.corner == nil { s.corner = effectiveTheme.defaultCorner }
+        return s
+    }
     /// Ảnh nền chỉ bật khi có quyền Plus VÀ file tồn tại.
     func wallpaperActive(fileExists: Bool) -> Bool {
         wallpaper && fileExists && ThemeGate.allowsWallpaper
@@ -534,12 +703,16 @@ struct KeyStyle: Equatable {
             let toward: RGBA = c.luminance > 0.4 ? .black : .white
             q.specialFill = toward.alpha(0.18).over(c)
             q.balloon = c
+            q.functionFill = nil      // màu người dùng chọn phủ MỌI phím
         }
         if let l = labelColor {
             q.ink = RGBA(hex: l)
+            q.functionInk = nil       // chữ người dùng chọn: mọi phím cùng màu
         } else {
             let sys = KeyboardTransparency.systemBackdrop(dark: p.isDark)
-            q.ink = KeyboardTransparency.readable(p.ink, on: q.keyFill.over(p.background?.over(sys) ?? sys))
+            let behind = p.background?.over(sys) ?? sys
+            q.ink = KeyboardTransparency.readable(p.ink, on: q.keyFill.over(behind))
+            q.functionInk = p.functionInk.map { KeyboardTransparency.readable($0, on: q.fnFill.over(behind)) }
         }
         if RGBA.contrast(q.ink, q.balloon.over(.white)) < KeyboardTransparency.minLabelContrast {
             q.balloon = q.ink.luminance > 0.5 ? RGBA(hex: 0x3A3A3C) : .white

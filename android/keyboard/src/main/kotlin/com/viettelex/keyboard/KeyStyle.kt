@@ -81,10 +81,15 @@ data class KeyStyle(
             val f = c.rgb(rgb)
             val toward = if (c.luminance(f) > 0.4) c.BLACK else c.WHITE
             val special = c.over(c.withAlpha(toward, 0.18f), f)
-            q = q.copy(keyFill = f, specialFill = special, balloon = f, popup = f)
+            // Màu người dùng chọn phủ MỌI phím (bỏ nền phím chức năng riêng của theme).
+            q = q.copy(keyFill = f, specialFill = special, balloon = f, popup = f, functionFill = null)
         }
+        val behind = c.over(p.bg, KeyboardTransparency.systemBackdrop(p.isDark))
         val ink = labelColor?.let { c.rgb(it) }
-            ?: KeyboardTransparency.readable(p.ink, c.over(q.keyFill, c.over(p.bg, KeyboardTransparency.systemBackdrop(p.isDark))))
+            ?: KeyboardTransparency.readable(p.ink, c.over(q.keyFill, behind))
+        // Chữ người dùng chọn: mọi phím cùng màu; chỉ đổi nền ⇒ chữ phím chức năng đổi nếu không đọc được.
+        q = q.copy(functionInk = if (labelColor != null) null
+            else p.functionInk?.let { KeyboardTransparency.readable(it, c.over(q.fnFill, behind)) })
         var balloon = q.balloon; var popup = q.popup
         val alt = if (c.luminance(ink) > 0.5) c.rgb(0x3A3A3C) else c.WHITE
         if (c.contrast(ink, c.over(balloon, c.WHITE)) < KeyboardTransparency.MIN_LABEL_CONTRAST) balloon = alt

@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Slider
@@ -41,6 +42,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.layout.ContentScale
@@ -52,6 +54,7 @@ import com.viettelex.keyboard.KeyboardTransparency
 import com.viettelex.keyboard.KeyStyle
 import com.viettelex.keyboard.Keys
 import com.viettelex.keyboard.ThemeGate
+import com.viettelex.keyboard.ThemePicker
 import com.viettelex.keyboard.ThemePalette
 import com.viettelex.keyboard.ThemeSettings
 import com.viettelex.keyboard.WallpaperCrop
@@ -218,6 +221,8 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var confirmReset by remember { mutableStateOf(false) }
+    /** Trang con "Chọn giao diện" đang mở. */
+    var picking by remember { mutableStateOf(false) }
     // Ảnh đưa vào trình chỉnh (mới chọn: chưa ghi gì — Huỷ thì ảnh nền cũ còn nguyên).
     var editor by remember { mutableStateOf<EditorInput?>(null) }
     fun update(n: ThemeSettings) { s = n; saveThemeSettings(ctx, n) }
@@ -259,6 +264,11 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
             })
     }
 
+    if (picking) {
+        ThemePickerPage(s, dark, onSelect = { update(it) }, onOpenPlus = onOpenPlus, onBack = { picking = false })
+        return
+    }
+
     SubPageHeader(FeaturePage.GiaoDien.title, onBack)
 
     val active = s.wallpaperActive(wall != null)
@@ -278,23 +288,15 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
         VTSection(footer = tr("Theme có nhãn Plus và ảnh nền thuộc VietTelex Plus (Giới Thiệu → VietTelex Plus). Hệ thống, Tối OLED và Tương phản cao luôn miễn phí.")) {}
     }
 
+    // Bộ theme dài (14) ⇒ chọn ở trang con "Chọn giao diện"; ở đây một dòng tóm tắt.
     VTSection(header = "Theme") {
-        KeyboardTheme.entries.chunked(3).forEach { row ->
-            Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                row.forEach { t ->
-                    val locked = !ThemeGate.allows(t)
-                    val selected = s.theme == t
-                    Column(Modifier.weight(1f).clickable(enabled = !locked) { update(s.copy(theme = t)) },
-                        verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                        KeyboardPreview(previewPalette(t, dark), null, 0, large = false,
-                            modifier = Modifier.fillMaxWidth().height(56.dp).clip(RoundedCornerShape(8.dp))
-                                .border(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.separator, RoundedCornerShape(8.dp)))
-                        Text(t.title + if (t.isPlus) " · Plus" else "", style = VTType.footnote,
-                            color = if (locked) c.secondary else c.label, maxLines = 1)
-                    }
-                }
-                repeat(3 - row.size) { Box(Modifier.weight(1f)) }
-            }
+        VTRow(onClick = { picking = true }) {
+            KeyboardPreview(previewPalette(s.theme, dark), null, 0, large = false, keyStyle = KeyStyle(corner = s.theme.defaultCorner),
+                modifier = Modifier.width(56.dp).height(36.dp).clip(RoundedCornerShape(6.dp))
+                    .border(1.dp, c.separator, RoundedCornerShape(6.dp)))
+            Text(tr("Giao diện bàn phím"), style = VTType.body, color = c.label,
+                modifier = Modifier.weight(1f).padding(start = 12.dp))
+            Text("${s.effectiveTheme.title} ›", style = VTType.body, color = c.secondary, maxLines = 1)
         }
     }
 
@@ -467,6 +469,14 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
             backdrop?.let { drawRect(Color(it)) }
             if (bottom != null) drawRect(Brush.verticalGradient(listOf(Color(p.bg), Color(bottom))))
             else drawRect(Color(p.bg))
+            // Hoạ tiết (Tim đen / Hoa xanh) cùng hình học bàn phím thật, thu theo bề ngang 390 dp.
+            val d = p.decoration
+            if (d != null && wallpaper == null) {
+                val unit = size.width / 390f
+                val path = android.graphics.Path()
+                com.viettelex.android.ime.decorPath(path, d.motif, 390f, size.height / unit, unit)
+                drawPath(path.asComposePath(), Color(d.color))
+            }
         }
         if (wallpaper != null) {
             // Ảnh nền không theo độ trong suốt phím (ThemePalette.wallpaperLayer).
@@ -493,9 +503,53 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
                 for (i in 0 until n) key(x0 + i * (kw + gap), pad + row * (kh + gap), kw, p.keyFill)
             }
             val y = pad + 3 * (kh + gap)
-            key(pad, y, kw * 2 + gap, p.specialFill)
-            key(pad + 2 * (kw + gap), y, kw * 6 + gap * 5, p.keyFill)
+            key(pad, y, kw * 2 + gap, p.fnFill)
+            key(pad + 2 * (kw + gap), y, kw * 6 + gap * 5, p.spaceFill)
             key(pad + 8 * (kw + gap), y, kw * 2 + gap, p.action)
+        }
+    }
+}
+
+
+/**
+ * "Chọn giao diện": lưới 2 cột thẻ xem trước (vẽ bằng token theme, không ảnh), chia "Miễn phí" /
+ * "Plus". Chạm là chọn ngay và ở lại trang (thẻ đang chọn viền + ✓). Theme Plus bị khoá: mờ + nhãn
+ * Plus, chạm mở VietTelex Plus (cổng PlusGate như cũ).
+ */
+@Composable
+private fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSettings) -> Unit,
+                            onOpenPlus: () -> Unit, onBack: () -> Unit) {
+    val c = LocalVT.current
+    BackHandler(onBack = onBack)
+    SubPageHeader(tr("Chọn giao diện"), onBack)
+    if (!ThemeGate.allowsWallpaper) {
+        VTSection(footer = tr("Theme có nhãn Plus và ảnh nền thuộc VietTelex Plus (Giới Thiệu → VietTelex Plus). Hệ thống, Tối OLED và Tương phản cao luôn miễn phí.")) {}
+    }
+    for (section in ThemePicker.sections) {
+        VTSection(header = tr(section.title)) {
+            section.themes.chunked(2).forEach { row ->
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    row.forEach { t ->
+                        val locked = !ThemeGate.allows(t)
+                        val selected = s.theme == t
+                        Column(Modifier.weight(1f).clickable {
+                            val next = ThemePicker.select(t, s)
+                            if (next != null) onSelect(next) else onOpenPlus()
+                        }, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Box {
+                                KeyboardPreview(previewPalette(t, dark), null, 0, large = false, keyStyle = KeyStyle(corner = t.defaultCorner),
+                                    modifier = Modifier.fillMaxWidth().height(72.dp).clip(RoundedCornerShape(10.dp))
+                                        .border(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.separator, RoundedCornerShape(10.dp)))
+                                if (selected) Text("✓", style = VTType.body, color = c.accent,
+                                    modifier = Modifier.align(androidx.compose.ui.Alignment.TopEnd).padding(6.dp))
+                            }
+                            Text(t.title + if (t.isPlus && locked) " · Plus" else "", style = VTType.footnote,
+                                color = if (locked) c.secondary else c.label, maxLines = 1)
+                        }
+                    }
+                    repeat(2 - row.size) { Box(Modifier.weight(1f)) }
+                }
+            }
         }
     }
 }
