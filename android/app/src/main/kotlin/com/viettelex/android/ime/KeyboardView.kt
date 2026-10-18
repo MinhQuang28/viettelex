@@ -376,6 +376,8 @@ class KeyboardView(
     // --- trackpad / giữ phím ---
     private var trackpad = false
     private var spaceKey: LaidKey? = null
+    /** Phím cách ngón [spacePtr] đang giữ (tách đôi: một trong hai phím cách). */
+    private var spaceDownKey: LaidKey? = null
     private val trackpadGesture = TrackpadGesture()
     /** Gom bước theo frame: ≤ 1 lệnh dời con trỏ (IPC) mỗi vsync. */
     private val trackpadBatch = TrackpadBatcher()
@@ -594,7 +596,9 @@ class KeyboardView(
                   templatesEnabled: Boolean, templates: List<TemplateItem>, keyAreaPx: Float,
                   numberSigned: Boolean = false, numberDecimal: Boolean = false, numberRow: Boolean = false,
                   numberRowFull: Boolean = false, spaceSideKey: SpaceSideKey = SpaceSideKey.DEFAULT,
-                  emojiInStrip: Boolean = false, labelSize: KeyLabelSize = KeyLabelSize.DEFAULT) {
+                  emojiInStrip: Boolean = false, labelSize: KeyLabelSize = KeyLabelSize.DEFAULT,
+                  split: Boolean = false) {
+        this.splitSetting = split
         this.numberRow = numberRow
         this.spaceSideKey = spaceSideKey
         this.emojiInStrip = emojiInStrip
@@ -662,6 +666,14 @@ class KeyboardView(
         rebuild()
     }
 
+    /** Bật / tắt "Bàn phím tách đôi" khi bàn phím đang mở (ô Thử gõ) — dựng lại nếu đổi. */
+    fun setSplit(on: Boolean) {
+        if (on == splitSetting) return
+        cancelAllTouches()
+        splitSetting = on
+        rebuild()
+    }
+
     /** Icon con trỏ trên thanh gợi ý: mở / đóng bảng sửa văn bản. */
     fun toggleEditPanel() {
         setPlane(if (plane == Plane.EDIT) Plane.LETTERS else Plane.EDIT)
@@ -692,25 +704,41 @@ class KeyboardView(
     private var emojiInStrip = false
     /** Chế độ một tay (IME chỉ đặt khác OFF trên điện thoại). */
     var oneHand = OneHandSide.OFF; private set
-    private fun signature() = "$returnLabel|$inputKind|$needsGlobe|$width|$keyAreaPx|$numberSigned|$numberDecimal|$numberRow|$numberRowFull|$spaceSideKey|$emojiInStrip|$oneHand|$textToolsEnabled|$translateEnabled"
+    /**
+     * Công tắc "Bàn phím tách đôi" (Settings, mặc định TẮT). Tắt ⇒ [splitNow] false ngay (một phép
+     * AND mỗi lần dựng, không gì trong đường chạm).
+     */
+    private var splitSetting = false
+    /**
+     * Đang tách ở bề ngang hiện tại (công tắc + ≥ SplitLayout.MIN_WIDTH_DP) — tính lại mỗi lần dựng,
+     * nên xoay / gập-mở (onSizeChanged) tự vào / ra kiểu tách. Khi tách: gõ vuốt + một tay tạm tắt.
+     */
+    private var splitNow = false
+    /** IME / test: bàn phím đang tách đôi (một tay, gõ vuốt tạm tắt). */
+    val splitActive: Boolean get() = splitNow
+    /** Một tay thực dùng: tách đôi đã chia hai bên ⇒ một tay vô nghĩa (như iOS). */
+    private val oneHandNow: OneHandSide get() = if (splitNow) OneHandSide.OFF else oneHand
+    private fun signature() = "$returnLabel|$inputKind|$needsGlobe|$width|$keyAreaPx|$numberSigned|$numberDecimal|$numberRow|$numberRowFull|$spaceSideKey|$emojiInStrip|$oneHand|$textToolsEnabled|$translateEnabled|$splitNow"
 
     private fun rebuild() {
         if (width == 0) return
         dropAlt()                         // phím có thể dời / đổi plane
         dropPopover()
         balloon.clearPress()              // khung phím sẫm cũ không còn đúng
+        splitNow = splitSetting && KeyLayout.splitActive(true, width.toFloat(), d)
         val sig = signature()
         if (sig != builtSig) { planeCache.clear(); builtSig = sig }
         val cfg = LayoutConfig(plane, width.toFloat(), keyAreaPx, d, inputKind, needsGlobe,
-            theme.tablet, returnLabel, numberSigned, numberDecimal, numberRow, oneHand,
+            theme.tablet, returnLabel, numberSigned, numberDecimal, numberRow, oneHandNow,
             editTools = textToolsEnabled, numberRowFull = numberRowFull, editTranslate = translateEnabled,
-            spaceSideKey = spaceSideKey, emojiInStrip = emojiInStrip)
+            spaceSideKey = spaceSideKey, emojiInStrip = emojiInStrip, split = splitNow)
         keys = planeCache.getOrPut(plane) { KeyLayout.build(cfg) }
         fitLetterLabels()
         periodSideKey = KeyLayout.sideKey(cfg) == SpaceSideKey.PERIOD
-        railSpan = if (OneHand.appliesTo(plane)) OneHand.rail(width.toFloat(), oneHand) else null
+        railSpan = if (OneHand.appliesTo(plane)) OneHand.rail(width.toFloat(), oneHandNow) else null
         a11y.invalidateRoot()             // TalkBack tắt ⇒ trả về ngay (manager không bật)
-        spaceKey = keys.firstOrNull { it.kind == KeyKind.SPACE }
+        // Tách đôi có hai phím cách: phím PHẢI (sau cùng) mang logo / badge như iOS. Không tách: một phím.
+        spaceKey = keys.lastOrNull { it.kind == KeyKind.SPACE }
         spaceKey?.let {
             val sz = theme.dp(22f)
             logoRect.set(it.right - theme.dp(10f) - sz, it.centerY - sz / 2, it.right - theme.dp(10f), it.centerY + sz / 2)
@@ -937,7 +965,7 @@ class KeyboardView(
                 }
                 icon(c, id, cx, cy, 22f, theme.actionInk, contentAlpha)
             }
-            KeyKind.SPACE -> {
+            KeyKind.SPACE -> if (k === spaceKey) {
                 // Badge "ViệtTelex" lúc hiện rồi mờ dần về logo Vᴛ (như iOS).
                 if (badgeAlpha > 0f) {
                     badgePaint.alpha = (badgeAlpha * contentAlpha).toInt()
@@ -1242,7 +1270,7 @@ class KeyboardView(
                 if (cmdGesture != null) {
                     keyCmd = cmdGesture; keyCmdPid = pid; keyCmdDeferred = defer; keyCmdShiftWas = shiftWas
                 }
-                if (!defer && swipeTyping && plane == Plane.LETTERS && activeCount() == 1)
+                if (!defer && swipeTyping && !splitNow && plane == Plane.LETTERS && activeCount() == 1)
                     startSwipeTracking(pid, k, x, y, e.eventTime, since, shiftWas)
                 if (!defer && alts.isNotEmpty()) armAlt(pid, k, x, y, shiftWas)
             }
@@ -1275,6 +1303,7 @@ class KeyboardView(
                 press(k)
                 commits.arm(k, spaceFire)
                 spacePtr = pid
+                spaceDownKey = k
                 flickDownT = e.eventTime
                 removeCallbacks(spaceHoldRun)
                 postDelayed(spaceHoldRun, SPACE_HOLD_MS)
@@ -1544,6 +1573,8 @@ class KeyboardView(
     /** Tâm phím chữ a–z (plane chữ) → decoder; bước phím = khoảng cách tâm q→w. */
     private fun publishSwipeLayout() {
         if (!swipeTyping || plane != Plane.LETTERS || keys.isEmpty()) return
+        // Tách đôi: gõ vuốt tạm tắt (G/V lặp, khe giữa) — không phát layout, không theo dõi ngón.
+        if (splitNow) { abortSwipe(); return }
         val m = KeyLayout.letterCenters(keys)
         val q = m['q'] ?: return
         val w = m['w'] ?: return
@@ -1878,7 +1909,7 @@ class KeyboardView(
      * (nút strip ở đỉnh cửa sổ, không có chỗ phía trên). Ngón hiện ở [menuX], [menuY].
      */
     private fun showEmojiMenu(anchorCx: Float, anchorTop: Float, anchorBottom: Float, below: Boolean): Boolean {
-        val acts = EmojiKeyMenu.actions(voiceAvailable, oneHandAvailable = !theme.tablet && !floatingOn,
+        val acts = EmojiKeyMenu.actions(voiceAvailable, oneHandAvailable = !theme.tablet && !floatingOn && !splitNow,
             floatingAvailable = true)
         val h = DomainPopup.Hold(acts.map { EmojiKeyMenu.label(it, oneHand != OneHandSide.OFF, floatingOn) })
         val n = acts.size
@@ -1955,7 +1986,8 @@ class KeyboardView(
     // MARK: trackpad
 
     private fun beginTrackpad() {
-        val k = spaceKey ?: return
+        // Phím cách ĐANG giữ (tách đôi có hai phím cách) — disarm đúng phím đó.
+        val k = spaceDownKey ?: spaceKey ?: return
         if (spacePtr < 0) return
         trackpad = true
         if (carouselOn) { flickAnim?.cancel(); carouselOn = false }

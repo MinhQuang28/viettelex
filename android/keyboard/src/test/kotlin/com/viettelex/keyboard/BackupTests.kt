@@ -128,7 +128,8 @@ class BackupTests {
             "keyboardTransparency" to 250, "keyLabelTransparency" to 35,
             BackupPrefs.SHORTCUTS_KEY to "# VietTelex — bảng gõ tắt\nko: không\n")
         val p = BackupPrefs.snapshot({ prefs[it] }, listOf(TemplateItem("", "a")), null)
-        assertEquals(57, p.settings!!.size)   // +suggestionBarHeight (18/10/2026)
+        assertEquals(58, p.settings!!.size)   // +splitKeyboard (18/10/2026)
+        assertEquals(false, p.settings!![Keys.SPLIT_KEYBOARD])   // tách đôi: mặc định tắt
         assertEquals(0, p.settings!![Keys.SUGGESTION_COUNT])   // số từ gợi ý: mặc định Tự động
         assertEquals("medium", p.settings!![Keys.SUGGESTION_BAR_HEIGHT])   // chiều cao thanh gợi ý: mặc định Vừa
         assertEquals("1h", p.settings!![Keys.CLIPBOARD_TTL])   // giữ lịch sử clipboard: mặc định 1 giờ

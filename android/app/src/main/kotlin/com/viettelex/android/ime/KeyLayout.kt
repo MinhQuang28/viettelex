@@ -2,6 +2,7 @@ package com.viettelex.android.ime
 
 import com.viettelex.keyboard.KeyboardSettings
 import com.viettelex.keyboard.SpaceSideKey
+import com.viettelex.keyboard.SplitLayout
 
 /**
  * Hình học bàn phím — port 1:1 các constraint UIStackView của iOS KeyboardView
@@ -109,6 +110,11 @@ data class LayoutConfig(
      * 😊 ở hàng đáy (space ăn chỗ) — nút nằm trên StripView. Plane khác / ô tìm emoji giữ 😊.
      */
     val emojiInStrip: Boolean = false,
+    /**
+     * Công tắc "Bàn phím tách đôi" (Settings, mặc định TẮT). Chỉ có hiệu lực khi đủ rộng
+     * ([KeyLayout.splitActive]) và ở plane chữ / ?123 / =\< ([KeyLayout.splitPlane]).
+     */
+    val split: Boolean = false,
 )
 
 object KeyLayout {
@@ -238,7 +244,7 @@ object KeyLayout {
      * câu ("," chọn sẵn) không — tablet có cả "," lẫn "." nên "." không cần popup đó.
      */
     fun sideKey(c: LayoutConfig): SpaceSideKey? =
-        if (c.plane == Plane.LETTERS && !c.tablet && c.kind != InputKind.URL && c.kind != InputKind.EMAIL)
+        if (c.plane == Plane.LETTERS && (!c.tablet || splitActive(c)) && c.kind != InputKind.URL && c.kind != InputKind.EMAIL)
             c.spaceSideKey else null
 
     /**
@@ -278,6 +284,13 @@ object KeyLayout {
     }
 
     fun build(c: LayoutConfig): List<LaidKey> {
+        // Tách đôi (công tắc bật + đủ rộng): plane chữ / ?123 / =\< dựng hai nửa; một tay bỏ qua.
+        if (c.split && splitPlane(c.plane) && splitActive(c)) {
+            val out = ArrayList<LaidKey>(44)
+            buildSplit(out, c)
+            for (i in out.indices) out[i].index = i
+            return out
+        }
         // Một tay: dựng plane ở bề ngang hẹp rồi dời — mọi hình học (router, tâm phím gõ
         // vuốt, bước vuốt ⌫) tự đúng, không nhánh riêng.
         if (c.oneHand != OneHandSide.OFF && OneHand.appliesTo(c.plane)) {
@@ -335,7 +348,7 @@ object KeyLayout {
                 val head = searchHeaderPx(c.keyAreaPx)
                 // Ô tìm emoji: strip ẩn ⇒ luôn giữ 😊 (về bảng emoji).
                 for (k in build(c.copy(plane = Plane.LETTERS, keyAreaPx = c.keyAreaPx - head, oneHand = OneHandSide.OFF,
-                        emojiInStrip = false))) {
+                        emojiInStrip = false, split = false))) {
                     k.top += head; k.bottom += head
                     out += k
                 }
@@ -588,6 +601,145 @@ object KeyLayout {
             out += LaidKey(KeyKind.MORE, "?123", "?123", "?123", rightX, top(2), rightX + sideW, bot(2))
         }
         out += LaidKey(KeyKind.RETURN, c.returnLabel, c.returnLabel, "\n", rightX, top(3), rightX + sideW, bot(3))
+    }
+
+    // MARK: bàn phím tách đôi (SplitLayout — Settings → Giao diện, mặc định TẮT)
+    // Công tắc tắt ⇒ build() không vào nhánh này (một phép AND), không phím / vòng lặp nào thêm.
+    // Bật + đủ rộng ⇒ plane chữ / ?123 / =\< thành hai nửa: [nửa trái][khe chết][nửa phải]; emoji,
+    // mẫu câu, tìm emoji, bảng sửa, bàn số giữ đầy bề ngang. Router [hit] giữ nguyên: khe giữa
+    // cách mọi phím > 21 dp ⇒ không phím nào (vùng chết như Apple), mép phím vẫn nhận phím gần nhất.
+
+    /** Plane nào dựng tách đôi khi bật (như iOS: chữ, 123, #+=). */
+    fun splitPlane(p: Plane): Boolean = p == Plane.LETTERS || p == Plane.NUMBERS || p == Plane.SYMBOLS
+
+    /** Công tắc bật + bàn phím rộng ≥ [SplitLayout.MIN_WIDTH_DP] (không xét plane). */
+    fun splitActive(c: LayoutConfig): Boolean = splitActive(c.split, c.widthPx, c.density)
+    fun splitActive(setting: Boolean, widthPx: Float, density: Float): Boolean =
+        setting && density > 0f && SplitLayout.active(true, widthPx / density)
+
+    /** Hình học tách đôi (px) cho bề ngang [LayoutConfig.widthPx]. */
+    fun splitMetrics(c: LayoutConfig): SplitLayout.Metrics {
+        val d = c.density
+        return SplitLayout.metrics(c.widthPx, ROW_MARGIN_H * d, KEY_SPACING * d, SplitLayout.MAX_PITCH_DP * d)
+    }
+
+    private fun buildSplit(out: MutableList<LaidKey>, c: LayoutConfig) {
+        val d = c.density
+        val m = splitMetrics(c)
+        val p = m.pitch
+        val xl = ROW_MARGIN_H * d
+        val xr = c.widthPx - ROW_MARGIN_H * d - m.half
+        // Phím đều [m.keyWidth] bắt đầu ở mép nửa + lề trong (đơn vị bước phím).
+        fun keys(labels: List<String>, kind: Int, x0: Float, t: Float, b: Float) {
+            var x = x0
+            for (s in labels) {
+                val up = if (kind == KeyKind.LETTER) s.uppercase() else s
+                out += LaidKey(kind, s, up, s, x, t, x + m.keyWidth, b)
+                x += p
+            }
+        }
+        // Hàng 10 phím (số / ký hiệu) chia 5 | 5: nửa trái thụt phải ½, nửa phải thụt trái ½.
+        fun tenRow(row: List<String>, t: Float, b: Float) {
+            val (l, r) = SplitLayout.halves(row)
+            keys(l, KeyKind.CHAR, xl, t, b)
+            keys(r, KeyKind.CHAR, xr + 0.5f * p, t, b)
+        }
+        val letters = c.plane == Plane.LETTERS
+        val u: Float
+        val y0: Float
+        if (c.numberRow) {
+            u = rowUnit(c.keyAreaPx, true, d, c.numberRowFull)
+            y0 = numberRowHeight(u, ROW_GAP * d, c.numberRowFull)
+        } else { u = c.keyAreaPx / 4f; y0 = 0f }
+        val sideW = 1.5f * p - KEY_SPACING * d      // ⇧ / ⌫ / phím chuyển plane hàng 3
+        if (letters) {
+            if (c.numberRow) tenRow(NUM1, keyTop(0, y0, d), keyBottom(0, y0, d))
+            for (i in 0 until 2) {
+                val (l, r) = SplitLayout.letterRows[i]
+                val (il, ir) = SplitLayout.letterIndents[i]
+                val t = keyTop(i, u, d, y0); val b = keyBottom(i, u, d, y0)
+                keys(l.map { it.toString() }, KeyKind.LETTER, xl + il.l * p, t, b)
+                keys(r.map { it.toString() }, KeyKind.LETTER, xr + ir.l * p, t, b)
+            }
+            // Hàng 3: [⇧] z x c v | v b n m [⌫] — ⇧ / ⌫ ≈ 1.5 bước.
+            val (l3, r3) = SplitLayout.letterRows[2]
+            val t = keyTop(2, u, d, y0); val b = keyBottom(2, u, d, y0)
+            out += LaidKey(KeyKind.SHIFT, "", "", "", xl, t, xl + sideW, b)
+            keys(l3.map { it.toString() }, KeyKind.LETTER, xl + 1.5f * p, t, b)
+            keys(r3.map { it.toString() }, KeyKind.LETTER, xr, t, b)
+            out += LaidKey(KeyKind.BACKSPACE, "", "", "", xr + 4f * p, t, xr + m.half, b)
+            splitBottomRow(out, c, m, y0 + 3 * u, u, planeKey = "?123")
+        } else {
+            val rows = symbolicRows(c.plane == Plane.NUMBERS, c.numberRow)
+            if (c.numberRow) {
+                tenRow(rows[0], keyTop(0, y0, d), keyBottom(0, y0, d))
+                tenRow(rows[1], keyTop(0, u, d, y0), keyBottom(0, u, d, y0))
+                tenRow(rows[2], keyTop(1, u, d, y0), keyBottom(1, u, d, y0))
+            } else {
+                tenRow(rows[0], keyTop(0, u, d), keyBottom(0, u, d))
+                tenRow(rows[1], keyTop(1, u, d), keyBottom(1, u, d))
+            }
+            // Hàng 3: [=\< | ?123] ký tự… | …ký tự [⌫]; ký tự = phím chuẩn, co lại nếu phím mép < 1.5 bước.
+            val (l3, r3) = SplitLayout.halves(if (c.plane == Plane.NUMBERS) NUM3 else SYM3)
+            val t = keyTop(2, u, d, y0); val b = keyBottom(2, u, d, y0)
+            val gap = KEY_SPACING * d
+            fun charW(n: Int) = if (n == 0) 0f else minOf(m.keyWidth, (m.half - sideW - n * gap) / n)
+            val more = if (c.plane == Plane.NUMBERS) "=\\<" else "?123"
+            val wl = charW(l3.size)
+            val moreR = xl + m.half - l3.size * (wl + gap)
+            out += LaidKey(KeyKind.MORE, more, more, more, xl, t, moreR, b)
+            var x = moreR + gap
+            for (s in l3) { out += LaidKey(KeyKind.CHAR, s, s, s, x, t, x + wl, b); x += wl + gap }
+            val wr = charW(r3.size)
+            x = xr
+            for (s in r3) { out += LaidKey(KeyKind.CHAR, s, s, s, x, t, x + wr, b); x += wr + gap }
+            out += LaidKey(KeyKind.BACKSPACE, "", "", "", x, t, xr + m.half, b)
+            splitBottomRow(out, c, m, y0 + 3 * u, u, planeKey = if (c.kind.padPlane != null) "123" else "ABC")
+        }
+    }
+
+    /**
+     * Hàng đáy tách: [?123|ABC][🌐?][😊?][space] | [space][dấu câu…][↵][ẩn? (tablet)]. Hai phím cách
+     * cùng gõ dấu cách; phím PHẢI (sau cùng trong danh sách) mang logo / badge / trackpad như iOS.
+     * Dấu câu nửa phải: bàn chữ ô thường theo "Phím cạnh dấu cách" ([sideKey]); ô email "@ .",
+     * ô URL "/ ."; plane ?123 / =\< ", ." (hai dấu này chỉ ở hàng đáy — xem [symbolicRows]).
+     */
+    private fun splitBottomRow(out: MutableList<LaidKey>, c: LayoutConfig, m: SplitLayout.Metrics,
+                               rowTop: Float, rowH: Float, planeKey: String) {
+        val d = c.density
+        val gap = KEY_SPACING * d
+        val t = rowTop + BOTTOM_ROW_TOP * d
+        val b = rowTop + rowH - BOTTOM_ROW_BOTTOM * d
+        val kw = m.keyWidth
+        val letters = c.plane == Plane.LETTERS
+        val left = ArrayList<Slot>(4)
+        left += Slot(KeyKind.PLANE, planeKey, planeKey, kw)
+        if (c.needsGlobe) left += Slot(KeyKind.GLOBE, "", "", kw)
+        if (!(letters && c.emojiInStrip)) left += Slot(KeyKind.EMOJI, "", "", kw)
+        left += Slot(KeyKind.SPACE, "", " ", -1f)
+        val right = ArrayList<Slot>(5)
+        right += Slot(KeyKind.SPACE, "", " ", -1f)
+        val puncts: List<String> = if (letters) when (c.kind) {
+            InputKind.EMAIL -> listOf("@", ".")
+            InputKind.URL -> listOf("/", ".")
+            else -> listOfNotNull(c.spaceSideKey.left, c.spaceSideKey.right)
+        } else listOf(",", ".")
+        for (s in puncts) right += Slot(KeyKind.PUNCT, s, s, 0.9f * kw)
+        right += Slot(KeyKind.RETURN, c.returnLabel, "\n", 1.9f * kw)
+        if (c.tablet) right += Slot(KeyKind.DISMISS, "", "", kw)
+        fun half(slots: List<Slot>, x0: Float) {
+            var fixed = 0f
+            for (s in slots) if (s.mult > 0) fixed += s.mult
+            val space = (m.half - fixed - gap * (slots.size - 1)).coerceAtLeast(gap)
+            var x = x0
+            for (s in slots) {
+                val w = if (s.mult > 0) s.mult else space
+                out += LaidKey(s.kind, s.label, s.label, s.insert, x, t, x + w, b)
+                x += w + gap
+            }
+        }
+        half(left, ROW_MARGIN_H * d)
+        half(right, c.widthPx - ROW_MARGIN_H * d - m.half)
     }
 
     /** Tâm phím a–z (toạ độ view) cho SwipeLayout — lấy từ frame THẬT (kể cả một tay). */

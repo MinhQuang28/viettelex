@@ -397,6 +397,10 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
         }
         RowDivider()
         BoolToggle(Keys.SHOW_SPACE_LOGO, Prefs.D.showSpaceLogo, tr("Hiện logo Vᴛ"), tr("Logo mờ ở góc phải phím cách."))
+        RowDivider()
+        // Bàn phím tách đôi (SplitLayout, cùng khoá iOS) — mặc định TẮT; chỉ tách khi bàn phím ≥ 600 dp.
+        BoolToggle(Keys.SPLIT_KEYBOARD, Prefs.D.splitKeyboard, tr("Bàn phím tách đôi"),
+            tr("Màn hình rộng (điện thoại gập khi mở, điện thoại xoay ngang, máy tính bảng): chia bàn phím làm hai nửa để gõ bằng hai ngón cái. Khi đang tách, gõ vuốt và chế độ một tay tạm tắt."))
     }
 
     VTSection(footer = tr("Về theme Hệ thống, tắt ảnh nền (ảnh vẫn giữ để bật lại), độ tối/mờ, độ trong suốt và tuỳ chỉnh nâng cao về mặc định. Chiều cao hàng và logo giữ nguyên.")) {
