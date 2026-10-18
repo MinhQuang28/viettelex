@@ -316,7 +316,10 @@ class TelexEngine {
                 for (i in lcp until rawCount) sb.append(raw[i].toChar())
                 action = TelexAction.Replace(backspaces, sb.toString())
             }
-            captureReopen(wantsRestore)
+            // Teencode "Dạa" (Swift isToneThenATail): rewrite only the last character.
+            val elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+            if (elongate) action = TelexAction.Replace(1, elongatedTail())
+            captureReopen(wantsRestore || elongate)
             updateContext(wantsRestore)
             return action
         } finally {
@@ -555,9 +558,11 @@ class TelexEngine {
             }
             val wantsRestore = outCount > 0 &&
                 (needsStandaloneWRunRestore() || (autoRestore && shouldRestoreRaw()))
-            captureReopen(wantsRestore)
+            val elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+            val text = if (wantsRestore) rawKeystrokes else if (elongate) composedElongated() else composed
+            captureReopen(wantsRestore || elongate)
             updateContext(wantsRestore)
-            return if (wantsRestore) rawKeystrokes else composed
+            return text
         } finally {
             resetWord()
         }
@@ -568,7 +573,55 @@ class TelexEngine {
         if (overflowed) return composed
         if (outCount > 0 && needsStandaloneWRunRestore()) return rawKeystrokes
         if (autoRestore && outCount > 0 && shouldRestoreRaw()) return rawKeystrokes
+        if (outCount > 0 && isToneThenATail()) return composedElongated()
         return composed
+    }
+
+    /**
+     * TEENCODE one-letter elongation "Dạa" (Swift `isToneThenATail`): "daja" commits "dạa"
+     * instead of the invalid bare "dậ" — the tone was placed before the extra `a` came.
+     * Teencode only, Telex only, no cancel, tone keys between the target `a` and the final
+     * `a`, the â carries the tone, and the head with a plain `a` is a valid syllable.
+     */
+    private fun isToneThenATail(): Boolean {
+        if (!teencode || vniMode || markCancelled || overflowed || pCount < 2 || rawCount < 3 ||
+            lastEffTone == T.NONE
+        ) return false
+        val last = pCount - 1
+        if (lBase[last] != 'a'.code || lMark[last] != Mark.CIRCUMFLEX) return false
+        if (lowercased(raw[rawCount - 1]) != 'a'.code || rawLetter[rawCount - 1] != last) return false
+        if (outCount != pCount) return false
+        if (out[outCount - 1] != Tables.applyTone(Tables.markedScalar('a'.code, Mark.CIRCUMFLEX, lUpper[last]), lastEffTone)) return false
+        var r = rawCount - 2
+        var tones = 0
+        while (r >= 0 && isToneKey(r)) { tones++; r-- }
+        if (tones == 0 || r < 0 || lowercased(raw[r]) != 'a'.code || rawLetter[r] != last) return false
+        return isValidHead(pCount, lastEffTone, plainLast = true)
+    }
+
+    private fun isToneKey(r: Int): Boolean {
+        when (lowercased(raw[r])) {
+            's'.code, 'f'.code, 'r'.code, 'x'.code, 'j'.code -> {}
+            else -> return false
+        }
+        for (j in 0 until pToneKeyCount) if (toneKeys[j] == r) return true
+        return false
+    }
+
+    private fun elongatedTail(): String {
+        val last = pCount - 1
+        val toned = Tables.applyTone(Tables.markedScalar('a'.code, Mark.NONE, lUpper[last]), lastEffTone)
+        val sb = StringBuilder(3)
+        sb.appendCodePoint(toned)
+        sb.append(raw[rawCount - 1].toChar())
+        return sb.toString()
+    }
+
+    private fun composedElongated(): String {
+        val sb = StringBuilder(outCount + 1)
+        for (i in 0 until outCount - 1) sb.appendCodePoint(out[i])
+        sb.append(elongatedTail())
+        return sb.toString()
     }
 
     private fun rawIsEnglishCollision(): Boolean {
@@ -689,7 +742,7 @@ class TelexEngine {
         return -1
     }
 
-    private fun isValidHead(k: Int, tone: Int): Boolean {
+    private fun isValidHead(k: Int, tone: Int, plainLast: Boolean = false): Boolean {
         if (k < 1 || k > CAPACITY) return false
         var t = tone
         if ((t == T.GRAVE || t == T.HOOK || t == T.TILDE) && hasStopCoda(k) &&
@@ -700,11 +753,11 @@ class TelexEngine {
         if (onset != 0 && onsetSkip(onset) < k) {
             var n = writeCanon(onset, buf)
             for (j in onsetSkip(onset) until k) {
-                buf[n] = Tables.letterClass(rBase[j], rMark[j]); n++
+                buf[n] = Tables.letterClass(rBase[j], if (plainLast && j == k - 1) Mark.NONE else rMark[j]); n++
             }
             if (SyllableValidator.isValidSyllable(buf, n, t, teencode)) return true
         }
-        for (j in 0 until k) buf[j] = Tables.letterClass(rBase[j], rMark[j])
+        for (j in 0 until k) buf[j] = Tables.letterClass(rBase[j], if (plainLast && j == k - 1) Mark.NONE else rMark[j])
         return SyllableValidator.isValidSyllable(buf, k, t, teencode)
     }
 

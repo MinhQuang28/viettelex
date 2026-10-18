@@ -295,6 +295,22 @@ final class ControllerHarnessTests: XCTestCase {
         XCTAssertEqual(h.client.string, "a google ", dump(h))
     }
 
+    // MARK: Teencode "Dạa" (18/10/2026)
+
+    /// Boundary rewrite ⌫1 + "ạa" qua đường in-place; teencode tắt (mặc định app) = "dậ".
+    func testTeencodeToneThenAInPlace() {
+        let saved = AppState.shared.teencode
+        defer { AppState.shared.teencode = saved }
+        AppState.shared.teencode = true
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "a ")
+        h.type("daja ")
+        XCTAssertEqual(h.client.string, "a dạa ", dump(h))
+        AppState.shared.teencode = false
+        let g = ControllerHarness(bundleID: "com.apple.TextEdit", text: "a ")
+        g.type("daja ")
+        XCTAssertEqual(g.client.string, "a dậ ", dump(g))
+    }
+
     // MARK: Dấu chấm khi nhấn đúp phím cách
 
     /// Lỗi gốc: AppKit gọi commitComposition sau dấu cách native ⇒ shortcutTail.reset()

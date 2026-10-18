@@ -1164,3 +1164,31 @@ final class BracketVowelTests: XCTestCase {
         XCTAssertEqual(f.composed, "uaw")
     }
 }
+
+// Engine-level contract of the teencode "Dạa" rule (see TeencodeToneThenATests): commit,
+// commitBoundary and peekCommitText agree; the action rewrites only the last character.
+final class EngineToneThenATests: XCTestCase {
+    func testCommitPathsAgree() {
+        for keys in ["daja", "Mafa", "HARA", "quaja"] {
+            var a = TelexEngine(); a.liveSpellCheck = true
+            for ch in keys { _ = a.feed(ch) }
+            let peek = a.peekCommitText(autoRestore: true)
+            var b = a
+            let text = b.commitText(autoRestore: true)
+            var screen = Array(a.composed)
+            if case let .replace(bs, ins) = a.commitBoundary(autoRestore: true) {
+                screen.removeLast(bs); screen.append(contentsOf: ins)
+            }
+            XCTAssertEqual(peek, text, keys)
+            XCTAssertEqual(String(screen), text, keys)
+        }
+        // Not a restore: applies with auto-restore off too.
+        var e = TelexEngine()
+        for ch in "Daja" { _ = e.feed(ch) }
+        XCTAssertEqual(e.commitText(autoRestore: false), "Dạa")
+        // Teencode off (engine default is ON): historical.
+        var f = TelexEngine(); f.teencode = false
+        for ch in "Daja" { _ = f.feed(ch) }
+        XCTAssertEqual(f.commitText(autoRestore: true), "Dậ")
+    }
+}

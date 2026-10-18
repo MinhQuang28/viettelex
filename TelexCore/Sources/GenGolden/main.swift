@@ -370,6 +370,19 @@ for n in 0..<40000 {
     run(flags, ops + " ")
 }
 
+// Teencode "Dạa" (18/10/2026): tone + extra `a` at the boundary, teencode on vs off ('t').
+for w in ["daja", "Daja", "DAJA", "mafa", "hara", "dasa", "quaja", "daa", "maa", "dajau", "dajaa",
+          "asa", "sara", "para", "baja", "dajsa", "dafja", "duaja", "ngaxa", "giaja"] {
+    for cfg in ["", "t", "A", "At", "AL", "ALt", "AFL", "AFLt", "AFSLC", "AFSLCt", "AV"] {
+        run(cfg, w + " ")
+    }
+    run("AL", w + "%")
+    run("AL", w + " ^")
+    run("AL", w + " <")
+    run("AL", w + "<" + "a ")
+    run("ALC", "the " + w + " is ")
+}
+
 // Eager English restore fuzz: own PRNG (the stream above stays byte-identical), live
 // spell-check + E always on at start, mid-word flips may include E.
 var rngE = XorShift(s: 0xE16E_2026_1018_0001)

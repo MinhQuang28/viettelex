@@ -455,3 +455,107 @@ final class TeencodeUmUnTests: XCTestCase {
         XCTAssertEqual(run("column"), "column")
     }
 }
+
+// TEENCODE one-letter elongation "Dạa" (maintainer 18/10/2026). "daja" used to show and
+// COMMIT "dậ": the second `a` became the aa-circumflex — but a bare "â" never ends a
+// Vietnamese syllable. The key order says it all: the tone was already placed ("dạ") when
+// the extra `a` came, so the boundary commits "dạa". Teencode ON only.
+final class TeencodeToneThenATests: XCTestCase {
+
+    private func engine(teencode: Bool = true, free: Bool = true) -> TelexEngine {
+        var e = TelexEngine()
+        e.freeMarking = free
+        e.liveSpellCheck = true
+        e.teencode = teencode
+        return e
+    }
+
+    private func commit(_ keys: String, teencode: Bool = true, free: Bool = true) -> String {
+        var e = engine(teencode: teencode, free: free)
+        for ch in keys { _ = e.feed(ch) }
+        return e.commitText(autoRestore: true)
+    }
+
+    func testToneThenAElongationCommitsBaseSyllablePlusA() {
+        for free in [true, false] {
+            XCTAssertEqual(commit("daja", free: free), "dạa")
+            XCTAssertEqual(commit("Daja", free: free), "Dạa")
+            XCTAssertEqual(commit("DAJA", free: free), "DẠA")
+            XCTAssertEqual(commit("mafa", free: free), "màa")
+            XCTAssertEqual(commit("hara", free: free), "hảa")
+            XCTAssertEqual(commit("dasa", free: free), "dáa")
+            XCTAssertEqual(commit("quaja", free: free), "quạa")
+        }
+    }
+
+    func testTeencodeOffKeepsHistoricalCircumflex() {
+        // Phil 18/10/2026: only with teencode on; off = today's behaviour exactly.
+        XCTAssertEqual(commit("daja", teencode: false), "dậ")
+        XCTAssertEqual(commit("Daja", teencode: false), "Dậ")
+        XCTAssertEqual(commit("DAJA", teencode: false), "DẬ")
+        XCTAssertEqual(commit("mafa", teencode: false), "mầ")
+        XCTAssertEqual(commit("hara", teencode: false), "hẩ")
+    }
+
+    func testMidWordScreenIsUnchanged() {
+        // Boundary-only rule: mid-word the screen still shows the circumflex.
+        var e = engine()
+        for ch in "daja" { _ = e.feed(ch) }
+        XCTAssertEqual(e.composed, "dậ")
+        XCTAssertEqual(e.peekCommitText(autoRestore: true), "dạa")
+        XCTAssertEqual(e.commitBoundary(autoRestore: true), .replace(backspaces: 1, insert: "ạa"))
+    }
+
+    func testRealWordsAndPlainCircumflexUnaffected() {
+        for teencode in [true, false] {
+            // â reached without a tone in between is THE way to type â: unchanged.
+            XCTAssertEqual(commit("daa", teencode: teencode), "dâ")
+            XCTAssertEqual(commit("maa", teencode: teencode), "mâ")
+            // Real words with â + coda/offglide never end in a bare â.
+            XCTAssertEqual(commit("dajau", teencode: teencode), "dậu")
+            XCTAssertEqual(commit("daajn", teencode: teencode), "dận")
+            XCTAssertEqual(commit("daan", teencode: teencode), "dân")
+            XCTAssertEqual(commit("daaus", teencode: teencode), "dấu")
+            XCTAssertEqual(commit("maam", teencode: teencode), "mâm")
+            XCTAssertEqual(commit("caafn", teencode: teencode), "cần")
+            XCTAssertEqual(commit("dasau", teencode: teencode), "dấu")
+            // A lone toned â without an onset ("asa" → ấ) has no head to elongate.
+            XCTAssertEqual(commit("asa", teencode: teencode), "ấ")
+        }
+    }
+
+    func testEnglishAndCancelsKeepCurrentBehaviour() {
+        // English words ending in "aa" (no tone key in between) and restored words.
+        XCTAssertEqual(commit("bazaa"), commit("bazaa", teencode: false))
+        XCTAssertEqual(commit("para"), "para")            // restored to raw as before
+        // A third `a` cancels the circumflex (escape) — the rule never sees it.
+        XCTAssertEqual(commit("dajaa"), commit("dajaa", teencode: false))
+        XCTAssertEqual(commit("dajaaaa"), commit("dajaaaa", teencode: false))
+    }
+
+    func testBackspaceAndReopenAfterElongation() {
+        // The screen shows "dạa", which no keystrokes re-compose: ⌫ on the space must NOT
+        // re-open (that would desync the buffer); the app deletes natively.
+        var e = engine()
+        for ch in "daja" { _ = e.feed(ch) }
+        _ = e.commitBoundary(autoRestore: true)
+        XCTAssertFalse(e.canReopenLastCommit)
+        XCTAssertNil(e.reopenLastCommit())
+        // Mid-word ⌫ before the boundary is the ordinary path: "dậ" ⌫ → "d".
+        var f = engine()
+        for ch in "daja" { _ = f.feed(ch) }
+        _ = f.backspace()
+        XCTAssertEqual(f.composed, "d")
+        for ch in "aja" { _ = f.feed(ch) }
+        XCTAssertEqual(f.commitText(autoRestore: true), "dạa")
+    }
+
+    func testVNIUnaffected() {
+        var e = engine(); e.vniMode = true
+        for ch in "da5a" { _ = e.feed(ch) }
+        let vni = e.commitText(autoRestore: true)
+        var g = engine(teencode: false); g.vniMode = true
+        for ch in "da5a" { _ = g.feed(ch) }
+        XCTAssertEqual(vni, g.commitText(autoRestore: true))
+    }
+}

@@ -186,7 +186,11 @@ private:
     bool abbreviationDoublerException(uint8_t lower, bool upper) const;
     bool composedIsValidSyllable() const;
     int elongationHeadCount(int count, Tone tone) const;
-    bool isValidHead(int k, Tone tone) const;
+    bool isValidHead(int k, Tone tone, bool plainLast = false) const;
+    bool isToneThenATail() const;
+    bool isToneKeyAt(int r) const;
+    void elongatedTail(char32_t* two) const;
+    int emitElongated(char16_t* buf, int cap) const;
     bool isTeencodeKeep() const { return elongationHeadCount(pCount_, lastEffTone_) > 0; }
     bool compositionDiffersFromRaw() const;
     bool compositionHasDiacritic() const;

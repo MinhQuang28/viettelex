@@ -636,9 +636,79 @@ public struct TelexEngine {
             for i in lcp..<rawCount { s.append(Unicode.Scalar(raw[i])) }
             action = .replace(backspaces: backspaces, insert: String(s))
         }
-        captureReopen(restored: wantsRestore)
+        // Teencode one-letter elongation ("daja" → "dạa", not the invalid "dậ"): only the
+        // last character changes, so rewrite exactly that one.
+        let elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+        if elongate { action = .replace(backspaces: 1, insert: elongatedTail()) }
+        // The screen no longer shows `composed` (and no keystrokes re-compose "dạa"), so a
+        // ⌫ on the boundary must not re-open it — same as a restored word.
+        captureReopen(restored: wantsRestore || elongate)
         updateContext(restored: wantsRestore)
         return action
+    }
+
+    /// TEENCODE one-letter elongation "Dạa" (maintainer 18/10/2026). Telex reads the second
+    /// `a` of "daja" as the aa-circumflex and shows "dậ" — but a bare "â" never ends a
+    /// Vietnamese syllable (only ân/âng/âm/âp/ât/âc/âu/ây), and the key ORDER says what the
+    /// user meant: the tone was already placed ("dạ") when the extra `a` came, i.e. the
+    /// chat spelling "dạa" (= dạ), "màa", "hảa". At the boundary such a word commits as
+    /// the base syllable with its tone + a literal `a`.
+    /// Only when `teencode` is on (off = historical "dậ"), Telex only, no cancel, the last
+    /// raw key is the `a` that made the â, every key between the target `a` and it was a
+    /// TONE key, the â carries the word's tone, and the head ("dạ") is a valid syllable.
+    /// Plain "daa" (no tone in between) is the ordinary way to type â and stays "dâ".
+    /// "ă" is not covered: it only comes from `w`, which is no elongation of `a`.
+    /// Boundary-only, NON-mutating, allocation-free.
+    private func isToneThenATail() -> Bool {
+        guard teencode, !vniMode, !markCancelled, !overflowed, pCount >= 2, rawCount >= 3,
+              lastEffTone != .none else { return false }
+        let last = pCount - 1
+        guard letters[last].base == UInt8(ascii: "a"), letters[last].mark == .circumflex,
+              lowercased(raw[rawCount - 1]) == UInt8(ascii: "a"),
+              rawLetter[rawCount - 1] == last,
+              outCount == pCount,
+              out[outCount - 1] == Tables.applyTone(
+                  Tables.markedScalar(base: UInt8(ascii: "a"), mark: .circumflex, upper: letters[last].upper),
+                  lastEffTone) else { return false }
+        // Walk back over the tone keys right before the final `a` (at least one), then the
+        // target `a` itself must sit there.
+        var r = rawCount - 2
+        var tones = 0
+        while r >= 0, isToneKey(r) { tones += 1; r -= 1 }
+        guard tones > 0, r >= 0, lowercased(raw[r]) == UInt8(ascii: "a"), rawLetter[r] == last
+        else { return false }
+        return isValidHead(pCount, tone: lastEffTone, plainLast: true)
+    }
+
+    /// Raw key `r` was consumed as a deferred tone key (s f r x j).
+    private func isToneKey(_ r: Int) -> Bool {
+        switch lowercased(raw[r]) {
+        case UInt8(ascii: "s"), UInt8(ascii: "f"), UInt8(ascii: "r"),
+             UInt8(ascii: "x"), UInt8(ascii: "j"): break
+        default: return false
+        }
+        for j in 0..<pToneKeyCount where toneKeys[j] == r { return true }
+        return false
+    }
+
+    /// The rewritten last character(s) for `isToneThenATail`: "ậ" → "ạa" (case kept: the
+    /// toned vowel takes the â's case, the extra letter the final key's case).
+    private func elongatedTail() -> String {
+        let last = pCount - 1
+        let toned = Tables.applyTone(
+            Tables.markedScalar(base: UInt8(ascii: "a"), mark: .none, upper: letters[last].upper), lastEffTone)
+        var v = String.UnicodeScalarView()
+        v.append(Unicode.Scalar(toned)!)
+        v.append(Unicode.Scalar(raw[rawCount - 1]))
+        return String(v)
+    }
+
+    /// `composed` with the elongation rewrite applied (commitText / peek).
+    private func composedElongated() -> String {
+        var s = String.UnicodeScalarView()
+        for i in 0..<(outCount - 1) { s.append(Unicode.Scalar(out[i])!) }
+        s.append(contentsOf: elongatedTail().unicodeScalars)
+        return String(s)
     }
 
     /// Remember the just-committed word so a ⌫ on the boundary character can put it
@@ -1024,9 +1094,11 @@ public struct TelexEngine {
         // (reusing the restore decision — no repeated checks).
         let wantsRestore = outCount > 0
             && (needsStandaloneWRunRestore() || (autoRestore && shouldRestoreRaw()))
-        captureReopen(restored: wantsRestore)
+        let elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+        let text = wantsRestore ? rawKeystrokes : (elongate ? composedElongated() : composed)
+        captureReopen(restored: wantsRestore || elongate)
         updateContext(restored: wantsRestore)
-        return wantsRestore ? rawKeystrokes : composed
+        return text
     }
 
     /// Non-mutating twin of `commitText(autoRestore:)`: điều boundary SẼ chốt,
@@ -1043,6 +1115,7 @@ public struct TelexEngine {
         if autoRestore, outCount > 0, shouldRestoreRaw() {
             return rawKeystrokes
         }
+        if outCount > 0, isToneThenATail() { return composedElongated() }
         return composed
     }
 
@@ -1286,8 +1359,10 @@ public struct TelexEngine {
     /// half of the elongation split. Teencode onsets (w→qu, z→d, dz→d) fold exactly like
     /// `composedIsValidSyllable`, and the stop-coda tone rule is applied to the HEAD's
     /// coda. NON-mutating, stack buffer, no heap.
-    private func isValidHead(_ k: Int, tone: Tone) -> Bool {
+    private func isValidHead(_ k: Int, tone: Tone, plainLast: Bool = false) -> Bool {
         guard k >= 1, k <= Self.capacity else { return false }
+        // `plainLast`: judge the head with its LAST letter's mark dropped ("dậ" as "dạ").
+        func mark(_ j: Int) -> Mark { plainLast && j == k - 1 ? .none : renderLetters[j].mark }
         var t = tone
         if t == .grave || t == .hook || t == .tilde, hasStopCoda(k),
            !(t == .grave && isUkRime(k)) { t = .none }     // lockstep với render path
@@ -1296,15 +1371,13 @@ public struct TelexEngine {
                 var n = 0
                 for c in canon { buf[n] = Tables.letterClass(base: c, mark: .none); n += 1 }
                 for j in skip..<k {
-                    buf[n] = Tables.letterClass(base: renderLetters[j].base,
-                                                mark: renderLetters[j].mark)
+                    buf[n] = Tables.letterClass(base: renderLetters[j].base, mark: mark(j))
                     n += 1
                 }
                 if SyllableValidator.isValidSyllable(classes: buf, count: n, tone: t, teencode: teencode) { return true }
             }
             for j in 0..<k {
-                buf[j] = Tables.letterClass(base: renderLetters[j].base,
-                                            mark: renderLetters[j].mark)
+                buf[j] = Tables.letterClass(base: renderLetters[j].base, mark: mark(j))
             }
             return SyllableValidator.isValidSyllable(classes: buf, count: k, tone: t, teencode: teencode)
         }
