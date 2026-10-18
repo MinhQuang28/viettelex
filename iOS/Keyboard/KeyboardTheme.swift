@@ -161,6 +161,43 @@ enum KeyboardTransparency {
     }
 }
 
+/// Kiểu ô phóng to khi bấm + popup ký tự phụ / đuôi tên miền / pill: GIỐNG PHÍM của theme đang dùng
+/// (nền phím đã ghép lên nền bàn phím — gồm độ trong suốt + sáng/tối, viền, bo góc, màu chữ, phông /
+/// độ đậm / cỡ). Ô đang chọn trong popup ký tự phụ dùng màu nhấn. Giải MỘT lần mỗi lần dựng palette
+/// (KeyboardView.resolvePalette) — không tính gì thêm mỗi lần bấm. Android y hệt (KeyPopupStyle.kt).
+struct KeyPopupStyle: Equatable {
+    /// Nền ĐỤC (ô phóng to luôn đọc được kể cả khi phím trong suốt hẳn).
+    var fill: RGBA
+    var ink: RGBA
+    /// Viền như phím (Hoa xanh, Neon, Tương phản cao); nil = không viền.
+    var border: RGBA?
+    var borderWidth: Double
+    /// Bo góc như phím (% KeyStyle.corner); nil = bo mặc định của ô phóng to.
+    var cornerPercent: Int?
+    /// Hệ số cỡ chữ (KeyStyle.fontScale) — kẹp vừa ô lúc vẽ.
+    var labelScale: Double
+    /// Ô đang chọn (popup ký tự phụ / tên miền): nền nhấn + chữ đọc được trên nhấn.
+    var selectedFill: RGBA
+    var selectedInk: RGBA
+
+    static func make(_ p: KeyboardPalette, style: KeyStyle, systemDark: Bool, wallpaper: Bool) -> KeyPopupStyle {
+        let sys = KeyboardTransparency.systemBackdrop(dark: systemDark)
+        let behind = (wallpaper ? p.wallpaperOverlay : p.background)?.over(sys) ?? sys
+        let fill = p.keyFill.over(behind)
+        let ink = KeyboardTransparency.readable(RGBA(r: p.ink.r, g: p.ink.g, b: p.ink.b), on: fill)
+        let selected = p.accent.over(behind)
+        let selInk = KeyboardTransparency.readable(RGBA(r: p.accentInk.r, g: p.accentInk.g, b: p.accentInk.b), on: selected)
+        return KeyPopupStyle(fill: fill, ink: ink, border: p.keyBorder.map { $0.over(fill) },
+                             borderWidth: p.keyBorder == nil ? 0 : 1, cornerPercent: style.corner,
+                             labelScale: Double(style.labelScale), selectedFill: selected, selectedInk: selInk)
+    }
+
+    /// Bán kính bo góc ô cỡ `size` (bo theo % như phím; mặc định `fallback`), kẹp nửa cạnh ngắn.
+    func radius(size: CGSize, fallback: CGFloat) -> CGFloat {
+        KeyStyle.cornerRadius(percent: cornerPercent, size: size, fallback: fallback)
+    }
+}
+
 extension KeyboardPalette {
     func withTransparency(keyboard: Int, labels: Int, systemDark: Bool,
                           wallpaper: Bool) -> KeyboardPalette {

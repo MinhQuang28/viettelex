@@ -112,7 +112,42 @@ enum BackupSettings {
         // Dịch trên máy (Plus): ngôn ngữ đích — chỉ iOS dùng.
         Spec(key: TranslatePrefs.targetKey, kind: .string(TranslatePrefs.defaultTarget, TranslatePrefs.knownTargets)),
     ]
-    static let byKey: [String: Spec] = Dictionary(uniqueKeysWithValues: all.map { ($0.key, $0) })
+    /// Chỉ để NHẬN (file sao lưu / iCloud từ bản cũ ≤ iOS 1.2.17 / Android 1.5.12): bộ "Tuỳ chỉnh nâng cao"
+    /// CHUNG cũ — không xuất; nhập ⇒ chuyển vào theme đang chọn (`migrateLegacyStyle`, cùng luật
+    /// KeyStyleStore.migrate). Android giữ y hệt (BackupSettings.IMPORT_ONLY).
+    static let importOnly: [Spec] = [
+        Spec(key: KeyStyle.labelColorKey, kind: .int(-1, -1...0xFFFFFF)),
+        Spec(key: KeyStyle.fillColorKey, kind: .int(-1, -1...0xFFFFFF)),
+        Spec(key: KeyStyle.cornerKey, kind: .int(-1, -1...100)),
+        Spec(key: KeyStyle.fontScaleKey, kind: .int(0, 0...150)),
+        Spec(key: KeyStyle.fontKey, kind: .string(KeyLabelFont.standard.rawValue, KeyLabelFont.allCases.map(\.rawValue))),
+        Spec(key: KeyStyle.weightKey, kind: .string(KeyLabelWeight.regular.rawValue, KeyLabelWeight.allCases.map(\.rawValue))),
+    ]
+    static let byKey: [String: Spec] = Dictionary(uniqueKeysWithValues: (all + importOnly).map { ($0.key, $0) })
+
+    /// Nhập bộ chung cũ: có khoá cũ mà KHÔNG có `keyStyles` ⇒ chuyển vào theme đang chọn trên máy này
+    /// (chỉ khi theme đó chưa có mục riêng) thành `keyStyles`; khoá cũ luôn bị bỏ (không ghi lại).
+    static func migrateLegacyStyle(_ s: [String: SettingValue], theme: String?,
+                                   styles: [String: KeyStyle]) -> [String: SettingValue] {
+        let legacyKeys = importOnly.map(\.key)
+        guard legacyKeys.contains(where: { s[$0] != nil }) else { return s }
+        var out = s
+        for k in legacyKeys { out[k] = nil }
+        guard s[KeyStyleStore.key] == nil else { return out }
+        func int(_ k: String) -> Int? { if case .int(let i)? = s[k] { return i }; return nil }
+        func str(_ k: String) -> String? { if case .string(let t)? = s[k] { return t }; return nil }
+        var legacy = KeyStyle()
+        legacy.labelColor = KeyStyle.parseColor(int(KeyStyle.labelColorKey))
+        legacy.fillColor = KeyStyle.parseColor(int(KeyStyle.fillColorKey))
+        legacy.corner = KeyStyle.parseCorner(int(KeyStyle.cornerKey))
+        legacy.fontScale = KeyStyle.parseFontScale(int(KeyStyle.fontScaleKey))
+        legacy.font = str(KeyStyle.fontKey).flatMap(KeyLabelFont.init(rawValue:)) ?? .standard
+        legacy.weight = str(KeyStyle.weightKey).flatMap(KeyLabelWeight.init(rawValue:)) ?? .regular
+        guard !legacy.isDefault else { return out }
+        let m = KeyStyleStore.migrate(theme: theme, styles: styles, legacy: legacy)
+        out[KeyStyleStore.key] = .string(KeyStyleStore.serialize(m.styles))
+        return out
+    }
 }
 
 enum SettingValue: Equatable {

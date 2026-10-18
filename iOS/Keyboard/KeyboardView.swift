@@ -1348,6 +1348,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         enum Paste: Equatable { case none, text, image }
         let dark: Bool
         let theme: KeyboardTheme
+        /// Màu chữ thanh gợi ý — theme tự tạo / tuỳ chỉnh đổi màu mà `theme` vẫn là .system.
+        var ink: RGBA = .black
         let slots: [Slot?]
         let emojis: [String]
         let paste: Paste
@@ -1395,7 +1397,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // lượt đo text/Auto Layout mỗi keystroke.
         // So bằng struct Equatable (chỉ copy tham chiếu chuỗi) — không ghép chuỗi khoá mỗi lần.
         let sig = BarSignature(
-            dark: dark, theme: themeSettings.theme,
+            dark: dark, theme: themeSettings.theme, ink: palette.barInk,
             slots: texts.map { $0.map { .init(display: $0.display, insert: $0.insert) } },
             emojis: emojis,
             paste: pasteCardOn ? (set.pasteIsImage ? .image : .text) : .none)
@@ -1403,13 +1405,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         lastSuggestionSig = sig
 
         suggestionBar.setChipCount(chipCount)
-        let ink = palette.barInk.ui
-        let inkChanged = barInkApplied != ink
-        barInkApplied = ink
-        if inkChanged {
-            for d in slotDividers { d.backgroundColor = ink.withAlphaComponent(0.18) }
-            for l in suggestionBar.labels { l.textColor = ink }   // cả ô đang ẩn
-        }
+        applyBarInk()
         // Chỉ ghi thuộc tính THỰC SỰ đổi (chữ literal đổi mỗi phím, 2 ô kia thường giữ).
         for (i, b) in slotButtons.enumerated() {
             if let t = texts[i] {
@@ -1735,8 +1731,42 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         wallpaperActive = themeSettings.wallpaperActive(fileExists: fileExists)
         palette = themeSettings.palette(systemDark: systemDark, wallpaperActive: wallpaperActive)
         dark = palette.isDark
+        // Thanh gợi ý theo palette MỚI ngay (không đợi lượt gợi ý kế — bug nền tối chữ đen).
+        applyBarInk()
+        // Ô phóng to / popup: kiểu phím của theme, giải + đổi sang UIColor MỘT lần ở đây (không mỗi lần bấm).
+        popup = PopupUI(KeyPopupStyle.make(palette, style: themeSettings.effectiveKeyStyle,
+                                           systemDark: systemDark, wallpaper: wallpaperActive))
+        if balloonMade { balloon.invalidateStyle() }
         applyBackdrop()
     }
+
+    /// Chữ + vạch ngăn thanh gợi ý theo palette hiện tại; y hệt thì 0 việc.
+    private func applyBarInk() {
+        guard !suggestionBar.labels.isEmpty else { return }   // thanh chưa dựng: lần dựng đầu tự áp
+        let ink = palette.barInk.ui
+        guard barInkApplied != ink else { return }
+        barInkApplied = ink
+        for d in slotDividers { d.backgroundColor = ink.withAlphaComponent(0.18) }
+        for l in suggestionBar.labels { l.textColor = ink }   // cả ô đang ẩn
+    }
+    /// Test: màu chữ thanh gợi ý đang áp (nil = chưa dựng thanh).
+    var debugBarInkApplied: UIColor? { barInkApplied }
+
+    /// Kiểu ô phóng to / popup đã đổi sang UIColor (KeyPopupStyle) — dựng lại khi palette đổi.
+    struct PopupUI {
+        let style: KeyPopupStyle
+        let fill: UIColor, ink: UIColor, selectedFill: UIColor, selectedInk: UIColor
+        let border: CGColor?
+        init(_ s: KeyPopupStyle) {
+            style = s
+            fill = s.fill.ui; ink = s.ink.ui; selectedFill = s.selectedFill.ui; selectedInk = s.selectedInk.ui
+            border = s.border?.ui.cgColor
+        }
+    }
+    private var popup = PopupUI(KeyPopupStyle.make(KeyboardTheme.system.palette(systemDark: false), style: .default,
+                                                    systemDark: false, wallpaper: false))
+    /// Test: kiểu ô phóng to / popup đang dùng.
+    var debugPopupStyle: KeyPopupStyle { popup.style }
 
     private func applyBackdrop() {
         if themeBackdrop.superview == nil {
@@ -3911,18 +3941,21 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
         /// keyRect trong toạ độ superview. Path cache theo hình dạng — gõ cùng
         /// một hàng phím thì không dựng lại path (không alloc trên hot path).
-        func present(keyRect: CGRect, text: String, fill: UIColor, ink: UIColor, topLimit: CGFloat,
-                     containerWidth: CGFloat) {
+        func present(keyRect: CGRect, text: String, popup: PopupUI, topLimit: CGFloat, containerWidth: CGFloat) {
             // Sát mép màn hình: bubble dời vào trong (BalloonGeometry), không tràn ra bị cắt.
             frame = BalloonGeometry.frame(keyRect: keyRect, containerWidth: containerWidth, topLimit: topLimit)
             let bubbleW = frame.width, top = frame.minY
             let kx0 = keyRect.minX - frame.minX, kx1 = keyRect.maxX - frame.minX
             let bubbleH = max(keyRect.minY - top - 6, 22)
             let H = frame.height
-            let key = "\(bubbleW)|\(kx0)|\(H)|\(bubbleH)"
+            let key = "\(bubbleW)|\(kx0)|\(H)|\(bubbleH)|\(keyRect.width)"
             if key != pathKey {
                 pathKey = key
-                let r: CGFloat = 9, kr: CGFloat = KeyboardView.keyRadius, neckY = min(bubbleH + 12, H)
+                // Bo góc như phím (Tuỳ chỉnh nâng cao / theme) — kẹp để cổ + bubble vẫn liền khối.
+                let st = popup.style
+                let kr = min(st.radius(size: keyRect.size, fallback: KeyboardView.keyRadius), keyRect.width / 2, (H - bubbleH) / 2)
+                let r = min(st.radius(size: keyRect.size, fallback: 9), bubbleH / 2, bubbleW / 2)
+                let neckY = min(bubbleH + 12, H)
                 let p = UIBezierPath()
                 p.move(to: CGPoint(x: 0, y: bubbleH))
                 p.addLine(to: CGPoint(x: 0, y: r))
@@ -3950,13 +3983,16 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                 shape.path = p.cgPath
                 layer.shadowPath = p.cgPath
                 label.frame = CGRect(x: 0, y: 0, width: bubbleW, height: bubbleH)
-                // Bubble thấp (ít headroom): co chữ cho vừa — không để glyph bị cắt nửa.
-                let size = min(34, (bubbleH * 0.9).rounded())
+                // Bubble thấp (ít headroom): co chữ cho vừa — không để glyph bị cắt nửa. Cỡ chữ theo
+                // "Cỡ chữ trên phím" (kẹp vừa bubble trong popupFont).
+                let size = min(34 * CGFloat(st.labelScale), (bubbleH * 0.9).rounded())
                 let f = KeyboardView.popupFont(size, height: bubbleH)
                 if label.font != f { label.font = f }
+                shape.fillColor = popup.fill.cgColor
+                shape.strokeColor = popup.border
+                shape.lineWidth = CGFloat(st.borderWidth)
+                label.textColor = popup.ink
             }
-            shape.fillColor = fill.cgColor
-            label.textColor = ink
             label.text = text
             isHidden = false
         }
@@ -3997,8 +4033,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             balloonHidePending = false
             NSObject.cancelPreviousPerformRequests(withTarget: self, selector: #selector(hideBalloonDeferred), object: nil)
         }
-        balloon.present(keyRect: f, text: text, fill: palette.balloon.ui, ink: palette.ink.ui, topLimit: topLimit,
-                        containerWidth: bounds.width)
+        balloon.present(keyRect: f, text: text, popup: popup, topLimit: topLimit, containerWidth: bounds.width)
         balloonShownAt = CACurrentMediaTime()
     }
     private func hideBalloon() { if balloonMade { balloon.isHidden = true } }
@@ -4345,8 +4380,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             wordSwipePill = pill
         }
         pill.text = n > 0 ? L("\u{232B} %@ từ", n) : L("Huỷ")
-        pill.textColor = palette.ink.ui
-        pill.backgroundColor = palette.balloon.ui
+        pill.textColor = popup.ink
+        pill.backgroundColor = popup.fill
         if pill.superview == nil { addSubview(pill) }
         bringSubviewToFront(pill)
         let key = wordSwipeKey.map { convert($0.bounds, from: $0) }
@@ -5048,8 +5083,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         guard let v = domainPopup else { return }
         if v.superview == nil { addSubview(v) }
         v.present(layout: l, key: key, top: top, panelH: panelH, choices: choices,
-                  fill: palette.balloon.ui, ink: palette.ink.ui,
-                  fontSize: variants ? (Self.isPad ? 26 : 24) : (Self.isPad ? 20 : 18))
+                  popup: popup,
+                  fontSize: (variants ? (Self.isPad ? 26 : 24) : (Self.isPad ? 20 : 18)) * CGFloat(popup.style.labelScale))
         v.select(sel)
         Self.flickFeedback()
     }
@@ -5090,6 +5125,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         private var labels: [UILabel] = []
         private var slots: [CGRect] = []
         private var ink: UIColor = .label
+        private var selectedInk: UIColor = .white
         override init(frame: CGRect) {
             super.init(frame: frame)
             isUserInteractionEnabled = false
@@ -5108,21 +5144,28 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
         /// Toạ độ `key`, `layout`, `top` theo superview (KeyboardView).
         func present(layout l: DomainPopup.Layout, key: CGRect, top: CGFloat, panelH: CGFloat,
-                     choices: [String], fill: UIColor, ink: UIColor, fontSize: CGFloat) {
+                     choices: [String], popup: PopupUI, fontSize: CGFloat) {
             let inset: CGFloat = 4
             let panel = CGRect(x: l.originX - inset, y: top, width: l.width + inset * 2, height: panelH)
             let f = panel.union(key)
             frame = f
             let lp = panel.offsetBy(dx: -f.minX, dy: -f.minY)
             let lk = key.offsetBy(dx: -f.minX, dy: -f.minY)
-            let path = UIBezierPath(roundedRect: lp, cornerRadius: 10)
+            // Bo góc / viền / màu như phím (KeyPopupStyle); ô chọn = màu nhấn.
+            let st = popup.style
+            let path = UIBezierPath(roundedRect: lp, cornerRadius: min(st.radius(size: lk.size, fallback: 10), lp.height / 2))
             // Cổ nối panel xuống trọn phím (phủ phím như balloon).
             let neck = CGRect(x: lk.minX, y: lp.maxY - 10, width: lk.width, height: lk.maxY - lp.maxY + 10)
-            path.append(UIBezierPath(roundedRect: neck, cornerRadius: KeyboardView.keyRadius))
+            path.append(UIBezierPath(roundedRect: neck,
+                                     cornerRadius: min(st.radius(size: lk.size, fallback: KeyboardView.keyRadius), lk.width / 2)))
             shape.path = path.cgPath
-            shape.fillColor = fill.cgColor
+            shape.fillColor = popup.fill.cgColor
+            shape.strokeColor = popup.border
+            shape.lineWidth = CGFloat(st.borderWidth)
             layer.shadowPath = path.cgPath
-            self.ink = ink
+            self.ink = popup.ink
+            self.selectedInk = popup.selectedInk
+            highlight.backgroundColor = popup.selectedFill.cgColor
             while labels.count < choices.count {
                 let lb = UILabel()
                 lb.textAlignment = .center
@@ -5146,7 +5189,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         }
 
         func select(_ i: Int?) {
-            for (j, lb) in labels.enumerated() { lb.textColor = j == i ? .white : ink }
+            for (j, lb) in labels.enumerated() { lb.textColor = j == i ? selectedInk : ink }
             guard let i, i < slots.count else { highlight.isHidden = true; return }
             highlight.frame = slots[i].insetBy(dx: 1, dy: 0)
             highlight.isHidden = false
@@ -5322,8 +5365,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             keyCmdPill = pill
         }
         pill.text = text
-        pill.textColor = palette.ink.ui
-        pill.backgroundColor = palette.balloon.ui
+        pill.textColor = popup.ink
+        pill.backgroundColor = popup.fill
         if pill.superview == nil { addSubview(pill) }
         bringSubviewToFront(pill)
         // Ngay dưới đỉnh vùng phím, thẳng phím xuất phát — ngón đang ở trên nên không che.

@@ -149,6 +149,8 @@ class ThemeSpecTests {
         assertTrue(oks > 0); assertTrue(errs > 1000)
         assertFalse(ThemeSpecParser.parse("{\"v\":" + "9".repeat(10_000) + "}").errors.isEmpty())
         assertEquals(ThemeIssue.Code.tooLarge, ThemeSpecParser.parse("a".repeat(100_000)).errors.first().code)
+        // Lỗi cú pháp báo "dòng:cột" (iOS cùng giá trị).
+        assertEquals(ThemeIssue(ThemeIssue.Code.syntax, "2:10"), ThemeSpecParser.parse("{\n  \"v\": 1,,\n}").errors.first())
         // Chuỗi Java hỏng (nửa surrogate lẻ) ⇒ lỗi mã hoá, không crash.
         assertEquals(ThemeIssue.Code.encoding, ThemeSpecParser.parse("{\"v\":1,\"name\":{\"vi\":\"\uD800\"}}").errors.first().code)
     }

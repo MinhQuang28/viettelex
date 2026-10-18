@@ -215,3 +215,39 @@ object KeyLabelFitter {
     const val KEY_SAMPLE = "WMĐÂĂÊÔƠƯgjpqy"
     const val STACKED_SAMPLE = "ỄẪỖẰẲỮỂgjpqyỵỹ"
 }
+
+/**
+ * Kiểu ô phóng to khi bấm + popup ký tự phụ / tên miền: GIỐNG PHÍM của theme đang dùng (nền phím đã ghép
+ * lên nền bàn phím — gồm độ trong suốt + sáng/tối, viền, bo góc, màu chữ, cỡ chữ). Ô đang chọn dùng màu
+ * nhấn. Giải MỘT lần mỗi lần dựng theme (ImeTheme) — không tính gì thêm mỗi lần bấm. Y hệt iOS
+ * KeyPopupStyle (iOS/Keyboard/KeyboardTheme.swift).
+ */
+data class KeyPopupStyle(
+    /** Nền ĐỤC (ô phóng to luôn đọc được kể cả khi phím trong suốt hẳn). */
+    val fill: Int,
+    val ink: Int,
+    /** Viền như phím (Hoa xanh, Neon, Tương phản cao); null = không viền. */
+    val border: Int?,
+    /** Bề dày viền (dp). */
+    val borderWidth: Float,
+    /** Bo góc như phím (% [KeyStyle.corner]); null = bo mặc định của ô. */
+    val cornerPercent: Int?,
+    /** Hệ số cỡ chữ ([KeyStyle.fontScale]) — kẹp vừa ô lúc vẽ. */
+    val labelScale: Float,
+    /** Ô đang chọn: nền nhấn + chữ đọc được trên nhấn. */
+    val selectedFill: Int,
+    val selectedInk: Int,
+) {
+    companion object {
+        fun make(p: ThemePalette, style: KeyStyle, systemDark: Boolean): KeyPopupStyle {
+            val c = ThemeColor
+            val t = KeyboardTransparency
+            val behind = c.over(if (p.wallpaper) p.wallpaperOverlay else p.bg, t.systemBackdrop(systemDark))
+            val fill = c.over(p.keyFill, behind)
+            val ink = t.readable(c.rgb(p.ink and 0xFFFFFF), fill)
+            val sel = c.over(p.action, behind)
+            return KeyPopupStyle(fill, ink, p.keyBorder?.let { c.over(it, fill) }, if (p.keyBorder == null) 0f else 1f,
+                style.corner, style.letterScale, sel, t.readable(c.rgb(p.actionInk and 0xFFFFFF), sel))
+        }
+    }
+}

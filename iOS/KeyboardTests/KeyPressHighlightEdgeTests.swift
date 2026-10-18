@@ -225,4 +225,76 @@ final class KeyPressHighlightEdgeTests: XCTestCase {
             }
         }
     }
+
+    /// Bug Phil 19/10/2026 (tối, theme Hệ thống, Caps bật): bấm 123 rồi ABC (về bàn chữ) ⇒ phím 123 MẤT
+    /// nền (chỉ còn nhãn trên nền bàn phím) trong khi mọi phím khác còn nền. Khoá: sau vòng đổi plane,
+    /// phím 123 có nền = nền phím chức năng, không còn sẫm treo — mọi tổ hợp sáng/tối × Caps × sẫm-khi-bấm.
+    @MainActor func testPlaneRoundTripKeeps123KeyFill() throws {
+        for dark in [true, false] { for caps in [true, false] { for highlight in [true, false] {
+        for fast in [true, false] { for upEvent in [UIControl.Event.touchUpInside, .touchCancel, .touchUpOutside] {
+            let ctx = "dark=\(dark) caps=\(caps) highlight=\(highlight) fast=\(fast) up=\(upEvent.rawValue)"
+            try withKeyboard(width: 390, numberRow: false, highlight: highlight) { kb, _ in
+                kb.applyAppearance(dark ? .dark : .light, style: dark ? .dark : .light)
+                kb.setNeedsLayout(); kb.layoutIfNeeded()
+                if caps {
+                    let sh = try XCTUnwrap(kb.debugControl("Shift"), ctx)
+                    for _ in 0..<2 { sh.sendActions(for: .touchDown); sh.sendActions(for: .touchUpInside) }
+                    if !kb.debugShiftCaps {   // ⇧ đầu có thể đã bật sẵn (đầu câu) ⇒ thêm một lần
+                        let s2 = try XCTUnwrap(kb.debugControl("Shift"), ctx)
+                        s2.sendActions(for: .touchDown); s2.sendActions(for: .touchUpInside)
+                    }
+                    XCTAssertTrue(kb.debugShiftCaps, ctx)
+                }
+                for label in [L("Số"), L("Chữ")] {
+                    let c = try XCTUnwrap(kb.debugControl(label), "\(ctx) \(label)")
+                    c.sendActions(for: .touchDown)
+                    kb.setNeedsLayout(); kb.layoutIfNeeded()
+                    c.sendActions(for: upEvent)
+                    if !fast { RunLoop.main.run(until: Date().addingTimeInterval(BalloonGeometry.minVisible + 0.05)) }
+                    kb.setNeedsLayout(); kb.layoutIfNeeded()
+                }
+                RunLoop.main.run(until: Date().addingTimeInterval(BalloonGeometry.minVisible + 0.05))
+                XCTAssertEqual(kb.debugPlaneName, "letters", ctx)
+                let more = try XCTUnwrap(kb.debugControl(L("Số")), ctx)
+                let col = kb.debugKeyColors(more as! UIButton)
+                let fn = kb.debugPalette.fnFill.ui
+                XCTAssertEqual(col.current, fn, "\(ctx): phím 123 phải có nền phím chức năng")
+                XCTAssertEqual(col.normal, fn, ctx)
+                XCTAssertTrue(kb.debugPressedKeys().isEmpty, ctx)
+                // Phím chức năng khác (emoji / ⌫) cùng nền — đối chiếu.
+                if let bs = kb.debugControl(L("Xoá")) as? UIButton { XCTAssertEqual(kb.debugKeyColors(bs).current, fn, ctx) }
+            }
+        } } } } }
+    }
+
+    /// Bug Phil 19/10/2026: nền / thanh gợi ý tối, phím sáng. Đổi sáng/tối GIỮA CHỪNG khi đang ở plane khác
+    /// (plane cũ nằm trong cache) rồi đổi plane: phím mọi plane, chữ thanh gợi ý và ô phóng to phải cùng
+    /// MỘT chế độ với palette.
+    @MainActor func testAppearanceFlipAcrossPlanesStaysConsistent() throws {
+        try withKeyboard(width: 390, numberRow: false) { kb, _ in
+            kb.showSuggestions(.init(nextWords: ["một", "hai", "ba"]))
+            func check(_ dark: Bool, _ ctx: String) throws {
+                kb.setNeedsLayout(); kb.layoutIfNeeded()
+                let p = kb.debugPalette
+                XCTAssertEqual(p.isDark, dark, ctx)
+                XCTAssertEqual(p, ThemeSettings().palette(systemDark: dark, wallpaperActive: false), ctx)
+                let key = try XCTUnwrap(kb.debugPlaneName == "letters" ? kb.debugLetterButton("a") : kb.debugKeyButton("1"), ctx)
+                XCTAssertEqual(kb.debugKeyColors(key).normal, p.keyFill.ui, "\(ctx): nền phím")
+                XCTAssertEqual(key.titleColor(for: .normal) ?? key.tintColor, p.keyInk.ui, "\(ctx): chữ phím")
+                if let ink = kb.debugBarInkApplied { XCTAssertEqual(ink, p.barInk.ui, "\(ctx): chữ thanh gợi ý") }
+                XCTAssertEqual(kb.debugPopupStyle, KeyPopupStyle.make(p, style: .default, systemDark: dark, wallpaper: false), ctx)
+            }
+            try check(false, "sáng, chữ")
+            kb.debugSetPlane(numbers: true); try check(false, "sáng, số")
+            kb.updateDark(true); try check(true, "tối, số")
+            kb.debugSetPlane(numbers: false); try check(true, "tối, chữ (từ cache)")
+            kb.debugSetPlane(numbers: true); try check(true, "tối, số lại")
+            kb.updateDark(false); try check(false, "sáng, số")
+            kb.debugSetPlane(numbers: false); try check(false, "sáng, chữ (từ cache)")
+            // applyAppearance (lần hiện mới) cũng vậy.
+            kb.applyAppearance(.dark, style: .light); try check(true, "ô xin .dark")
+            kb.applyAppearance(.default, style: .dark); try check(true, ".default theo trait tối")
+            kb.applyAppearance(.default, style: .light); try check(false, ".default theo trait sáng")
+        }
+    }
 }

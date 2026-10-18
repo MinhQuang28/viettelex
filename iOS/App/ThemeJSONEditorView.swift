@@ -37,12 +37,13 @@ struct ThemeJSONEditorView: View {
             VStack(spacing: 8) {
                 if let spec = outcome.spec {
                     HStack(spacing: 8) {
-                        ThemePreview(palette: spec.palette(dark: false), wallpaper: nil, dim: 0, large: false,
-                                     keyStyle: spec.typography)
-                        ThemePreview(palette: spec.palette(dark: true), wallpaper: nil, dim: 0, large: false,
-                                     keyStyle: spec.typography)
+                        ForEach([false, true], id: \.self) { dark in
+                            ThemePreview(palette: spec.palette(dark: dark), wallpaper: nil, dim: 0, large: false,
+                                         keyStyle: spec.typography)
+                                .clipShape(RoundedRectangle(cornerRadius: 8))
+                        }
                     }
-                    .frame(height: 70).clipShape(RoundedRectangle(cornerRadius: 8))
+                    .frame(height: 70)
                 }
                 TextEditor(text: $text)
                     .font(.system(.footnote, design: .monospaced))
@@ -57,7 +58,12 @@ struct ThemeJSONEditorView: View {
             .padding()
             .navigationTitle(title)
             .navigationBarTitleDisplayMode(.inline)
-            .onChange(of: text) { _ in saveIssues = [] }
+            .onChange(of: text) { new in
+                saveIssues = []
+                // Bàn phím iOS hay tự đổi " thành “ ” (dấu ngoặc cong) ⇒ JSON sai — đổi lại ngay.
+                let fixed = new.replacingOccurrences(of: "“", with: "\"").replacingOccurrences(of: "”", with: "\"")
+                if fixed != new { text = fixed }
+            }
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button(L("Huỷ")) { dismiss() } }
                 ToolbarItem(placement: .confirmationAction) {
@@ -87,13 +93,14 @@ struct ThemePastePreview: View {
                 if let spec = outcome.spec {
                     Section {
                         HStack(spacing: 8) {
-                            ThemePreview(palette: spec.palette(dark: false), wallpaper: nil, dim: 0, large: false,
-                                         keyStyle: spec.typography)
-                            ThemePreview(palette: spec.palette(dark: true), wallpaper: nil, dim: 0, large: false,
-                                         keyStyle: spec.typography)
+                            ForEach([false, true], id: \.self) { dark in
+                                ThemePreview(palette: spec.palette(dark: dark), wallpaper: nil, dim: 0, large: false,
+                                             keyStyle: spec.typography)
+                                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                            }
                         }
                         .frame(height: 90)
-                        .listRowInsets(EdgeInsets())
+                        .listRowInsets(EdgeInsets(top: 8, leading: 8, bottom: 8, trailing: 8))
                     } header: { Text(spec.name) } footer: { Text(L("Sáng · Tối")) }
                 }
                 Section {

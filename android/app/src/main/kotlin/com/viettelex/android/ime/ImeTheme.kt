@@ -81,6 +81,8 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val actionInk = palette.actionInk
     /** Chip (thẻ Dán, highlight category emoji, nhấn slot gợi ý). */
     val chip = palette.chip
+    /** Ô phóng to / popup: kiểu phím của theme ([KeyPopupStyle]) — giải MỘT lần ở đây, không mỗi lần bấm. */
+    val popupStyle: com.viettelex.keyboard.KeyPopupStyle = com.viettelex.keyboard.KeyPopupStyle.make(palette, keyStyle, systemDark)
     /** Người dùng chọn Màu nhấn ⇒ ⇧ bật/Caps tô [action] / [actionInk]. */
     val accentShift = palette.accentShift
     val trail = palette.trail

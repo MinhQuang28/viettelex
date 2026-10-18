@@ -1,0 +1,17 @@
+{
+  "createdAt": "2026-10-10T08:00:00Z",
+  "format": "viettelex-backup",
+  "minReaderVersion": 1,
+  "platform": "ios",
+  "settings": {
+    "keyCornerRadius": 100,
+    "keyFillColor": -1,
+    "keyFontScale": 0,
+    "keyLabelColor": 16723285,
+    "keyLabelFont": "serif",
+    "keyLabelWeight": "regular",
+    "simpleTelex": true,
+    "systemBackdropPureWhite": false
+  },
+  "version": 1
+}

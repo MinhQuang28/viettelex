@@ -534,7 +534,7 @@ object L10nTable {
         put("Màu nhấn", "Accent colour")
         put("Quá lớn (tối đa 16 KB).", "Too large (max 16 KB).")
         put("Không phải văn bản UTF-8 hợp lệ.", "Not valid UTF-8 text.")
-        put("JSON sai cú pháp (ký tự %s).", "JSON syntax error (character %s).")
+        put("JSON sai cú pháp ở %s (dòng:cột).", "JSON syntax error at %s (line:column).")
         put("JSON lồng quá sâu.", "JSON is nested too deeply.")
         put("Khoá bị lặp: %s", "Duplicate key: %s")
         put("Khoá không hỗ trợ: %s", "Unsupported key: %s")

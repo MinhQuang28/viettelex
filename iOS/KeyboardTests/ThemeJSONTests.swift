@@ -169,6 +169,8 @@ final class ThemeJSONTests: XCTestCase {
         // Số / chuỗi khổng lồ.
         XCTAssertFalse(ThemeSpecParser.parse(Data(("{\"v\":" + String(repeating: "9", count: 10_000) + "}").utf8)).errors.isEmpty)
         XCTAssertEqual(ThemeSpecParser.parse(String(repeating: "a", count: 100_000)).errors.first?.code, .tooLarge)
+        // Lỗi cú pháp báo "dòng:cột" (Android cùng giá trị).
+        XCTAssertEqual(ThemeSpecParser.parse("{\n  \"v\": 1,,\n}").errors.first, ThemeIssue(code: .syntax, path: "2:10"))
     }
 
     // MARK: thời gian / bộ nhớ (bàn phím)

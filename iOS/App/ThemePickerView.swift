@@ -53,16 +53,34 @@ struct ThemePickerView: View {
                     }
                     .padding(.vertical, 6)
                 }
-                Button { paste() } label: {
-                    HStack(spacing: 6) {
-                        Label(L("Dán giao diện"), systemImage: "doc.on.clipboard")
-                        if !ThemeGate.allowsCustom { plusBadge }
+                if ThemeGate.allowsCustom {
+                    // PasteButton (iOS 16+): hệ thống chỉ trao clipboard khi người dùng bấm — không hỏi "Cho
+                    // phép dán", không đọc ngầm. Nhận chuỗi rồi XEM TRƯỚC (chưa ghi gì).
+                    HStack {
+                        PasteButton(payloadType: String.self) { items in
+                            let text = items.first ?? ""
+                            DispatchQueue.main.async {
+                                if text.isEmpty { toast = L("Clipboard không có văn bản.") } else { pasteText = PasteText(text: text) }
+                            }
+                        }
+                        .labelStyle(.titleAndIcon)
+                        .buttonBorderShape(.capsule)
+                        Spacer()
+                    }
+                } else {
+                    Button { paste() } label: {
+                        HStack(spacing: 6) {
+                            Label(L("Dán giao diện"), systemImage: "doc.on.clipboard")
+                            plusBadge
+                        }
                     }
                 }
             } header: { Text(L("Giao diện của bạn")) } footer: {
                 Text(L("Dán JSON giao diện đã chép (Plus). Chỉ đọc clipboard khi bạn bấm, xem trước rồi mới thêm."))
             }
         }
+        // Chừa chỗ thanh tab nổi — không che "Dán giao diện" / chú thích cuối trang.
+        .bottomBarScrollMargin()
         .navigationTitle(L("Chọn giao diện"))
         .navigationBarTitleDisplayMode(.inline)
         .navigationDestination(isPresented: $showPlus) { PlusView(model: PlusShared.model) }
@@ -94,7 +112,8 @@ struct ThemePickerView: View {
         .overlay(alignment: .bottom) {
             if let toast {
                 Text(toast).font(.footnote).padding(.horizontal, 14).padding(.vertical, 8)
-                    .background(Capsule().fill(.thinMaterial)).padding(.bottom, 24)
+                    .background(Capsule().fill(.thinMaterial))
+                    .padding(.bottom, 100)   // trên thanh tab nổi
                     .task { try? await Task.sleep(nanoseconds: 1_600_000_000); self.toast = nil }
             }
         }
@@ -105,12 +124,8 @@ struct ThemePickerView: View {
         onChange()
     }
 
-    private func paste() {
-        guard ThemeGate.allowsCustom else { showPlus = true; return }
-        // Chỉ đọc clipboard ở đây (người dùng vừa bấm "Dán giao diện").
-        guard let s = UIPasteboard.general.string, !s.isEmpty else { toast = L("Clipboard không có văn bản."); return }
-        pasteText = PasteText(text: s)
-    }
+    /// Chưa có Plus: "Dán giao diện" mở màn Plus (có Plus thì là PasteButton của hệ thống).
+    private func paste() { showPlus = true }
 
     private func copy(_ t: ThemeEditTarget) {
         guard let text = ThemeJSONActions.copyText(t, settings: settings, store: store) else { return }

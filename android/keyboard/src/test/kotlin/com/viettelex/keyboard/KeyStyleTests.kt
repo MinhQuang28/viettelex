@@ -173,7 +173,8 @@ class KeyStyleTests {
     @Test fun backupIncludesKeyStyle() {
         val k = BackupSettings.byKey
         assertEquals(SettingKind.StyleMap, k[Keys.KEY_STYLES]?.kind)
-        for (key in KeyStyleStore.LEGACY_KEYS) assertNull("khoá chung cũ $key không còn sao lưu", k[key])
+        // Khoá chung cũ: chỉ NHẬN (file cũ), không xuất.
+        for (key in KeyStyleStore.LEGACY_KEYS) { assertTrue(key, BackupSettings.all.none { it.key == key }); assertTrue(key, k.containsKey(key)) }
 
         val s = ThemeSettings(theme = KeyboardTheme.MINT).withKeyStyle(custom)
             .withKeyStyle(KeyStyle(accentColor = 0xD6336C), KeyboardTheme.SYSTEM)

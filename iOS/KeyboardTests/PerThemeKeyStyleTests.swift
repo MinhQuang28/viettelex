@@ -275,10 +275,118 @@ final class PerThemeKeyStyleTests: XCTestCase {
         // Đồng bộ iCloud: chuỗi sổ đồng bộ = chuỗi chuẩn; rác bị bỏ.
         XCTAssertEqual(SettingValue.fromSyncString(Self.golden, key: KeyStyleStore.key), .string(Self.golden))
         XCTAssertNil(SettingValue.fromSyncString("oops", key: KeyStyleStore.key))
-        // File cũ có khoá chung ⇒ bỏ qua như key lạ; chuỗi lộn xộn ⇒ chuẩn hoá.
+        // File có CẢ khoá chung cũ lẫn keyStyles ⇒ keyStyles thắng, khoá cũ bỏ; chuỗi lộn xộn ⇒ chuẩn hoá.
         let old = #"{"format":"viettelex-backup","version":1,"settings":{"keyLabelColor":255,"keyStyles":"{ \"oled\" : {\"corner\":0} }"}}"#
         let p = try BackupCodec.decode(Data(old.utf8))
-        XCTAssertNil(p.settings?["keyLabelColor"])
         XCTAssertEqual(p.settings?[KeyStyleStore.key], .string(#"{"oled":{"corner":0}}"#))
+        let m = BackupSettings.migrateLegacyStyle(try XCTUnwrap(p.settings), theme: "mint", styles: [:])
+        XCTAssertNil(m["keyLabelColor"])
+        XCTAssertEqual(m[KeyStyleStore.key], .string(#"{"oled":{"corner":0}}"#))
+    }
+
+    /// Sao lưu bản CŨ (chỉ có bộ chung keyLabelColor…, chưa có keyStyles) vẫn khôi phục được: vào theme đang
+    /// chọn trên máy nhận (cùng luật chuyển đổi). Fixture chung với Android (backup-legacy-keystyle.json).
+    func testRestoreOldFormatBackupMigratesIntoCurrentTheme() throws {
+        let url = try XCTUnwrap(Bundle(for: Self.self).url(forResource: "backup-legacy-keystyle", withExtension: "json"))
+        let p = try BackupCodec.decode(Data(contentsOf: url))
+        XCTAssertEqual(p.settings?.count, 7)                                  // systemBackdropPureWhite: key lạ
+        XCTAssertEqual(p.settings?[KeyStyle.labelColorKey], .int(0xFF2D55))
+        let want = KeyStyle(labelColor: 0xFF2D55, corner: 100, font: .serif)
+        // Máy nhận đang dùng Bạc hà, chưa chỉnh gì.
+        d.set("mint", forKey: ThemeSettings.themeKey)
+        BackupStore(defaults: d, containerURL: nil).setSettings(try XCTUnwrap(p.settings))
+        XCTAssertEqual(ThemeSettings.load(d).keyStyles, ["mint": want])
+        for k in KeyStyleStore.legacyKeys { XCTAssertNil(d.object(forKey: k), "khoá cũ không ghi lại: \(k)") }
+        XCTAssertEqual(d.string(forKey: KeyStyleStore.key), KeyStyleStore.serialize(["mint": want]))
+        // Nhập lại (lặp) ⇒ không đổi; theme đã có mục riêng ⇒ không ghi đè.
+        BackupStore(defaults: d, containerURL: nil).setSettings(try XCTUnwrap(p.settings))
+        XCTAssertEqual(ThemeSettings.load(d).keyStyles, ["mint": want])
+        var s = ThemeSettings.load(d)
+        s.keyStyle = KeyStyle(corner: 5)
+        s.save(d)
+        BackupStore(defaults: d, containerURL: nil).setSettings(try XCTUnwrap(p.settings))
+        XCTAssertEqual(ThemeSettings.load(d).keyStyles, ["mint": KeyStyle(corner: 5)])
+        // Máy nhận còn ở "Trắng hồng" (Android 1.5.12) ⇒ bộ cũ + màu nhấn hồng vào Hệ thống.
+        let o = "perthemestyle-pw-\(UUID().uuidString)"
+        let pw = try XCTUnwrap(UserDefaults(suiteName: o))
+        defer { pw.removePersistentDomain(forName: o) }
+        pw.set("pureWhite", forKey: ThemeSettings.themeKey)
+        BackupStore(defaults: pw, containerURL: nil).setSettings(try XCTUnwrap(p.settings))
+        var withAccent = want; withAccent.accentColor = 0xD6336C
+        XCTAssertEqual(ThemeSettings.load(pw).keyStyles, ["system": withAccent])
+        // Bộ cũ toàn mặc định ⇒ không tạo mục.
+        let blank: [String: SettingValue] = [KeyStyle.labelColorKey: .int(-1), KeyStyle.fontKey: .string("default")]
+        XCTAssertEqual(BackupSettings.migrateLegacyStyle(blank, theme: "mint", styles: [:]), [:])
+    }
+
+    // MARK: ô phóng to / popup theo kiểu phím (Phil 19/10/2026 — Laban Key vẽ popup trơn; ta phải giống phím)
+
+    func testKeyPopupStyleFollowsThemeKey() {
+        for t in KeyboardTheme.allCases {
+            for dark in [false, true] {
+                let s = ThemeSettings(theme: t)
+                let p = s.palette(systemDark: dark, wallpaperActive: false)
+                let ps = KeyPopupStyle.make(p, style: s.effectiveKeyStyle, systemDark: dark, wallpaper: false)
+                let sys = KeyboardTransparency.systemBackdrop(dark: dark)
+                let behind = p.background?.over(sys) ?? sys
+                let tag = "\(t) \(dark)"
+                XCTAssertEqual(ps.fill, p.keyFill.over(behind), tag)
+                XCTAssertEqual(ps.fill.a, 1, tag)
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(ps.ink, ps.fill), KeyboardTransparency.minLabelContrast, tag)
+                XCTAssertEqual(ps.selectedFill, p.accent.over(behind), tag)
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(ps.selectedInk, ps.selectedFill), KeyboardTransparency.minLabelContrast, tag)
+                XCTAssertEqual(ps.border == nil, p.keyBorder == nil, tag)
+                XCTAssertEqual(ps.borderWidth, p.keyBorder == nil ? 0 : 1, tag)
+            }
+        }
+        for t in [KeyboardTheme.greenFloral, .neon, .contrast] {
+            XCTAssertNotNil(KeyPopupStyle.make(t.palette(systemDark: true), style: .default, systemDark: true, wallpaper: false).border)
+        }
+        XCTAssertEqual(ThemeSettings(theme: .pink).effectiveKeyStyle.corner, 70)
+    }
+
+    func testKeyPopupStyleFollowsCustomizationAndTransparency() {
+        let st = KeyStyle(labelColor: 0xFFE066, fillColor: 0x102030, accentColor: 0xFF9500, corner: 100,
+                          fontScale: 130, font: .serif, weight: .bold)
+        var s = ThemeSettings(theme: .mint)
+        s.keyStyle = st
+        let ps = KeyPopupStyle.make(s.palette(systemDark: false, wallpaperActive: false), style: s.effectiveKeyStyle,
+                                    systemDark: false, wallpaper: false)
+        XCTAssertEqual(ps.fill, RGBA(hex: 0x102030))
+        XCTAssertEqual(ps.ink, RGBA(hex: 0xFFE066))
+        XCTAssertEqual(ps.cornerPercent, 100)
+        XCTAssertEqual(ps.labelScale, 1.3, accuracy: 1e-9)
+        XCTAssertEqual(ps.selectedFill, RGBA(hex: 0xFF9500))
+        XCTAssertEqual(ps.radius(size: CGSize(width: 30, height: 42), fallback: 9), 15)
+        // Phím trong suốt hẳn ⇒ ô đục (màu nền bàn phím), chữ vẫn đọc được; ảnh nền ⇒ ghép trên lớp phủ.
+        for wallpaper in [false, true] {
+            let tr = ThemeSettings(theme: .sky, keyboardTransparency: 100)
+            let c = KeyPopupStyle.make(tr.palette(systemDark: true, wallpaperActive: wallpaper), style: .default,
+                                       systemDark: true, wallpaper: wallpaper)
+            XCTAssertEqual(c.fill.a, 1)
+            XCTAssertGreaterThanOrEqual(RGBA.contrast(c.ink, c.fill), KeyboardTransparency.minLabelContrast)
+        }
+    }
+
+    /// Bàn phím thật: kiểu popup giải SẴN mỗi lần hiện (không mỗi lần bấm) và đổi theo theme.
+    @MainActor func testKeyboardViewCachesPopupStyle() {
+        let ud = UserDefaultsProvider.shared
+        let keys = [ThemeSettings.themeKey, KeyStyleStore.key] + KeyStyleStore.legacyKeys
+        let saved = keys.map { ud?.object(forKey: $0) }
+        defer { for (k, v) in zip(keys, saved) { ud?.set(v, forKey: k) } }
+        for k in KeyStyleStore.legacyKeys { ud?.removeObject(forKey: k) }
+        ud?.set("greenFloral", forKey: ThemeSettings.themeKey)
+        ud?.set(KeyStyleStore.serialize(["greenFloral": KeyStyle(corner: 0)]), forKey: KeyStyleStore.key)
+        let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }
+        kb.frame = CGRect(x: 0, y: 0, width: 390, height: 300)
+        kb.applyAppearance(.light, style: .light)
+        let want = KeyPopupStyle.make(kb.debugPalette, style: KeyStyle(corner: 0), systemDark: false, wallpaper: false)
+        XCTAssertEqual(kb.debugPopupStyle, want)
+        XCTAssertNotNil(kb.debugPopupStyle.border)
+        XCTAssertEqual(kb.debugPopupStyle.cornerPercent, 0)
+        ud?.set("oled", forKey: ThemeSettings.themeKey)
+        kb.applyAppearance(.dark, style: .dark)
+        XCTAssertNil(kb.debugPopupStyle.border)
+        XCTAssertEqual(kb.debugPopupStyle.fill, KeyboardTheme.oled.palette(systemDark: true).keyFill)
     }
 }

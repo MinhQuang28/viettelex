@@ -412,7 +412,7 @@ enum L10n {
         "Màu nhấn": "Accent colour",
         "Quá lớn (tối đa 16 KB).": "Too large (max 16 KB).",
         "Không phải văn bản UTF-8 hợp lệ.": "Not valid UTF-8 text.",
-        "JSON sai cú pháp (ký tự %@).": "JSON syntax error (character %@).",
+        "JSON sai cú pháp ở %@ (dòng:cột).": "JSON syntax error at %@ (line:column).",
         "JSON lồng quá sâu.": "JSON is nested too deeply.",
         "Khoá bị lặp: %@": "Duplicate key: %@",
         "Khoá không hỗ trợ: %@": "Unsupported key: %@",

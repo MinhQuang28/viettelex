@@ -31,6 +31,7 @@
 		119898CF9669A5C213B9EACB /* Shortcuts.swift in Sources */ = {isa = PBXBuildFile; fileRef = BA8ED337D5676E88733DA615 /* Shortcuts.swift */; };
 		12C8D72D20143A7862D7B51D /* SuggestionSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = F9A392056B54E623933F9CD3 /* SuggestionSupport.swift */; };
 		1482D4C59B5BF2655556E516 /* KeyboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 941319FB73DCEB18DDE2E232 /* KeyboardView.swift */; };
+		14AD6AB390189A6785E57A46 /* backup-legacy-keystyle.json in Resources */ = {isa = PBXBuildFile; fileRef = 81359A2F7EFED57C124362D9 /* backup-legacy-keystyle.json */; };
 		152BF2B5DC41BA2DE6C6BF4F /* KeySoundSynth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F98B87CC6DBF96F8D09A899 /* KeySoundSynth.swift */; };
 		154EDCAD77DB44CD65FA5344 /* ClipboardFeature.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CD9AC3759F73AB2A6C0BC1B /* ClipboardFeature.swift */; };
 		16FCA2CDAD7489F48F628D81 /* PlusStoreModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1C44AD1817EC463233B42B2D /* PlusStoreModel.swift */; };
@@ -559,6 +560,7 @@
 		7EA567D02615989E6D0A4A64 /* enlexicon.bin */ = {isa = PBXFileReference; lastKnownFileType = archive.macbinary; path = enlexicon.bin; sourceTree = "<group>"; };
 		80AB0C87154897C583AEB2AE /* AutoCorrect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AutoCorrect.swift; sourceTree = "<group>"; };
 		80CE2088FB873FD0D894A6C0 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
+		81359A2F7EFED57C124362D9 /* backup-legacy-keystyle.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "backup-legacy-keystyle.json"; sourceTree = "<group>"; };
 		818AAEF3703366E38E67813C /* EmojiAtlasBuilder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiAtlasBuilder.swift; sourceTree = "<group>"; };
 		8197742D5A3A7B8F8BE4C8DC /* PlusTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlusTests.swift; sourceTree = "<group>"; };
 		81B2DDC0E24D11BD96525161 /* KeyboardTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardTheme.swift; sourceTree = "<group>"; };
@@ -769,6 +771,7 @@
 				1AFEC1150BE618B085350A60 /* backup-android-v1.json */,
 				BDBDF5E631CCFAEF1C938796 /* backup-future-v2.json */,
 				F98CF75D5CF9E5845F830381 /* backup-ios-v1.json */,
+				81359A2F7EFED57C124362D9 /* backup-legacy-keystyle.json */,
 				283B18B560C805EFBE10D839 /* backup-too-new.json */,
 				874923DAE33DB7FA95441F18 /* bigram-heldout.txt */,
 				F79F82B042565CDF4CA8558E /* chat-cases.txt */,
@@ -1274,6 +1277,7 @@
 				2C7D04D371A9C6785EDA3641 /* backup-android-v1.json in Resources */,
 				DBC370A7174CDADB99FC0E6D /* backup-future-v2.json in Resources */,
 				F280DF8330021685A18751B8 /* backup-ios-v1.json in Resources */,
+				14AD6AB390189A6785E57A46 /* backup-legacy-keystyle.json in Resources */,
 				0BA146A5605A6C79C1FD23BC /* backup-too-new.json in Resources */,
 				0D74B9E1C49AB9872006D893 /* bigram-heldout.txt in Resources */,
 				467594276DC8BAEF5AC22F0E /* chat-cases.txt in Resources */,

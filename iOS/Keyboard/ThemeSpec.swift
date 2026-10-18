@@ -35,7 +35,7 @@ struct ThemeIssue: Error, Equatable {
         switch code {
         case .tooLarge: return L("Quá lớn (tối đa 16 KB).")
         case .encoding: return L("Không phải văn bản UTF-8 hợp lệ.")
-        case .syntax: return L("JSON sai cú pháp (ký tự %@).", path)
+        case .syntax: return L("JSON sai cú pháp ở %@ (dòng:cột).", path)
         case .depth: return L("JSON lồng quá sâu.")
         case .duplicateKey: return L("Khoá bị lặp: %@", path)
         case .unknownKey: return L("Khoá không hỗ trợ: %@", path)
@@ -106,10 +106,22 @@ indirect enum StrictJSON: Equatable {
             guard p.i == p.s.count else { throw Failure(issue: ThemeIssue(code: .syntax, path: String(p.i))) }
             return .success(v)
         } catch let f as Failure {
-            return .failure(f.issue)
+            // Vị trí (chỉ số ký tự) ⇒ "dòng:cột" (1-based) cho người đọc; Android y hệt.
+            var issue = f.issue
+            if [.syntax, .badNumber, .tooLong].contains(issue.code), let idx = Int(issue.path) {
+                issue.path = Self.lineColumn(p.s, idx)
+            }
+            return .failure(issue)
         } catch {
             return .failure(ThemeIssue(code: .syntax))
         }
+    }
+
+    /// "dòng:cột" (1-based) của chỉ số `idx` trong dãy ký tự.
+    static func lineColumn(_ s: [Unicode.Scalar], _ idx: Int) -> String {
+        var line = 1, col = 1
+        for c in s.prefix(max(0, min(idx, s.count))) { if c == "\n" { line += 1; col = 1 } else { col += 1 } }
+        return "\(line):\(col)"
     }
 
     private struct Parser {

@@ -97,7 +97,35 @@ object BackupSettings {
         // Ngôn ngữ đích của Dịch trên máy (gói model KHÔNG đi theo — máy mới tải lại trong app).
         Spec(Keys.TRANSLATE_TARGET, SettingKind.Choice(TranslateLangs.DEFAULT_TARGET, TranslateLangs.TARGETS)),
     )
-    val byKey: Map<String, Spec> = all.associateBy { it.key }
+    /**
+     * Chỉ để NHẬN (file sao lưu từ bản cũ ≤ Android 1.5.12 / iOS 1.2.17): bộ "Tuỳ chỉnh nâng cao" CHUNG cũ —
+     * không xuất; nhập ⇒ chuyển vào theme đang chọn ([migrateLegacyStyle]). iOS giữ y hệt (importOnly).
+     */
+    val IMPORT_ONLY: List<Spec> = listOf(
+        Spec(Keys.KEY_LABEL_COLOR, SettingKind.IntRange(-1, -1..0xFFFFFF)),
+        Spec(Keys.KEY_FILL_COLOR, SettingKind.IntRange(-1, -1..0xFFFFFF)),
+        Spec(Keys.KEY_CORNER_RADIUS, SettingKind.IntRange(-1, -1..100)),
+        Spec(Keys.KEY_FONT_SCALE, SettingKind.IntRange(0, 0..150)),
+        Spec(Keys.KEY_LABEL_FONT, SettingKind.Choice(KeyLabelFont.DEFAULT.id, KeyLabelFont.IDS)),
+        Spec(Keys.KEY_LABEL_WEIGHT, SettingKind.Choice(KeyLabelWeight.REGULAR.id, KeyLabelWeight.IDS)),
+    )
+    val byKey: Map<String, Spec> = (all + IMPORT_ONLY).associateBy { it.key }
+
+    /**
+     * Nhập bộ chung cũ: có khoá cũ mà KHÔNG có `keyStyles` ⇒ chuyển vào theme đang chọn trên máy này (chỉ khi
+     * theme đó chưa có mục riêng) thành `keyStyles`; khoá cũ luôn bị bỏ (không ghi lại).
+     */
+    fun migrateLegacyStyle(s: Map<String, Any>, theme: String?, styles: Map<String, KeyStyle>): Map<String, Any> {
+        val legacyKeys = IMPORT_ONLY.map { it.key }
+        if (legacyKeys.none { s.containsKey(it) }) return s
+        val out = LinkedHashMap(s)
+        legacyKeys.forEach { out.remove(it) }
+        if (s.containsKey(Keys.KEY_STYLES)) return out
+        val legacy = KeyStyle.loadLegacy { s[it] }
+        if (legacy.isDefault) return out
+        out[Keys.KEY_STYLES] = KeyStyleStore.serialize(KeyStyleStore.migrate(theme, styles, legacy).styles)
+        return out
+    }
 }
 
 /** Giá trị setting: Boolean, Int (đã kẹp phạm vi) hoặc String ([SettingKind.Choice]). */
@@ -296,7 +324,9 @@ object BackupPrefs {
 
     fun plan(p: BackupPayload, read: (String) -> Any?, currentTemplates: List<TemplateItem>): ImportPlan {
         val writes = LinkedHashMap<String, Any>()
-        p.settings?.let { writes.putAll(it) }
+        // File từ bản cũ: bộ "Tuỳ chỉnh nâng cao" chung ⇒ vào theme đang chọn trên máy này.
+        p.settings?.let { writes.putAll(BackupSettings.migrateLegacyStyle(it, read(Keys.KEYBOARD_THEME) as? String,
+            KeyStyleStore.parse(read(Keys.KEY_STYLES) as? String))) }   // bản lưu thô: bộ cũ trong file thắng bộ cũ trên máy
         var changed = 0
         p.shortcuts?.let { sc ->
             val cur = shortcutsFromPref(read(SHORTCUTS_KEY))

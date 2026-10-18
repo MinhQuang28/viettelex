@@ -228,9 +228,42 @@ class KeyStyleStoreTests {
         // File cũ có khoá chung ⇒ bỏ qua như key lạ; chuỗi lộn xộn ⇒ chuẩn hoá; rác ⇒ bỏ.
         val old = """{"format":"viettelex-backup","version":1,"settings":{"keyLabelColor":255,"keyStyles":"{ \"oled\" : {\"corner\":0} }"}}"""
         val p = BackupCodec.decode(old)
-        assertNull(p.settings!!["keyLabelColor"])
         assertEquals("""{"oled":{"corner":0}}""", p.settings!![Keys.KEY_STYLES])
+        val both = BackupSettings.migrateLegacyStyle(p.settings!!, "mint", emptyMap())
+        assertNull(both["keyLabelColor"]); assertEquals("""{"oled":{"corner":0}}""", both[Keys.KEY_STYLES])
         val junk = BackupCodec.decode("""{"format":"viettelex-backup","version":1,"settings":{"keyStyles":"oops"}}""")
         assertNull(junk.settings!![Keys.KEY_STYLES])
+    }
+
+    /**
+     * Sao lưu bản CŨ (chỉ có bộ chung keyLabelColor…, chưa có keyStyles) vẫn khôi phục được: vào theme đang
+     * chọn trên máy nhận. Fixture chung với iOS (iOS/KeyboardTests/Fixtures/backup-legacy-keystyle.json).
+     */
+    @Test fun restoreOldFormatBackupMigratesIntoCurrentTheme() {
+        val f = listOf("../../iOS", "../iOS", "iOS").map { java.io.File(it, "KeyboardTests/Fixtures/backup-legacy-keystyle.json") }
+            .first { it.exists() }
+        val p = BackupCodec.decode(f.readText())
+        assertEquals(7, p.settings!!.size)                                   // systemBackdropPureWhite: key lạ
+        assertEquals(0xFF2D55, p.settings!![Keys.KEY_LABEL_COLOR])
+        val want = KeyStyle(labelColor = 0xFF2D55, corner = 100, font = KeyLabelFont.SERIF)
+        // Máy nhận đang dùng Bạc hà, chưa chỉnh gì.
+        val prefs = FakePrefs(hashMapOf(Keys.KEYBOARD_THEME to "mint"))
+        fun restore() = prefs.m.putAll(BackupPrefs.plan(p, prefs.get, emptyList()).writes)
+        restore()
+        assertEquals(mapOf("mint" to want), ThemeSettings.load(prefs.get).keyStyles)
+        for (k in KeyStyleStore.LEGACY_KEYS) assertNull("khoá cũ không ghi lại: $k", prefs.m[k])
+        // Nhập lại ⇒ không đổi; theme đã có mục riêng ⇒ không ghi đè.
+        restore()
+        assertEquals(mapOf("mint" to want), ThemeSettings.load(prefs.get).keyStyles)
+        prefs.save(ThemeSettings.load(prefs.get).withKeyStyle(KeyStyle(corner = 5)))
+        restore()
+        assertEquals(mapOf("mint" to KeyStyle(corner = 5)), ThemeSettings.load(prefs.get).keyStyles)
+        // Máy nhận còn ở "Trắng hồng" ⇒ bộ cũ + màu nhấn hồng vào Hệ thống.
+        val pw = FakePrefs(hashMapOf(Keys.KEYBOARD_THEME to "pureWhite"))
+        pw.m.putAll(BackupPrefs.plan(p, pw.get, emptyList()).writes)
+        assertEquals(mapOf("system" to want.copy(accentColor = 0xD6336C)), ThemeSettings.load(pw.get).keyStyles)
+        // Bộ cũ toàn mặc định ⇒ không tạo mục.
+        assertEquals(emptyMap<String, Any>(), BackupSettings.migrateLegacyStyle(
+            mapOf(Keys.KEY_LABEL_COLOR to -1, Keys.KEY_LABEL_FONT to "default"), "mint", emptyMap()))
     }
 }

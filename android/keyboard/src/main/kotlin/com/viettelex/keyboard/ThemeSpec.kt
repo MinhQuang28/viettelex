@@ -31,7 +31,7 @@ data class ThemeIssue(val code: Code, val path: String = "") {
     val message: String get() = when (code) {
         Code.tooLarge -> tr("Quá lớn (tối đa 16 KB).")
         Code.encoding -> tr("Không phải văn bản UTF-8 hợp lệ.")
-        Code.syntax -> tr("JSON sai cú pháp (ký tự %s).", path)
+        Code.syntax -> tr("JSON sai cú pháp ở %s (dòng:cột).", path)
         Code.depth -> tr("JSON lồng quá sâu.")
         Code.duplicateKey -> tr("Khoá bị lặp: %s", path)
         Code.unknownKey -> tr("Khoá không hỗ trợ: %s", path)
@@ -178,10 +178,20 @@ object StrictJson {
             if (p.i != n) throw Fail(ThemeIssue(ThemeIssue.Code.syntax, p.i.toString()))
             Result.Ok(v)
         } catch (f: Fail) {
-            Result.Err(f.issue)
+            // Vị trí (chỉ số ký tự) ⇒ "dòng:cột" (1-based) cho người đọc; iOS y hệt.
+            val idx = f.issue.path.toIntOrNull()
+            Result.Err(if (idx != null && f.issue.code in setOf(ThemeIssue.Code.syntax, ThemeIssue.Code.badNumber, ThemeIssue.Code.tooLong))
+                f.issue.copy(path = lineColumn(cps, n, idx)) else f.issue)
         } catch (e: RuntimeException) {
             Result.Err(ThemeIssue(ThemeIssue.Code.syntax))
         }
+    }
+
+    /** "dòng:cột" (1-based) của chỉ số [idx] trong dãy code point. */
+    fun lineColumn(s: IntArray, n: Int, idx: Int): String {
+        var line = 1; var col = 1
+        for (k in 0 until minOf(maxOf(0, idx), n)) { if (s[k] == '\n'.code) { line++; col = 1 } else col++ }
+        return "$line:$col"
     }
 
     private class P(val s: IntArray, val n: Int, val limits: Limits) {

@@ -811,7 +811,11 @@ final class KeyStyleTests: XCTestCase {
     func testBackupIncludesKeyStyle() {
         let specs = BackupSettings.byKey
         XCTAssertEqual(specs[KeyStyleStore.key]?.kind, .styleMap)
-        for k in KeyStyleStore.legacyKeys { XCTAssertNil(specs[k], "khoá chung cũ \(k) không còn sao lưu") }
+        // Khoá chung cũ: chỉ NHẬN (file cũ), không xuất.
+        for k in KeyStyleStore.legacyKeys {
+            XCTAssertFalse(BackupSettings.all.contains { $0.key == k }, k)
+            XCTAssertNotNil(specs[k], k)
+        }
 
         let a = "keystyle-bk-a-\(UUID().uuidString)", b = "keystyle-bk-b-\(UUID().uuidString)"
         let da = UserDefaults(suiteName: a)!, db = UserDefaults(suiteName: b)!

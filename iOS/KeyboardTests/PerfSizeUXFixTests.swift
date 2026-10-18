@@ -112,6 +112,8 @@ final class PerfSizeUXFixTests: XCTestCase {
                                emojis: ["🇻🇳"], paste: .none))
         XCTAssertNotEqual(a, S(dark: false, theme: .system, slots: [a.slots[0], nil, nil], emojis: [], paste: .none))
         XCTAssertNotEqual(a, S(dark: false, theme: .system, slots: [a.slots[0], nil, nil], emojis: ["🇻🇳"], paste: .image))
+        // Màu chữ bar đổi (theme tự tạo / tuỳ chỉnh vẫn là .system) ⇒ khác chữ ký ⇒ vẽ lại.
+        XCTAssertNotEqual(a, S(dark: false, theme: .system, ink: .white, slots: [a.slots[0], nil, nil], emojis: ["🇻🇳"], paste: .none))
         // Ranh giới ô: ("ab","") khác ("a","b") — chuỗi ghép cũ dựa vào ký tự phân cách.
         XCTAssertNotEqual(S(dark: false, theme: .system, slots: [.init(display: "ab", insert: ""), nil, nil], emojis: [], paste: .none),
                           S(dark: false, theme: .system, slots: [.init(display: "a", insert: "b"), nil, nil], emojis: [], paste: .none))

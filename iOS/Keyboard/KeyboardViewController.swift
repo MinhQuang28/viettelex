@@ -117,9 +117,7 @@ final class KeyboardViewController: UIInputViewController {
         if #available(iOS 17.0, *) {
             // traitCollectionDidChange không còn được gọi tin cậy trên iOS 17+.
             registerForTraitChanges([UITraitUserInterfaceStyle.self]) { (vc: Self, _: UITraitCollection) in
-                vc.keyboard?.updateDark(AppearancePolicy.isDark(
-                    appearance: vtSafe(.default) { vc.textDocumentProxy.keyboardAppearance ?? .default },
-                    style: vc.traitCollection.userInterfaceStyle))
+                vc.keyboard?.updateDark(vc.presentationDark)
             }
         }
         registerObservers()
@@ -499,7 +497,7 @@ final class KeyboardViewController: UIInputViewController {
     override func traitCollectionDidChange(_ previousTraitCollection: UITraitCollection?) {
         super.traitCollectionDidChange(previousTraitCollection)
         if previousTraitCollection?.userInterfaceStyle != traitCollection.userInterfaceStyle {
-            keyboard?.applyAppearance(vtSafe(.default) { self.textDocumentProxy.keyboardAppearance ?? .default }, style: traitCollection.userInterfaceStyle)
+            keyboard?.updateDark(presentationDark)
         }
     }
 
@@ -617,7 +615,7 @@ final class KeyboardViewController: UIInputViewController {
         // Một lần rebuild cho cả 3 (và 0 lần nếu field giống lần trước).
         keyboard.batchConfigure {
             keyboard.configureReturnKey(type: t.returnKeyType)
-            keyboard.applyAppearance(t.appearance, style: traitCollection.userInterfaceStyle)
+            keyboard.applyAppearance(t.appearance, style: presentationStyle)
             // configureInputKind nhảy plane (số/chữ) — chỉ gọi khi loại ô thật sự đổi
             // (hoặc lúc hiện), kẻo đang ở plane ký hiệu thì bị kéo về.
             // Bàn số lớn (NumericKeypad): ô OTP kiểu mặc định giữ inputKind .normal ⇒ so cả kiểu bàn số.
@@ -1234,6 +1232,17 @@ final class KeyboardViewController: UIInputViewController {
     // Kết luận điều tra khoảng trống 2026-07-24: window extension = đúng chiều
     // cao mình xin, view phủ từ y=0 — dải tối phía trên là chrome container
     // iOS 26 do HOST vẽ, mọi bàn phím bên thứ ba đều có, không can thiệp được.
+    /// Sáng/tối của lần hiện này — MỘT nguồn (AppearancePolicy.presentationDark): appearance của ô
+    /// (fieldTraits) + trait của view. Mọi chỗ (willAppear, didAppear, layout, đổi trait) dùng chung.
+    private var presentationStyle: UIUserInterfaceStyle {
+        let v = isViewLoaded ? view.traitCollection.userInterfaceStyle : .unspecified
+        return v == .unspecified ? traitCollection.userInterfaceStyle : v
+    }
+    private var presentationDark: Bool {
+        AppearancePolicy.presentationDark(fieldAppearance: fieldTraits?.appearance, viewStyle: presentationStyle,
+                                          controllerStyle: traitCollection.userInterfaceStyle)
+    }
+
     override func viewDidAppear(_ animated: Bool) {
         #if DEBUG
         let perfDidStart = CACurrentMediaTime()
@@ -1254,9 +1263,7 @@ final class KeyboardViewController: UIInputViewController {
         refreshFieldTraits()
         // Trait host đã resolve khi view vào window — sửa sáng/tối nếu lúc
         // viewWillAppear đoán sai (phím sáng trên nền tối).
-        keyboard?.updateDark(AppearancePolicy.isDark(
-            appearance: vtSafe(.default) { self.textDocumentProxy.keyboardAppearance ?? .default },
-            style: traitCollection.userInterfaceStyle))
+        keyboard?.updateDark(presentationDark)
         keyboard?.setNeedsGlobe(needsInputModeSwitchKey)
         refreshFullAccessIfChanged()
         pushSwipeLayout(prepare: true)       // frame phím đã thật → dựng template ở nền
@@ -2339,9 +2346,7 @@ extension KeyboardViewController {
         // tối ⇒ phím trắng trên backdrop tối, chữ gợi ý đen khó đọc (Phil 28/09/2026). Mỗi
         // lần layout so lại với trait hiện tại (chỉ so 2 giá trị đã có — không đọc proxy);
         // updateDark tự bỏ qua khi không đổi.
-        keyboard?.updateDark(AppearancePolicy.isDark(
-            appearance: fieldTraits?.appearance ?? .default,
-            style: view.traitCollection.userInterfaceStyle))
+        keyboard?.updateDark(presentationDark)
         checkHostFill()
     }
 

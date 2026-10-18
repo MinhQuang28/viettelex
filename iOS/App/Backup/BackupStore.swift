@@ -49,7 +49,11 @@ final class BackupStore: SyncLocal {
         return out
     }
 
-    func setSettings(_ s: [String: SettingValue]) {
+    func setSettings(_ input: [String: SettingValue]) {
+        // File / iCloud từ bản cũ: bộ "Tuỳ chỉnh nâng cao" chung ⇒ vào theme đang chọn trên máy này.
+        // Bản lưu thô (chưa chuyển đổi trong bộ nhớ): bộ cũ trong file thắng bộ cũ còn trên máy.
+        let s = BackupSettings.migrateLegacyStyle(input, theme: defaults.string(forKey: ThemeSettings.themeKey),
+                                                  styles: KeyStyleStore.parse(defaults.string(forKey: KeyStyleStore.key)))
         for (k, v) in s where BackupSettings.byKey[k] != nil && !Self.unsupported.contains(k) {
             let lk = Self.localKey[k] ?? k
             switch v {

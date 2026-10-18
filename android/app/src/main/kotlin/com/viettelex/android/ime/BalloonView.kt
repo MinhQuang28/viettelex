@@ -17,12 +17,21 @@ import android.view.View
 @SuppressLint("ViewConstructor")
 class BalloonView(context: Context, private val theme: ImeTheme) : View(context) {
     private val path = Path()
-    private val fill = theme.fill(theme.balloonFill).apply {
+    /** Kiểu phím của theme (nền đục, viền, bo góc, chữ, cỡ) — giải sẵn trong ImeTheme. */
+    private val ps = theme.popupStyle
+    private val fill = theme.fill(ps.fill).apply {
         // Bóng mềm 2dp lệch xuống 1dp, opacity 0.3. Shadow layer trên path chỉ được
         // tăng tốc phần cứng từ API 28; máy cũ bỏ bóng.
         if (Build.VERSION.SDK_INT >= 28) setShadowLayer(theme.dp(3f), 0f, theme.dp(1.5f), 0x33000000)
     }
-    private val textPaint = theme.text(28f, color = theme.balloonInk).apply { theme.keyTypeface?.let { typeface = it } }
+    private val textPaint = theme.text(28f * ps.labelScale, color = ps.ink).apply { theme.keyTypeface?.let { typeface = it } }
+    /** Viền như phím (Hoa xanh, Neon, Tương phản cao); null = không viền. */
+    private val borderPaint: Paint? = ps.border?.let { bc ->
+        Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; color = bc; strokeWidth = theme.dp(ps.borderWidth) }
+    }
+    /** Bo góc ô cỡ [w]×[h] theo % của phím ([KeyPopupStyle.cornerPercent]); mặc định [fallback]. */
+    private fun popupRadius(kw: Float, kh: Float, w: Float, h: Float, fallback: Float): Float =
+        com.viettelex.keyboard.KeyStyle.cornerRadius(ps.cornerPercent, kw, kh, fallback).coerceAtMost(minOf(w, h) / 2)
     private var textOff = theme.centerOffset(textPaint)
     /** Tuỳ chỉnh nâng cao: phông nhãn ⇒ kẹp cỡ để dấu chồng (Ễ, Ỗ) không tràn khỏi ô. */
     private val styled = theme.keyStyle.customizesLabels
@@ -95,10 +104,10 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
         if (bw != shapeW || bh != shapeH) {
             shapeW = bw; shapeH = bh
             path.reset()
-            val r = theme.dp(10f)
+            val r = popupRadius(kw, kh, bw, bh, theme.dp(10f))
             path.addRoundRect(0f, 0f, bw, bh, r, r, Path.Direction.CW)
             if (styled) {
-                textPaint.textSize = fitCentered(textPaint, theme.sp(28f), bh)
+                textPaint.textSize = fitCentered(textPaint, theme.sp(28f) * ps.labelScale, bh)
                 textOff = theme.centerOffset(textPaint)
             }
         }
@@ -126,13 +135,14 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
     // chữ trắng). Paint/mảng dựng LƯỜI lần đầu mở popup — bàn phím không bao giờ giữ thì 0 chi phí.
 
     private class Pop(theme: ImeTheme) {
-        val panel = theme.fill(theme.balloonFill).apply {
+        val panel = theme.fill(theme.popupStyle.fill).apply {
             if (Build.VERSION.SDK_INT >= 28) setShadowLayer(theme.dp(3f), 0f, theme.dp(1.5f), 0x4D000000)
         }
-        val hi = theme.fill(theme.action)
-        val text = theme.text(18f, color = theme.balloonInk).apply { theme.keyTypeface?.let { typeface = it } }
-        val ink = theme.balloonInk
-        val selInk = theme.actionInk
+        val hi = theme.fill(theme.popupStyle.selectedFill)
+        val text = theme.text(18f, color = theme.popupStyle.ink).apply { theme.keyTypeface?.let { typeface = it } }
+        val ink = theme.popupStyle.ink
+        val selInk = theme.popupStyle.selectedInk
+        var radius = 0f
         val rect = android.graphics.RectF()
         val fm = Paint.FontMetrics()
         var choices: List<String> = emptyList()
@@ -164,7 +174,9 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
         p.choices = choices; p.slotL = slotLefts; p.itemW = itemW; p.sel = sel
         p.icons = icons; p.iconSize = theme.dp(24f)
         val inset = theme.dp(4f)
-        val full = if (styled) fitCentered(p.text, theme.sp(textSp), b - t - 2 * inset) else theme.sp(textSp)
+        p.radius = popupRadius(itemW, b - t, r - l, b - t, theme.dp(10f))
+        val want = theme.sp(textSp) * ps.labelScale
+        val full = if (styled) fitCentered(p.text, want, b - t - 2 * inset) else want
         p.text.textSize = full
         val room = itemW - theme.dp(6f)
         p.size = FloatArray(choices.size) { i ->
@@ -189,8 +201,9 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
     }
 
     private fun drawPopup(c: Canvas, p: Pop) {
-        val r = theme.dp(10f)
+        val r = p.radius
         c.drawRoundRect(p.rect, r, r, p.panel)
+        borderPaint?.let { c.drawRoundRect(p.rect, r, r, it) }
         val inset = theme.dp(4f)
         val top = p.rect.top + inset; val bot = p.rect.bottom - inset
         for (i in p.choices.indices) {
@@ -216,6 +229,7 @@ class BalloonView(context: Context, private val theme: ImeTheme) : View(context)
         c.save()
         c.translate(ox, oy)
         c.drawPath(path, fill)
+        borderPaint?.let { c.drawPath(path, it) }
         c.drawText(text, bubbleW / 2, bubbleH / 2 + textOff, textPaint)
         c.restore()
     }
