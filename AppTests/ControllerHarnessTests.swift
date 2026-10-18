@@ -94,7 +94,7 @@ final class ControllerHarness {
         "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "1": 18, "2": 19,
         "3": 20, "4": 21, "6": 22, "5": 23, "9": 25, "7": 26, "8": 28, "0": 29,
         "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38, "'": 39, "k": 40,
-        ",": 43, "/": 44, "n": 45, "m": 46, ".": 47, " ": 49, "-": 27, "\"": 39,
+        ",": 43, "/": 44, "n": 45, "m": 46, ".": 47, " ": 49, "-": 27, "\"": 39, "*": 28,
     ]
 
     init(bundleID: String, text: String = "") {
@@ -108,7 +108,7 @@ final class ControllerHarness {
         ts += gap
         let lower = Character(ch.lowercased())
         let code = Self.keyCodes[lower] ?? 0
-        let shift = ch.isUppercase || ch == "\""
+        let shift = ch.isUppercase || ch == "\"" || ch == "*"
         let s = String(ch)
         let ev = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: shift ? [.shift] : [],
                                   timestamp: ts, windowNumber: 0, context: nil, characters: s,
@@ -133,6 +133,71 @@ final class ControllerHarness {
         let handled = controller.handle(ev, client: client)
         if !handled, !chars.isEmpty { client.typeNatively(chars) }
         return handled
+    }
+
+    /// Phím Return thật. handle() trả false ⇒ app tự chèn xuống dòng (và AppKit gọi
+    /// commitComposition như mọi phím native khác).
+    @discardableResult
+    func enter(gap: TimeInterval = 0.15) -> Bool { key(code: 36, chars: "\r", gap: gap) }
+
+    /// Phím có mã + ký tự bất kỳ (Return…) như key(_:) — false ⇒ app tự gõ.
+    @discardableResult
+    func key(code: UInt16, chars: String, gap: TimeInterval = 0.15) -> Bool {
+        ts += gap
+        let ev = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: [], timestamp: ts,
+                                  windowNumber: 0, context: nil, characters: chars,
+                                  charactersIgnoringModifiers: chars, isARepeat: false, keyCode: code)!
+        let handled = controller.handle(ev, client: client)
+        if !handled {
+            client.typeNatively(chars == "\r" ? "\n" : chars)
+            if appKitCommitsAfterNativeKey { controller.commitComposition(client) }
+        }
+        return handled
+    }
+
+    // MARK: Phím IME post (re-post Return/Tab, phím vượt — SyntheticKeyboard._testPostKeyHook)
+
+    struct Posted: Equatable { let key: CGKeyCode; let flags: CGEventFlags; let privateSource: Bool }
+    /// Phím controller đã "post" vào hàng sự kiện mà window server chưa giao lại.
+    var posted: [Posted] = []
+
+    /// Gắn test seam: post ⇒ xếp vào `posted` (không bao giờ post CGEvent thật).
+    func capturePosts() {
+        SyntheticKeyboard._testPostKeyHook = { [weak self] k, f, p in
+            self?.posted.append(Posted(key: k, flags: f, privateSource: p))
+        }
+    }
+
+    static let charsForKeyCode: [UInt16: (plain: String, shifted: String)] = {
+        var m: [UInt16: (String, String)] = [:]
+        for (c, code) in keyCodes where c != "\"" && c != "*" {
+            let s = String(c)
+            m[code] = (s, s == "'" ? "\"" : s.uppercased())
+        }
+        m[36] = ("\r", "\r"); m[48] = ("\t", "\t"); m[28] = ("8", "*"); m[24] = ("=", "+")
+        return m
+    }()
+
+    /// Window server giao lại các phím đã post, đúng thứ tự post (kể cả phím được post
+    /// thêm trong lúc giao). `magicIntact` = macOS cũ giữ magic của nguồn riêng; macOS 26
+    /// xoá magic trước IMKit (đo 08/2026) — cả hai phải đúng.
+    func deliverPosted(magicIntact: Bool = false) {
+        while !posted.isEmpty {
+            let p = posted.removeFirst()
+            let shift = p.flags.contains(.maskShift)
+            let chars = Self.charsForKeyCode[UInt16(p.key)].map { shift ? $0.shifted : $0.plain } ?? ""
+            guard let cg = CGEvent(keyboardEventSource: nil, virtualKey: p.key, keyDown: true) else { continue }
+            cg.flags = p.flags
+            let units = Array(chars.utf16)
+            cg.keyboardSetUnicodeString(stringLength: units.count, unicodeString: units)
+            if p.privateSource && magicIntact { cg.setIntegerValueField(.eventSourceUserData, value: SyntheticKeyboard.magic) }
+            guard let ev = NSEvent(cgEvent: cg) else { continue }
+            let handled = controller.handle(ev, client: client)
+            if !handled {
+                client.typeNatively(chars == "\r" ? "\n" : chars)
+                if appKitCommitsAfterNativeKey { controller.commitComposition(client) }
+            }
+        }
     }
 
     /// Gõ `raw`, cho gợi ý từ `word` hiện (như hết idleDelay), rồi Tab nhận.
@@ -373,3 +438,4 @@ final class ControllerHarnessTests: XCTestCase {
         XCTAssertEqual(h.client.string, "xin", dump(h))
     }
 }
+

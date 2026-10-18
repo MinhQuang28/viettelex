@@ -1660,6 +1660,11 @@ enum SyntheticKeyboard {
     }
 
     #if DEBUG
+    /// Test seam: postBoundaryKey / postKeyCopy hand the key here instead of posting a
+    /// real CGEvent (the controller harness must never type into the session).
+    /// `privateSource` = bản sao mang magic (Shift+Return, postKeyCopy).
+    static var _testPostKeyHook: ((_ key: CGKeyCode, _ flags: CGEventFlags, _ privateSource: Bool) -> Void)?
+
     /// Test seam: stamp through the real path (`stamp` is private). Lets the
     /// strictly-increasing contract be pinned without posting anything — the probe
     /// pair (postProbe) relies on it so the window server cannot deliver up before
@@ -1902,6 +1907,11 @@ enum SyntheticKeyboard {
     /// Value-based variant for callers that post AFTER the original event's
     /// lifetime (deferred edge-boundary bursts).
     static func postBoundaryKey(_ key: CGKeyCode, flags: CGEventFlags) {
+        #if DEBUG
+        if let hook = _testPostKeyHook {
+            hook(key, flags, flags.contains(.maskShift) && (key == 36 || key == 76)); return
+        }
+        #endif
         guard Accessibility.isTrusted else {
             DebugLog.log("boundary-copy: SKIPPED (untrusted)")
             return
@@ -1914,6 +1924,30 @@ enum SyntheticKeyboard {
         stamp(down); down.post(tap: .cgSessionEventTap)
         stamp(up); up.post(tap: .cgSessionEventTap)
         DebugLog.log("boundary-copy: posted fresh key=\(key)")
+    }
+
+    /// Post lại MỘT phím thật của user (keycode + modifier y nguyên) — phím đó tới IME
+    /// TRƯỚC bản re-post Return/Tab mình vừa gửi (TelexInputController.RepostOrder),
+    /// nên phải đi SAU bản sao đó để app nhận đúng thứ tự gõ. Nguồn riêng (magic):
+    /// giữ cờ Shift ("*", chữ hoa) dù user đã nhả phím — hidSystemState thì macOS hoà
+    /// cờ theo bàn phím thật (xem makeBoundaryRepost). false = không post được (phím
+    /// thì caller KHÔNG được nuốt).
+    @discardableResult
+    static func postKeyCopy(_ key: CGKeyCode, flags: CGEventFlags) -> Bool {
+        #if DEBUG
+        if let hook = _testPostKeyHook { hook(key, flags, true); return true }
+        if isTestHost { return false }      // unit test không bao giờ gõ vào phiên thật
+        #endif
+        guard Accessibility.isTrusted, source != nil,
+              let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false) else { return false }
+        down.flags = flags
+        up.flags = flags
+        notePostedKeyDown()
+        stamp(down); down.post(tap: .cgSessionEventTap)
+        stamp(up); up.post(tap: .cgSessionEventTap)
+        DebugLog.log("key-copy: posted key=\(key) behind boundary re-post")
+        return true
     }
 
     /// Builds the down/up pair postBoundaryCopy sends. Split out so tests can pin
