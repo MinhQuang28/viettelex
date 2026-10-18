@@ -385,7 +385,7 @@ final class SensitiveWordsTests: XCTestCase {
 
     /// Lô 2–3 (Phil 18/10/2026): tiếng lóng / từ báo chí (ma tuý, cờ bạc, mại dâm, tội phạm) và cảm thán nói
     /// tránh hiện cho mọi người; cặp nói thẳng tình dục / chửi ghép từ thường (kích dục, chơi cave, óc lợn,
-    /// con chó…) chỉ khi tắt lọc; cc / đb / lìn lọc theo từ.
+    /// láo chó…) chỉ khi tắt lọc; cc / đb / lìn lọc theo từ.
     func testSlangAndInsultBatches() {
         let m = UserLangModel(appGroup: nil)
         m.isKnownWord = { VNSuggest.contains($0) }
@@ -399,13 +399,20 @@ final class SensitiveWordsTests: XCTestCase {
         XCTAssertTrue(on("chơi").contains("coin"))
         for w in ["nồi", "đạn", "linh"] { XCTAssertTrue(on("vãi").contains(w), w) }
         for (p, w) in [("kích", "dục"), ("massage", "kích"), ("chơi", "cave"), ("chơi", "gái"), ("óc", "lợn"),
-                       ("não", "phẳng"), ("láo", "chó"), ("con", "chó"), ("quay", "tay"), ("phim", "heo"),
-                       ("clip", "nóng"), ("lộ", "clip"), ("như", "lợn"), ("như", "heo"), ("như", "bò"), ("như", "cột"),
+                       ("não", "phẳng"), ("láo", "chó"), ("quay", "tay"), ("phim", "heo"),
+                       ("clip", "nóng"), ("lộ", "clip"), ("như", "cột"),
                        ("cái", "mâm"), ("lùn", "tịt"), ("cò", "hương"), ("chúa", "phòng")] {
             XCTAssertTrue(SensitiveWords.isPair(p, w))
             XCTAssertFalse(on(p).contains(w), "\(p) \(w)")
             XCTAssertTrue(m.nextWords(after: p, limit: 24).contains(w), "tắt lọc: \(p) \(w)")
         }
+        // Phil bỏ lọc 18/10/2026: nghĩa đen quá thường ⇒ không phải SensitivePairs; "con chó" (corpus) và
+        // "óc chó" (hạt) vẫn gợi ý khi BẬT lọc; "như heo/bò/lợn", "con gà" bỏ khỏi seed.
+        for (p, w) in [("con", "chó"), ("con", "gà"), ("óc", "chó"), ("như", "heo"), ("như", "bò"), ("như", "lợn")] {
+            XCTAssertFalse(SensitiveWords.isPair(p, w), "\(p) \(w)")
+        }
+        XCTAssertTrue(on("con").contains("chó"), "con → chó không bị lọc khi bật lọc")
+        XCTAssertEqual(on("óc").first, "chó")
         for w in ["cc", "đb", "lìn"] { XCTAssertTrue(SensitiveWords.set.contains(w)); XCTAssertNotNil(SeedData.unigrams[w]) }
         // lô 4–5 hiện: tiếng lóng đời thường; cặp NEO giữ cách đọc thường đứng đầu sau từ rất thường
         for (p, w) in [("cà", "khịa"), ("trẻ", "trâu"), ("sống", "ảo"), ("gen", "z"), ("báo", "thủ"), ("ô", "dề"), ("xu", "cà"),

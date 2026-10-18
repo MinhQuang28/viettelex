@@ -244,7 +244,7 @@ class SeedDataTests {
     @Test fun testSeedSizesMatchIOS() {
         val s = SeedData.load()
         assertEquals(1222, s.unigrams.size)
-        assertEquals(1281, s.bigrams.size)
+        assertEquals(1277, s.bigrams.size)
     }
 }
 
@@ -373,13 +373,19 @@ class SensitivePairsTests {
         assertTrue("coin" in on("chơi"))
         for (w in listOf("nồi", "đạn", "linh")) assertTrue(w, w in on("vãi"))
         for ((p, w) in listOf("kích" to "dục", "massage" to "kích", "chơi" to "cave", "chơi" to "gái", "óc" to "lợn",
-                              "não" to "phẳng", "láo" to "chó", "con" to "chó", "quay" to "tay", "phim" to "heo",
-                              "clip" to "nóng", "lộ" to "clip", "như" to "lợn", "như" to "heo", "như" to "bò", "như" to "cột",
+                              "não" to "phẳng", "láo" to "chó", "quay" to "tay", "phim" to "heo",
+                              "clip" to "nóng", "lộ" to "clip", "như" to "cột",
                               "cái" to "mâm", "lùn" to "tịt", "cò" to "hương", "chúa" to "phòng")) {
             assertTrue(SensitiveWords.isPair(p, w))
             assertFalse("$p $w", w in on(p))
             assertTrue("tắt lọc: $p $w", w in m.nextWords(p, limit = 24))
         }
+        // Phil bỏ lọc 18/10/2026: nghĩa đen quá thường ⇒ không phải SensitivePairs
+        for ((p, w) in listOf("con" to "chó", "con" to "gà", "óc" to "chó", "như" to "heo", "như" to "bò", "như" to "lợn")) {
+            assertFalse("$p $w", SensitiveWords.isPair(p, w))
+        }
+        assertTrue("con → chó không bị lọc khi bật lọc", "chó" in on("con"))
+        assertEquals("chó", on("óc").first())
         for (w in listOf("cc", "đb", "lìn")) { assertTrue(w in SensitiveWords.set); assertTrue((SeedData.unigrams[w] ?: 0) > 0) }
         for ((p, w) in listOf("cà" to "khịa", "trẻ" to "trâu", "sống" to "ảo", "gen" to "z", "báo" to "thủ", "ô" to "dề", "xu" to "cà",
                               "phong" to "bì", "check" to "var", "anti" to "fan", "xin" to "link", "phòng" to "trọ", "que" to "tăm",

@@ -38,7 +38,7 @@ enum GoldShim {
 }
 // MathHint.swift's CaretSuggestion (fields PredictionLogic.suggestion uses).
 struct CaretSuggestion: Equatable {
-    enum Kind: Equatable { case math, number, typo, tones, date, predict }
+    enum Kind: Equatable { case math, number, typo, tones, date, predict, email }
     let kind: Kind
     let display: String
     let replace: String

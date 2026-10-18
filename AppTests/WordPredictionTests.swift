@@ -289,6 +289,14 @@ final class WordPredictionTests: XCTestCase {
         XCTAssertEqual(c("kích ", on: false), ["dục"])
         XCTAssertFalse(c("óc ").contains("lợn"))
         XCTAssertEqual(c("óc ", on: false), ["chó", "lợn"])
+        // Phil bỏ lọc 18/10/2026: con chó / con gà / óc chó / như heo / như bò / như lợn không còn là cặp nhạy cảm
+        XCTAssertEqual(c("óc "), ["chó"])
+        XCTAssertTrue(PredictionModel.shared.seedNext("con").contains("chó"))
+        XCTAssertTrue(SensitiveWords.filter(PredictionModel.shared.seedNext("con"), after: "con", enabled: true).contains("chó"),
+                      "con → chó không bị lọc khi bật lọc")
+        for (p, w) in [("con", "chó"), ("con", "gà"), ("óc", "chó"), ("như", "heo"), ("như", "bò"), ("như", "lợn")] {
+            XCTAssertFalse(SensitiveWords.isPair(p, w), "\(p) \(w)")
+        }
         XCTAssertTrue(c("vãi ").contains("nồi"))
         for w in ["cc", "đb", "lìn"] { XCTAssertTrue(SensitiveWords.set.contains(w)) }
         // từ công nghệ / tài chính (enlexicon SUPPLEMENT) gợi ý tiếng Anh trên máy tính
