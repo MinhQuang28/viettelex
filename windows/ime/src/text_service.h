@@ -153,7 +153,7 @@ private:
     void declineHint();
     void missHint();  // a non-prediction hint found nothing: prediction for this key, if armed
     void notePredictKey(const KeyInput& k, ITfContext* target, bool otherScheduled);
-    void schedulePredict(ITfContext* target);
+    void schedulePredict(ITfContext* target, bool email = false);
     void pickHint();  // click on a shown prediction (= Tab)
     bool replaceForHint(ITfContext* c, TfEditCookie ec, const hints::Suggestion& s);
     void afterHintApplied(bool ok, ITfContext* c, const hints::Suggestion& s);
@@ -254,6 +254,12 @@ private:
     std::u32string declinedPredict_;     // Esc: muted while the word starts with this
     bool predictAfter_ = false;          // another hint was armed at this key: predict if it misses
     ITfContext* predCtx_ = nullptr;      // owned, with predictAfter_
+    // Email domains (caret_hints.h emailDomainSuggestion): the caret is inside "…@part" (keys
+    // only, no screen read); the armed request is an email one (checked in the TIP, no app job).
+    bool emailToken_ = false;
+    bool predEmail_ = false;
+    bool predAfterEmail_ = false;        // with predictAfter_
+    bool declinedEmail_ = false;         // Esc: not again until this "@" token ends
     ITfContext* hintShownCtx_ = nullptr; // owned: where a shown prediction applies on click
     // "Học từ bạn gõ" (Settings::learnWords, only with word prediction on): committed words this
     // TIP composed → events, queued and sent to VietTelex.exe from a timer (HintJob::Learn) —

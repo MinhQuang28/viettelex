@@ -6,7 +6,9 @@
 //   b) TỪ KẾ TIẾP ngay sau dấu cách: dòng TRIGRAM vnlm.bin cho 2 từ ngữ cảnh ("cảm ơn ␣" →
 //      bạn), hoặc cặp SEED curated của iOS với MỘT từ ngữ cảnh ("cảm ␣" → ơn, "xin ␣" → lỗi —
 //      SeedNextData, sinh từ UserLangModel iOS). Không bao giờ lùi về bigram thống kê một từ
-//      ("Tên ␣" → gọi: quá đoán mò — Phil 16/10/2026; "tên" không có seed ⇒ không gì).
+//      ("Tên ␣" → gọi: quá đoán mò — Phil 16/10/2026; "tên" không có seed ⇒ không gì);
+//   c) ĐUÔI EMAIL: "user@" → gmail.com, "user@ic" → icloud.com (EmailDomainPrediction — song
+//      sinh iOS/Android EmailDomains): Tab chèn nguyên văn phần còn thiếu, engine reset.
 // Cùng luật với mọi gợi ý cạnh con trỏ: chỉ áp dụng bằng Tab (hoặc click ứng viên), Esc tắt,
 // không bao giờ tự thay, ĐỌC LẠI màn hình trước khi thay, không ở ô mật khẩu / Secure Input.
 // MỘT ứng viên duy nhất (Phil 16/10/2026: không danh sách, không số thứ tự) — Tab / click
@@ -294,6 +296,85 @@ enum PredictionLogic {
     static func muted(typed: String, declined: String?) -> Bool {
         guard let d = declined, !d.isEmpty, !typed.isEmpty else { return false }
         return typed.lowercased().hasPrefix(d.lowercased())
+    }
+}
+
+// MARK: - Đuôi email (gõ "user@" / "user@g" → gmail.com)
+
+/// Gợi ý tên miền email — song sinh EmailDomains (iOS/Keyboard/DomainPopup.swift, Android
+/// DomainPopup.kt): cùng danh sách nhà cung cấp, cùng thứ tự (Gmail trước), khớp tiền tố sau
+/// "@", chỉ chèn PHẦN CÒN THIẾU (không lặp "@" / tiền tố đã gõ). Desktop chỉ hiện MỘT gợi ý
+/// (hạng 1) như gợi ý từ. Bản C++ song sinh: windows/ime/core/caret_hints.cpp,
+/// linux/common/src/auto_text.cpp — sửa ở đây thì sửa y hệt bên kia.
+/// Rẻ: chỉ so chuỗi trên cụm cuối, không nạp mô hình. Chạy trong cổng gợi ý từ (cài đặt hệ
+/// thống "Show inline predictive text") — tắt ⇒ không bao giờ tới đây.
+enum EmailDomainPrediction {
+    static let providers = ["gmail.com", "icloud.com", "yahoo.com", "outlook.com"]
+    /// Phần sau "@" dài hơn thế ⇒ không phải đang gõ một tên miền trong danh sách.
+    static let maxPartial = 11
+
+    private static func isDomainChar(_ c: Character) -> Bool {
+        guard let a = c.asciiValue else { return false }
+        return (a >= 97 && a <= 122) || (a >= 65 && a <= 90) || (a >= 48 && a <= 57) || a == 46 || a == 45
+    }
+
+    /// `[A-Za-z0-9._%+-]` — ký tự phần trước "@".
+    private static func isLocalChar(_ c: Character) -> Bool {
+        guard let a = c.asciiValue else { return false }
+        return isDomainChar(c) || a == 95 || a == 37 || a == 43
+    }
+
+    /// Ký tự cắt phần trước "@" (đầu cụm): khoảng trắng / xuống dòng, , ; < ( : " '.
+    private static func isLocalDelimiter(_ c: Character) -> Bool {
+        c.isWhitespace || c.isNewline || ",;<(:\"'".contains(c)
+    }
+
+    /// `before` = văn bản trước con trỏ (GỒM từ đang soạn như đang hiện), `typed` = từ đang soạn
+    /// như đang hiện ("" = không soạn), `raw` = phím thô của từ đó. nil khi không gợi ý:
+    ///  • không có "@", phần trước "@" rỗng / không phải `[A-Za-z0-9._%+-]+` tới khoảng trắng /
+    ///    đầu văn bản ("phúc@", "x@y@" → nil);
+    ///  • phần sau "@" (đọc theo phím thô — Telex có thể đã đổi "yahoo" thành "yahô") không là
+    ///    tiền tố của nhà cung cấp nào, hoặc đã gõ đủ tên miền.
+    /// Kết quả: `display` = tên miền; chữ không bị đổi ⇒ `replace` "" + `insert` phần còn thiếu
+    /// ("user@gm" → "ail.com"); bị Telex đổi ⇒ `replace` = từ đang soạn, `insert` = phần tên miền
+    /// thay cho nó ("yahô" → "yahoo.com").
+    static func suggestion(before: String, typed: String, raw: String) -> CaretSuggestion? {
+        guard let at = before.lastIndex(of: "@") else { return nil }
+        let partial = before[before.index(after: at)...]
+        var match = String(partial)
+        var mangled = false
+        if !typed.isEmpty {
+            guard partial.hasSuffix(typed) else { return nil }
+            match = String(partial.dropLast(typed.count)) + raw
+            mangled = typed.lowercased() != raw.lowercased()
+        }
+        guard match.count <= maxPartial, match.allSatisfy(isDomainChar) else { return nil }
+        let head = before[..<at]
+        var i = head.endIndex
+        while i > head.startIndex {
+            let j = head.index(before: i)
+            if isLocalDelimiter(head[j]) { break }
+            guard isLocalChar(head[j]) else { return nil }
+            i = j
+        }
+        guard i < head.endIndex else { return nil }      // phần trước "@" rỗng
+        let p = match.lowercased()
+        guard let domain = providers.first(where: { $0.hasPrefix(p) && $0 != p }) else { return nil }
+        if !mangled {
+            return CaretSuggestion(kind: .email, display: domain, replace: "", insert: String(domain.dropFirst(p.count)))
+        }
+        return CaretSuggestion(kind: .email, display: domain, replace: typed,
+                               insert: String(domain.dropFirst(p.count - raw.count)))
+    }
+
+    /// Cụm cuối có dáng email đang gõ (có "@" sau khoảng trắng gần nhất) — gợi ý từ thường không
+    /// áp dụng ở đây.
+    static func looksLikeEmailToken(_ before: String) -> Bool {
+        for c in before.reversed() {
+            if c == "@" { return true }
+            if c.isWhitespace || c.isNewline { return false }
+        }
+        return false
     }
 }
 

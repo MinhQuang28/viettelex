@@ -379,7 +379,10 @@ void Session::applySettings(const Settings &s) {
     filter_ = s.filterSensitive;
     learnWords_ = s.learnWords;
     quotes_ = autotext::quotesFor(s.quoteStyle);
-    if (!predict_) declinedPrediction_.clear();
+    if (!predict_) {
+        declinedPrediction_.clear();
+        declinedEmail_ = false;
+    }
     if (!learnOn()) learn_.discard();
     if (!period_) lastSpaceMs_ = -1;
     if (!smart_) lastEmDashOurs_ = false;
@@ -654,10 +657,87 @@ void Session::deliverHint(uint64_t gen, const CaretSuggestion &s, InputContext &
 }
 
 bool Session::chooseHint(InputContext &ic) {
-    if (!hint_ || hint_->kind != CaretSuggestion::Kind::Predict) return false;
+    if (!hint_ || (hint_->kind != CaretSuggestion::Kind::Predict && hint_->kind != CaretSuggestion::Kind::Email))
+        return false;
     selectionMemo_ = -1;
     if (hintsOn_) keyGen_->fetch_add(1);
+    if (hint_->kind == CaretSuggestion::Kind::Email) return applyEmailDomain(ic);
     return applyPrediction(hint_->display, ic);
+}
+
+// Email-domain suggestion ("user@" → gmail.com, "user@ic" → icloud.com; iOS/Android
+// EmailDomains): after '@' / '.' / '-' and after each letter composed behind them. Shown at once —
+// a string check on the last few characters, no helper, no pause. True = the text before the caret
+// is an address being typed (shown, or declined / not replaceable here): no word prediction then.
+// The local part must be seen whole: an unknown text before the typed tail (U+FFFC in
+// typedBefore) is not a delimiter, so "<unknown>user@" offers nothing (it may be "phúc@").
+bool Session::offerEmailDomain(InputContext &ic) {
+    if (!predict_ || !hintsOn_ || !emailAllowed_ || mode_ == DisplayMode::Direct || hint_) return false;
+    if (!autotext::emailWorthChecking(tail_)) {
+        declinedEmail_ = false;
+        return false;
+    }
+    const bool composing = !vt_is_empty(e_);
+    const std::string typed = composing ? composed() : std::string();
+    autotext::EmailDomain d;
+    if (!autotext::emailDomainSuggestion(typedBefore() + typed, typed, composing ? raw() : std::string(), d)) {
+        declinedEmail_ = false;
+        return false;
+    }
+    if (declinedEmail_) return true;
+    // Replacing the composing word in place needs a field where the Session may edit.
+    if (!d.replace.empty() && mode_ == DisplayMode::Surrounding && !surroundingEdits_) return true;
+    CaretSuggestion s;
+    s.kind = CaretSuggestion::Kind::Email;
+    s.display = d.display;
+    s.replace = d.replace;
+    s.insert = d.insert;
+    hint_ = s;
+    ic.showPrediction(s.display, "Tab");
+    return true;
+}
+
+// Tab / click on an email domain: the missing part goes in RAW (the composing word stays as
+// shown, or — Telex changed it, "yahô" — is replaced). The engine is reset so nothing typed next
+// is toned with it and ⌫ does not re-open it; no space added, nothing learned, no next word.
+bool Session::applyEmailDomain(InputContext &ic) {
+    CaretSuggestion s = *hint_;
+    dismissHint(ic);
+    if (!vt_is_empty(e_)) {
+        const std::string word = composed();
+        if (!s.replace.empty() && word != s.replace) return false;
+        const std::string shown = s.replace.empty() ? word + s.insert : s.insert;
+        if (mode_ == DisplayMode::Preedit) {
+            vt_reset(e_);
+            ic.commit(shown);  // before hiding the preedit (see finish)
+            hidePreedit(ic);
+        } else if (mode_ == DisplayMode::Surrounding) {
+            if (!s.replace.empty() && (ic.hasSelection() || !inPlaceAllowed(ic, s.replace))) return false;
+            replace(ic, int(utf8Chars(s.replace)), s.insert, s.replace);
+            vt_reset(e_);
+            preedit_.clear();
+        } else {
+            return false;
+        }
+        applyPendingMode();
+        tailAppend(shown);
+    } else {
+        if (!s.replace.empty() || mode_ == DisplayMode::Direct) return false;
+        replace(ic, 0, s.insert, std::string());
+        tailAppend(s.insert);
+    }
+    vt_forget_last_commit(e_);
+    learn_.discard();  // an address is not a word to learn
+    lastWasBoundaryChar_ = false;
+    lastEnded_ = EndedWord();
+    toneTracker_.reset();
+    gluedToDigit_ = false;
+    caretMoved_ = false;
+    autoCappedWord_ = suppressAutoCap_ = false;
+    lastSpaceMs_ = -1;
+    acceptedSpace_.clear();
+    carriedSpace_.clear();
+    return true;
 }
 
 // Tab / click on a word prediction: the word being composed (or nothing, after a space) becomes
@@ -760,6 +840,8 @@ void Session::declineHint(InputContext &ic) {
         declinedTones_ = hint_->replace;
     } else if (hint_->kind == CaretSuggestion::Kind::Predict && !hint_->replace.empty()) {
         declinedPrediction_ = hint_->replace;  // not again while the word starts with it
+    } else if (hint_->kind == CaretSuggestion::Kind::Email) {
+        declinedEmail_ = true;  // not again for this address
     }
     dismissHint(ic);
 }
@@ -767,6 +849,7 @@ void Session::declineHint(InputContext &ic) {
 // Tab (math: Enter too). False = the screen no longer matches: dismissed, key goes on.
 bool Session::applyHint(InputContext &ic) {
     if (hint_->kind == CaretSuggestion::Kind::Predict) return applyPrediction(hint_->display, ic);
+    if (hint_->kind == CaretSuggestion::Kind::Email) return applyEmailDomain(ic);
     CaretSuggestion s = *hint_;
     dismissHint(ic);
     if (!s.replace.empty() && mode_ != DisplayMode::Direct) {
@@ -1091,7 +1174,8 @@ bool Session::processKey(const KeyEvent &ev, InputContext &ic) {
         caretMoved_ = false;
         lastWasBoundaryChar_ = false;
         // Word prediction: complete the word being typed after a pause (off = one bool).
-        if (predict_ && hintSink_ && !vt_is_empty(e_)) schedulePrediction(composed(), raw());
+        // Typing an address ("user@gm"): the email domain instead.
+        if (predict_ && !offerEmailDomain(ic) && hintSink_ && !vt_is_empty(e_)) schedulePrediction(composed(), raw());
         return r;
     }
 
@@ -1116,6 +1200,11 @@ bool Session::processKey(const KeyEvent &ev, InputContext &ic) {
     if (printable && (ch == '"' || ch == '\'') && smart_ && autoTextHere() && smartQuoteFor(ch, ic, quoted))
         ic.commit(quoted);
     if (hintsOn_) afterBoundary(ch, ev.keysym, quoted.empty() ? nullptr : &quoted);
+    // Email domain right after '@' ("user@" → gmail.com) or '.' / '-' inside the domain.
+    if (predict_ && (ch == '@' || ch == '.' || ch == '-') && !ks::isKeypad(ev.keysym)) {
+        if (ch == '@') declinedEmail_ = false;  // a new address
+        offerEmailDomain(ic);
+    }
     if (printable && mode_ == DisplayMode::Surrounding)
         ackAppend(quoted.empty() ? encode(ch) : quoted);  // the app types it / we committed it
     else ackDrop();

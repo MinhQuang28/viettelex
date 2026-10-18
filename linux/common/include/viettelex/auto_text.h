@@ -84,5 +84,30 @@ bool nextWordWorthAsking(const std::string &before);
 // after a space they usually open the next word.
 std::string acceptSpaceReplacement(uint32_t ch);
 
+// MARK: gợi ý tên miền email (iOS/Android EmailDomains, DomainPopup.swift / .kt)
+// "user@" → gmail.com, "user@ic" → icloud.com: the top provider (gmail.com, icloud.com,
+// yahoo.com, outlook.com — this order) whose name starts with what follows the '@' (any case),
+// shown as the single word prediction; Tab inserts it raw. Same rules on macOS / Windows.
+struct EmailDomain {
+    std::string display;  // the full domain ("gmail.com")
+    std::string replace;  // "" = insert only; else the composing word to replace (Telex mangled it)
+    std::string insert;   // only the missing part ("ail.com" after "user@gm"), never '@' again
+    bool operator==(const EmailDomain &o) const {
+        return display == o.display && replace == o.replace && insert == o.insert;
+    }
+};
+// `before` = text before the caret INCLUDING the composing word as shown, `typed` = that word
+// ("" when none), `raw` = its raw keys. The part after the last '@' (with the raw keys in place
+// of the composing word: "yahô" was typed "yahoo") must be ≤ 11 ASCII [A-Za-z0-9.-] and a strict
+// prefix of a provider; the local part before '@' — back to the start, whitespace / NBSP or one
+// of , ; < ( : " ' — must be 1+ ASCII [A-Za-z0-9._%+-] ("phúc@", "x@y@", U+FFFC unknown text →
+// no). Telex changed the composing word (lowercase typed ≠ lowercase raw) ⇒ `replace` = typed and
+// `insert` = the domain from the composing word on.
+bool emailDomainSuggestion(const std::string &before, const std::string &typed, const std::string &raw,
+                           EmailDomain &out);
+// Cheap per-key gate: a '@' among the last 12 bytes of the committed text (the domain part
+// typed so far is at most 11 characters; the composing word is not in it).
+bool emailWorthChecking(const std::string &committed);
+
 }  // namespace autotext
 }  // namespace viettelex

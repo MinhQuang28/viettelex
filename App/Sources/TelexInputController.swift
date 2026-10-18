@@ -374,6 +374,9 @@ final class TelexInputController: IMKInputController {
         }
         // Dấu cách mình chèn khi nhận gợi ý từ: phím ngay sau quyết định số phận nó.
         if acceptedSpace != nil || carriedSpace != nil, let r = handleAcceptedSpace(event, client) { return r }
+        // Vừa chèn NGUYÊN VĂN đuôi email: phím ngay sau không re-edit chữ đó ("com" + s ≠ "cóm").
+        let afterRawInsert = rawInsertedTail
+        rawInsertedTail = false
         let mathTrigger = CaretHint.shared.mathEnabled
             && MathHintLogic.isTrigger(characters: event.characters, modifiers: event.modifierFlags)
         defer { if mathTrigger { CaretHint.shared.afterEquals(client: client, controller: self) } }
@@ -991,6 +994,13 @@ final class TelexInputController: IMKInputController {
                                                         client: client, controller: self)
                 }
             }
+            // Đuôi email (EmailDomainPrediction): "user@" ⇒ mời gmail.com — cùng cổng gợi ý từ
+            // (tắt ⇒ một lần so chuỗi + đọc cờ). Chữ gõ tiếp sau "@" đi đường predictAfterLetter.
+            if inserted == "@", PredictionLogic.shouldSchedule(
+                settingOn: SystemInlinePrediction.isOn,
+                canReplace: !markedNow && !wasEdge && Self.replacesCommittedText(id)) {
+                CaretHint.shared.schedulePrediction(typed: "", raw: "", english: false, client: client, controller: self)
+            }
             // Ngoặc kép cong (cài đặt macOS): chèn “ ” ‘ ’ thay phím " ' sau khi từ đã chốt.
             let smartQuote = (boundaryChar == UInt8(ascii: "\"") || boundaryChar == UInt8(ascii: "'"))
                 && !(rewrote && wasEdge) ? smartQuoteText(boundaryText, client, id: id) : nil
@@ -1101,7 +1111,7 @@ final class TelexInputController: IMKInputController {
         // RE-EDIT (experimental, opt-in): a tone/mark key on an EMPTY engine right after a
         // word means "add this diacritic to that word" ("toan" + s → toán). Seed the
         // engine from the text on screen so the normal replace machinery does the edit.
-        if engine.isEmpty, tracking, selToClear == 0,
+        if engine.isEmpty, tracking, selToClear == 0, !afterRawInsert,
            AppState.shared.reEditWord, Self.isDiacriticOnlyKey(ascii, vni: engine.vniMode) {
             tryReEditWord(caret: anchor, client, id: id)
         }
@@ -2266,6 +2276,7 @@ final class TelexInputController: IMKInputController {
     /// ĐỌC LẠI màn hình — chỉ thay khi chữ ngay trước con trỏ đúng là cụm số + dấu cách và
     /// cụm đứng riêng (như gõ tắt ký hiệu); lệch ⇒ không đụng gì.
     private func applyCaretSuggestion(_ s: CaretSuggestion, _ client: IMKTextInput) {
+        if s.kind == .email { applyEmailSuggestion(s, client); return }
         if !engine.isEmpty { endComposition(client) }
         guard !s.replace.isEmpty else {
             client.insertText(s.insert, replacementRange: kNoRange)
@@ -2300,8 +2311,43 @@ final class TelexInputController: IMKInputController {
         }
     }
 
+    /// Đuôi email (EmailDomainPrediction): chèn NGUYÊN VĂN — không qua engine, không dấu cách, không
+    /// học, không mời từ kế tiếp. `replace` rỗng ⇒ chốt từ đang soạn như đang hiện rồi chèn phần
+    /// còn thiếu ("user@gm" + "ail.com"); không rỗng ⇒ Telex đã đổi từ đang soạn ("yahô"): ĐỌC LẠI
+    /// màn hình, thay đúng từ đó (lệch ⇒ không đụng gì). Engine reset sau đó: chữ gõ tiếp không bị
+    /// bỏ dấu ngược vào tên miền, ⌫ không mở lại từ cũ.
+    private func applyEmailSuggestion(_ s: CaretSuggestion, _ client: IMKTextInput) {
+        let id = AppState.shared.currentBundleID
+        if !engine.isEmpty { endComposition(client) }
+        if s.replace.isEmpty {
+            client.insertText(s.insert, replacementRange: kNoRange)
+        } else {
+            let sel = client.selectedRange()
+            let n = (s.replace as NSString).length
+            guard Self.replacesCommittedText(id), sel.location != NSNotFound, sel.length == 0, sel.location > n,
+                  client.attributedSubstring(from: NSRange(location: sel.location - n, length: n))?.string == s.replace,
+                  !(AppState.shared.manualMode(id) == .inPlace && sel.location - n <= 1)
+            else {
+                DebugLog.log("caret hint email \(id ?? "?"): screen disagrees → skip")
+                return
+            }
+            client.insertText(s.insert, replacementRange: NSRange(location: sel.location - n, length: n))
+            shortcutTail.reset()
+        }
+        engine.reset()
+        engine.resetContext()
+        shortcutTail.append(s.insert)
+        numberPrevRun = ""
+        acceptedSpace = nil
+        rawInsertedTail = true
+        learn.discard()       // không học phần trước "@" / tên miền
+        logDecision("caret hint email \(id ?? "?"): " + (s.replace.isEmpty ? "insert" : "replace -\((s.replace as NSString).length)"))
+    }
+
     /// Chữ vừa chèn khi nhận gợi ý từ ("được ") — sống tới PHÍM KẾ (PredictionLogic.AcceptSpace).
     private var acceptedSpace: String?
+    /// Vừa chèn nguyên văn đuôi email — phím KẾ không được re-edit (bỏ dấu ngược) chữ đó.
+    private var rawInsertedTail = false
     /// Dấu câu vừa dời dấu cách ra sau ("." + " ") — phím cách kế bị nuốt (không thành 2 dấu cách).
     private var carriedSpace: String?
 

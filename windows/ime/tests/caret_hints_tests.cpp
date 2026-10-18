@@ -615,6 +615,74 @@ TEST(predict_still_valid_before_replacing) {
     CHECK(n && !hintStillValid(*n, U"cảm"));
 }
 
+// ---------------------------------------------------------------- 6b. email domains
+// Same cases as macOS / Linux (shared spec; mobile iOS EmailDomains): gmail first, prefix match
+// after "@", only the missing part inserted, raw keys when Telex mangled the composing word.
+TEST(email_domain_suggestion) {
+    auto e = [](const std::u32string& b, const std::u32string& t = U"", const std::u32string& r = U"") {
+        return emailDomainSuggestion(b, t, r);
+    };
+    auto s = e(U"user@");
+    CHECK(s && *s == (Suggestion{Kind::Email, u"gmail.com", u"", u"gmail.com"}));
+    s = e(U"user@ic", U"ic", U"ic");
+    CHECK(s && *s == (Suggestion{Kind::Email, u"icloud.com", u"", u"loud.com"}));
+    s = e(U"user@gm", U"gm", U"gm");
+    CHECK(s && s->display == u"gmail.com" && s->insert == u"ail.com" && s->replace.empty());
+    s = e(U"user@GM", U"GM", U"GM");
+    CHECK(s && s->insert == u"ail.com");
+    s = e(U"user@gmail.");  // "." ended the composing word
+    CHECK(s && s->display == u"gmail.com" && s->insert == u"com");
+    s = e(U"user@gmail.c", U"c", U"c");
+    CHECK(s && s->insert == u"om");
+    CHECK(!e(U"user@gmail.com"));            // already complete
+    s = e(U"user@gmail", U"gmail", U"gmail");  // still a prefix of gmail.com
+    CHECK(s && s->insert == u".com");
+    CHECK(!e(U"user@x", U"x", U"x"));         // no provider
+    CHECK(!e(U"@"));                          // empty local part
+    CHECK(!e(U" @"));
+    CHECK(!e(U"phúc@"));                      // not an email local part
+    CHECK(!e(U"x@y@"));
+    CHECK(!e(U"user"));                       // no "@"
+    s = e(U"hello user@");
+    CHECK(s && s->display == u"gmail.com");
+    s = e(U"<user@");
+    CHECK(s && s->display == u"gmail.com");
+    s = e(U"to: first.last+tag@");
+    CHECK(s && s->display == u"gmail.com");
+    s = e(U"user@o", U"o", U"o");
+    CHECK(s && s->display == u"outlook.com" && s->insert == u"utlook.com");
+    s = e(U"user@y", U"y", U"y");
+    CHECK(s && s->display == u"yahoo.com");
+    // Telex turned "yahoo" into "yahô": match the raw keys, replace the composing word.
+    s = e(U"user@yahô", U"yahô", U"yahoo");
+    CHECK(s && *s == (Suggestion{Kind::Email, u"yahoo.com", u"yahô", u"yahoo.com"}));
+    // Mangled word after a committed prefix ("outl" + "ôk"… raw "ook"): replace only that word.
+    s = e(U"user@outlôk", U"outlôk", U"outlook");
+    CHECK(s && s->replace == u"outlôk" && s->insert == u"outlook.com");
+    CHECK(!e(U"user@gm", U"gx", U"gx"));      // screen does not end with the composing word
+    CHECK(!e(U"user@abcdefghijkl"));          // too long
+    CHECK(!e(U"user@g m"));                   // space in the domain part
+}
+
+TEST(email_domain_still_valid_and_keys) {
+    auto s = emailDomainSuggestion(U"user@gm", U"gm", U"gm");
+    CHECK(s && hintStillValid(*s, U"user@gm"));
+    CHECK(s && hintStillValid(*s, U"user@GM"));
+    CHECK(s && !hintStillValid(*s, U"user@gma"));
+    CHECK(s && !hintStillValid(*s, U"user gm"));
+    auto m = emailDomainSuggestion(U"user@yahô", U"yahô", U"yahoo");
+    CHECK(m && hintStillValid(*m, U"user@yahô"));
+    CHECK(m && !hintStillValid(*m, U"user@yahôo"));
+    auto a = emailDomainSuggestion(U"user@", U"", U"");
+    CHECK(a && hintStillValid(*a, U"user@"));
+    CHECK(a && !hintStillValid(*a, U"user@ "));
+    CHECK(action(Kind::Email, kVkTab, true) == KeyAction::Accept);
+    CHECK(action(Kind::Email, kVkReturn, true) == KeyAction::DismissPass);  // Enter sends / new line
+    CHECK(action(Kind::Email, kVkEscape, true) == KeyAction::DismissConsume);
+    CHECK(emailTokenChar(U'g') && emailTokenChar(U'.') && emailTokenChar(U'-') && emailTokenChar(U'7'));
+    CHECK(!emailTokenChar(U' ') && !emailTokenChar(U'@') && !emailTokenChar(U',') && !emailTokenChar(0x00F4));
+}
+
 TEST(predict_muting_and_apps) {
     CHECK(predictMuted(U"đươ", U"đư"));
     CHECK(predictMuted(U"ĐƯ", U"đư"));

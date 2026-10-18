@@ -315,7 +315,8 @@ void TextService::applyConfig(bool force) {
         learnOn_ = predictOn_ && predictApp_ && s.learnWords;
         if (!learnOn_) learn_.discard();
         if (!predictOn_) declinedPredict_.clear();
-        if ((!hintsAny_ && !predictOn_) || (!predictOn_ && hint_ && hint_->kind == hints::Kind::Predict)) {
+        if ((!hintsAny_ && !predictOn_) ||
+            (!predictOn_ && hint_ && (hint_->kind == hints::Kind::Predict || hint_->kind == hints::Kind::Email))) {
             hideHint();
             dropHintWork();
         }
@@ -1566,6 +1567,7 @@ const char* hintKindName(hints::Kind k) {
         case hints::Kind::Tones: return "tones";
         case hints::Kind::Date: return "date";
         case hints::Kind::Predict: return "predict";
+        case hints::Kind::Email: return "email";
     }
     return "?";
 }
@@ -1588,6 +1590,7 @@ void TextService::noteHintKey(const KeyInput& k, ITfContext* target, bool handle
     if (!hintsAny_ && !predictOn_) return;  // all off: this one test per key
     if (!hintsUsable() || !target) {
         hintTracker_.reset();
+        emailToken_ = false;
         if (learn_.hasPending() || !learn_.prev1().empty()) learn_.discard();
         return;
     }
@@ -1612,7 +1615,10 @@ void TextService::noteHintKey(const KeyInput& k, ITfContext* target, bool handle
             break;
         case KeyKind::Modifier:
         case KeyKind::Other: break;
-        default: hintTracker_.reset(); break;  // Enter, Tab, arrows, chords
+        default:  // Enter, Tab, arrows, chords
+            hintTracker_.reset();
+            emailToken_ = false;
+            break;
     }
 }
 
@@ -1706,6 +1712,10 @@ void TextService::onHintRead() {
             if (hints::standsAlone(before, hintRun_)) sug = hints::toneSuggestion(hintRun_, hintAnswer_);
             break;
         case HintStage::PredictRead:
+            if (predEmail_) {  // email domain: a string check here, no app job
+                sug = hints::emailDomainSuggestion(before, predTyped_, hints::toU32(predRaw_));
+                break;
+            }
             // The app builds the request from the screen (word_prediction.h request()).
             predBefore_ = hintRead_.before;
             askApp(HintJob::Predict, packPredictText(hintRead_.before, hints::toU16(predTyped_), predRaw_));
@@ -1770,7 +1780,7 @@ void TextService::presentHint(const hints::Suggestion& s) {
     }
     hideHint();
     const std::wstring text(s.display.begin(), s.display.end());
-    const bool predict = s.kind == hints::Kind::Predict;  // clickable (= Tab)
+    const bool predict = s.kind == hints::Kind::Predict || s.kind == hints::Kind::Email;  // clickable (= Tab)
     if (!popup_.show(text, caret, predict ? toolWnd_ : nullptr, predict ? kMsgHintPick : 0)) return;
     if (predict) {
         SafeRelease(hintShownCtx_);
@@ -1856,7 +1866,9 @@ bool TextService::applyHint(ITfContext* ctx, bool sync) {
 bool TextService::replaceForHint(ITfContext* c, TfEditCookie ec, const hints::Suggestion& s) {
     TsfTextSink sink(this, c, ec);
     if (sink.hasSelection() || composition_) return false;
-    const std::u16string before = sink.textBeforeCaret(static_cast<int>(s.replace.size()) + 2);
+    // Email: the whole "@part" is checked (≤ 11 letters + the composing word).
+    const int window = static_cast<int>(s.replace.size()) + (s.kind == hints::Kind::Email ? 16 : 2);
+    const std::u16string before = sink.textBeforeCaret(window);
     return hints::hintStillValid(s, hints::toU32(before)) && sink.replaceBeforeCaret(s.replace, s.insert);
 }
 
@@ -1903,8 +1915,11 @@ bool TextService::acceptSpaceApply(ITfContext* ctx) {
 }
 
 void TextService::afterHintApplied(bool ok, ITfContext* c, const hints::Suggestion& s) {
+    // Email domain inserted raw: the engine forgets the composing word (no re-toning of what
+    // follows, ⌫ does not reopen it); nothing learned (learn_.discard below), no next word.
     session_.reset();
     hintTracker_.reset();
+    if (s.kind == hints::Kind::Email) emailToken_ = false;
     if (ok && learnOn_) {
         // Học từ bạn gõ: an accepted prediction counts double (iOS weight 2); an accepted typo
         // fix learns the fixed form; any other hint replaced committed text — dropped.
@@ -1941,6 +1956,8 @@ void TextService::declineHint() {
         declinedTones_ = hints::toU32(hint_->replace);
     else if (hint_->kind == hints::Kind::Predict && !hint_->replace.empty())
         declinedPredict_ = hints::toU32(hint_->replace);  // until the next word
+    else if (hint_->kind == hints::Kind::Email)
+        declinedEmail_ = true;  // until this "@" token ends
     hideHint();
 }
 
@@ -2039,8 +2056,45 @@ void TextService::sendLearnQueue() {
 // to VietTelex.exe (which ranks with its embedded data), and a re-read before showing.
 
 void TextService::notePredictKey(const KeyInput& k, ITfContext* target, bool otherScheduled) {
+    // Email domains: track "…@part" from the keys alone ('@' arms, letters / digits / . - keep).
+    if (k.kind == KeyKind::Char) {
+        if (k.ch == U'@') {
+            emailToken_ = true;
+            declinedEmail_ = false;  // a new "@": the old Esc no longer applies
+        } else if (!hints::emailTokenChar(k.ch)) {
+            emailToken_ = false;
+        }
+    }
     if (!predictApp_ || !target) return;
-    if (hint_ && hint_->kind != hints::Kind::Predict) return;  // other hints win
+    if (hint_ && hint_->kind != hints::Kind::Predict && hint_->kind != hints::Kind::Email) return;  // other hints win
+    if (emailToken_ && k.kind == KeyKind::Char && (k.ch == U'@' || hints::isLetter(k.ch))) {
+        // "user@" / "user@g": the domain suggestion (a string check in onHintRead, no app job).
+        // The normal prediction would reject a word glued to "@" anyway.
+        if (declinedEmail_) return;
+        std::u32string typed;
+        std::u16string raw;
+        if (session_.wordActive()) {
+            if (composition_ || session_.wordMode() != OutputMode::InPlace) return;
+            typed = hints::toU32(session_.shown());
+            raw = session_.rawKeys();
+        } else if (k.ch != U'@') {
+            return;
+        }
+        predTyped_ = std::move(typed);
+        predRaw_ = std::move(raw);
+        predEnglish_ = false;
+        if (otherScheduled) {
+            predictAfter_ = true;
+            predAfterEmail_ = true;
+            SafeRelease(predCtx_);
+            predCtx_ = target;
+            predCtx_->AddRef();
+            return;
+        }
+        schedulePredict(target, true);
+        return;
+    }
+    if (emailToken_) return;  // digits / . - inside the domain part: nothing to predict
     const bool space = k.kind == KeyKind::Char && k.ch == U' ';
     if (k.kind == KeyKind::Char && !space && !hints::isLetter(k.ch)) return;
     std::u32string typed;
@@ -2061,6 +2115,7 @@ void TextService::notePredictKey(const KeyInput& k, ITfContext* target, bool oth
     predEnglish_ = session_.previousWordEnglish();
     if (otherScheduled) {  // that hint goes first; prediction only if it finds nothing
         predictAfter_ = true;
+        predAfterEmail_ = false;
         SafeRelease(predCtx_);
         predCtx_ = target;
         predCtx_->AddRef();
@@ -2069,10 +2124,11 @@ void TextService::notePredictKey(const KeyInput& k, ITfContext* target, bool oth
     schedulePredict(target);
 }
 
-void TextService::schedulePredict(ITfContext* target) {
+void TextService::schedulePredict(ITfContext* target, bool email) {
     if (!target || !toolWnd_) return;
     target->AddRef();  // dropHintWork may release the caller's reference (predCtx_)
     dropHintWork();
+    predEmail_ = email;
     hintTrig_ = hints::Trigger();
     hintGen_ = keyGen_;
     hintCtx_ = target;  // takes that reference
@@ -2085,7 +2141,7 @@ void TextService::missHint() {
         ITfContext* c = predCtx_;
         predCtx_ = nullptr;  // our reference now
         predictAfter_ = false;
-        schedulePredict(c);
+        schedulePredict(c, predAfterEmail_);
         c->Release();
         return;
     }
@@ -2093,7 +2149,8 @@ void TextService::missHint() {
 }
 
 void TextService::pickHint() {
-    if (!hint_ || hint_->kind != hints::Kind::Predict || !hintShownCtx_) return;
+    if (!hint_ || (hint_->kind != hints::Kind::Predict && hint_->kind != hints::Kind::Email) || !hintShownCtx_)
+        return;
     ITfContext* c = hintShownCtx_;
     c->AddRef();
     ++keyGen_;  // whatever was pending belongs to the text before the click

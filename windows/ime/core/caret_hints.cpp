@@ -1337,7 +1337,70 @@ std::optional<Suggestion> predictSuggestion(const std::u32string& before, const 
     return s;
 }
 
+// ---------------------------------------------------------------- email domains
+
+const char32_t* const kEmailProviders[4] = {U"gmail.com", U"icloud.com", U"yahoo.com", U"outlook.com"};
+
+namespace {
+bool emailLocalChar(char32_t c) {
+    return (c >= U'a' && c <= U'z') || (c >= U'A' && c <= U'Z') || (c >= U'0' && c <= U'9') || c == U'.' ||
+           c == U'_' || c == U'%' || c == U'+' || c == U'-';
+}
+bool emailDelimiter(char32_t c) {
+    return isWhitespace(c) || c == 0xA0 || c == U',' || c == U';' || c == U'<' || c == U'(' || c == U':' ||
+           c == U'"' || c == U'\'';
+}
+bool endsWithU32(const std::u32string& s, const std::u32string& t) {
+    return s.size() >= t.size() && s.compare(s.size() - t.size(), t.size(), t) == 0;
+}
+}  // namespace
+
+std::optional<Suggestion> emailDomainSuggestion(const std::u32string& before, const std::u32string& typed,
+                                                const std::u32string& raw) {
+    const size_t at = before.rfind(U'@');
+    if (at == std::u32string::npos) return std::nullopt;
+    const std::u32string partial = before.substr(at + 1);
+    std::u32string match = partial;
+    bool mangled = false;
+    if (!typed.empty()) {
+        if (!endsWithU32(partial, typed)) return std::nullopt;
+        match = partial.substr(0, partial.size() - typed.size()) + raw;
+        mangled = lower(typed) != lower(raw);
+    }
+    if (match.size() > 11) return std::nullopt;
+    for (char32_t c : match)
+        if (!emailTokenChar(c)) return std::nullopt;
+    size_t i = at;
+    while (i > 0 && !emailDelimiter(before[i - 1])) --i;
+    if (i == at) return std::nullopt;  // empty local part
+    for (size_t j = i; j < at; ++j)
+        if (!emailLocalChar(before[j])) return std::nullopt;  // "phúc@", "x@y@"
+    const std::u32string p = lower(match);
+    for (const char32_t* d : kEmailProviders) {
+        const std::u32string domain(d);
+        if (domain.size() <= p.size() || domain.compare(0, p.size(), p) != 0) continue;
+        Suggestion s;
+        s.kind = Kind::Email;
+        s.display = toU16(domain);
+        if (mangled) {  // Telex changed the composing word: replace it, from its raw keys on
+            s.replace = toU16(typed);
+            s.insert = toU16(domain.substr(p.size() - raw.size()));
+        } else {
+            s.insert = toU16(domain.substr(p.size()));
+        }
+        return s;
+    }
+    return std::nullopt;
+}
+
 bool hintStillValid(const Suggestion& s, const std::u32string& before) {
+    if (s.kind == Kind::Email) {
+        const size_t at = before.rfind(U'@');
+        if (at == std::u32string::npos) return false;
+        const std::u32string tail = before.substr(at + 1), rep = toU32(s.replace);
+        if (!endsWithU32(tail, rep)) return false;
+        return lower(tail.substr(0, tail.size() - rep.size())) + toU32(s.insert) == lower(toU32(s.display));
+    }
     if (s.kind == Kind::Math) return !before.empty() && before.back() == U'=';
     if (s.kind == Kind::Predict && s.replace.empty())
         return before.size() >= 2 && before.back() == U' ' && isLetter(before[before.size() - 2]);

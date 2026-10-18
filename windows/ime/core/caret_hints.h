@@ -36,7 +36,7 @@ char32_t lowerChar(char32_t c);  // ASCII + Latin-1/Ext-A/B + Vietnamese block
 std::u32string lower(const std::u32string& s);
 
 // ---------------------------------------------------------------- the suggestion
-enum class Kind : uint8_t { Math, Number, Typo, Tones, Date, Predict };
+enum class Kind : uint8_t { Math, Number, Typo, Tones, Date, Predict, Email };
 
 // `replace` = tail of the text before the caret that gets replaced ("" = insert only,
 // the math result), `insert` = what goes there, `display` = what the window shows.
@@ -191,7 +191,8 @@ bool predictionAllowedForApp(const std::string& exe);
 std::optional<Suggestion> predictSuggestion(const std::u32string& before, const std::u32string& typed,
                                             const std::u16string& candidate);
 // Right before replacing (Tab / click): the text before the caret still ends as `s` expects
-// (math: "=", next word: a space after a letter, otherwise `replace` standing alone).
+// (math: "=", next word: a space after a letter, email: "@" + prefix + `replace` and prefix +
+// `insert` still spells the domain, otherwise `replace` standing alone).
 bool hintStillValid(const Suggestion& s, const std::u32string& before);
 // Esc on a completion mutes it while the typed word still starts with the declined one.
 bool predictMuted(const std::u32string& typed, const std::u32string& declined);
@@ -211,6 +212,27 @@ enum class AcceptSpaceAct : uint8_t { Pass, Replace, Swallow };
 // The next key `ch` (0 = not a character key): what to do, `expect` = the screen tail to check
 // first (re-read), `replacement` = what replaces the last character (our space). Clears `st`.
 AcceptSpaceAct acceptSpaceKey(AcceptedSpace& st, char32_t ch, std::u32string& expect, std::u32string& replacement);
+
+// ---------------------------------------------------------------- 6b. email domains (đuôi mail)
+// Same rule as iOS EmailDomains (iOS/Keyboard/DomainPopup.swift) and the macOS / Linux desktop
+// ports: right after "user@" (or "user@g") the ONE suggestion is the first provider of
+// kEmailProviders the typed part after "@" is a (case-insensitive) prefix of, and not equal to.
+// Gate = word prediction (Settings::systemTextPrediction); only a string check on the token, no
+// app round trip. `before` = text before the caret (composing word included, as shown), `typed`
+// = the composing word as shown ("" = none), `raw` = its raw keys. Telex may have mangled the
+// composing word ("yahoo" shown "yahô"): matching uses the raw keys, and then the suggestion
+// REPLACES the composing word; otherwise it inserts only the missing part (never "@" again,
+// never the typed prefix). The local part before "@" (back to start / whitespace / , ; < ( : " ')
+// must be [A-Za-z0-9._%+-]+. Tab inserts raw (no space added, nothing learned, no next word).
+extern const char32_t* const kEmailProviders[4];  // gmail.com, icloud.com, yahoo.com, outlook.com
+std::optional<Suggestion> emailDomainSuggestion(const std::u32string& before, const std::u32string& typed,
+                                                const std::u32string& raw);
+// Cheap per-key tracker (no screen read): is the caret still inside "…@domainpart"? '@' arms,
+// these keep it, anything else disarms.
+inline bool emailTokenChar(char32_t c) {
+    return (c >= U'a' && c <= U'z') || (c >= U'A' && c <= U'Z') || (c >= U'0' && c <= U'9') || c == U'.' ||
+           c == U'-';
+}
 
 // ---------------------------------------------------------------- Học từ bạn gõ
 // App/Sources/LearnedModel.swift LearnTracker / learnable, same rules (the model itself lives in

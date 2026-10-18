@@ -226,6 +226,67 @@ bool nextWordWorthAsking(const std::string &before) {
     return v.size() >= 2 && v.back() == ' ' && isLetter(v[v.size() - 2]);
 }
 
+namespace {
+const char *const kEmailProviders[] = {"gmail.com", "icloud.com", "yahoo.com", "outlook.com"};
+bool asciiAlnum(unsigned char c) { return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9'); }
+std::string asciiLower(std::string s) {
+    for (char &c : s)
+        if (c >= 'A' && c <= 'Z') c = char(c - 'A' + 'a');
+    return s;
+}
+}  // namespace
+
+bool emailDomainSuggestion(const std::string &before, const std::string &typed, const std::string &raw,
+                           EmailDomain &out) {
+    const size_t at = before.rfind('@');
+    if (at == std::string::npos) return false;
+    const std::string partial = before.substr(at + 1);
+    std::string match = partial;
+    bool mangled = false;
+    if (!typed.empty()) {
+        if (partial.size() < typed.size() || partial.compare(partial.size() - typed.size(), typed.size(), typed) != 0)
+            return false;
+        match = partial.substr(0, partial.size() - typed.size()) + raw;
+        mangled = asciiLower(typed) != asciiLower(raw);
+    }
+    if (match.size() > 11) return false;
+    for (unsigned char c : match)
+        if (!asciiAlnum(c) && c != '.' && c != '-') return false;
+    // Local part: back to a delimiter, all [A-Za-z0-9._%+-], at least one character.
+    size_t i = at, n = 0;
+    while (i > 0) {
+        const unsigned char c = static_cast<unsigned char>(before[i - 1]);
+        if (c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == ',' || c == ';' || c == '<' || c == '(' ||
+            c == ':' || c == '"' || c == '\'')
+            break;
+        if (c == 0xa0 && i >= 2 && static_cast<unsigned char>(before[i - 2]) == 0xc2) break;  // NBSP
+        if (!asciiAlnum(c) && c != '.' && c != '_' && c != '%' && c != '+' && c != '-') return false;
+        --i;
+        ++n;
+    }
+    if (n == 0) return false;
+    const std::string p = asciiLower(match);
+    for (const char *d : kEmailProviders) {
+        const std::string domain = d;
+        if (domain.size() <= p.size() || domain.compare(0, p.size(), p) != 0) continue;
+        out.display = domain;
+        if (mangled) {
+            out.replace = typed;
+            out.insert = domain.substr(p.size() - raw.size());
+        } else {
+            out.replace.clear();
+            out.insert = domain.substr(p.size());
+        }
+        return true;
+    }
+    return false;
+}
+
+bool emailWorthChecking(const std::string &committed) {
+    const size_t from = committed.size() > 12 ? committed.size() - 12 : 0;
+    return committed.find('@', from) != std::string::npos;
+}
+
 std::string acceptSpaceReplacement(uint32_t ch) {
     switch (ch) {
     case '.': case ',': case '?': case '!': case ';': case ':':      // AutoSpace.triggers

@@ -916,6 +916,167 @@ void testHelperEndToEnd() {
 
 }  // namespace
 
+// MARK: - tên miền email (iOS/Android EmailDomains; same cases as macOS / Windows)
+
+EmailDomain ED(std::string d, std::string r, std::string i) { return EmailDomain{d, r, i}; }
+
+bool email(const std::string &before, EmailDomain &out, const std::string &typed = "", const std::string &raw = "") {
+    out = EmailDomain();
+    return emailDomainSuggestion(before, typed, raw, out);
+}
+
+void testEmailDomainRule() {
+    EmailDomain d;
+    CHECK(email("user@", d));
+    CHECK_EQ(d, ED("gmail.com", "", "gmail.com"));  // gmail first, '@' never repeated
+    CHECK(email("user@ic", d, "ic", "ic"));
+    CHECK_EQ(d, ED("icloud.com", "", "loud.com"));
+    CHECK(email("user@gm", d, "gm", "gm"));
+    CHECK_EQ(d, ED("gmail.com", "", "ail.com"));
+    CHECK(email("user@gm", d));  // committed (not composing): same
+    CHECK_EQ(d, ED("gmail.com", "", "ail.com"));
+    CHECK(email("user@GM", d, "GM", "GM"));  // any case; only the missing part
+    CHECK_EQ(d, ED("gmail.com", "", "ail.com"));
+    CHECK(email("user@gmail.", d));
+    CHECK_EQ(d, ED("gmail.com", "", "com"));
+    CHECK(email("user@gmail.c", d, "c", "c"));
+    CHECK_EQ(d, ED("gmail.com", "", "om"));
+    CHECK(email("user@o", d, "o", "o"));
+    CHECK_EQ(d, ED("outlook.com", "", "utlook.com"));
+    CHECK(email("user@y", d, "y", "y"));
+    CHECK_EQ(d, ED("yahoo.com", "", "ahoo.com"));
+    CHECK(!email("user@gmail.com", d));  // already whole
+    CHECK(!email("user@gmail.com", d, "com", "com"));
+    CHECK(!email("user@x", d, "x", "x"));  // no provider
+    CHECK(!email("user@gmx", d));
+    CHECK(!email("@", d));                 // no local part
+    CHECK(!email("hello @", d));
+    CHECK(!email("ph\xc3\xba" "c@", d));  // "phúc@": not an address
+    CHECK(email("hello user@", d));
+    CHECK_EQ(d.display, std::string("gmail.com"));
+    CHECK(email("<user@", d));
+    CHECK(email("to: a.b_c%d+e-f@", d));
+    CHECK(email("x,user@", d));
+    CHECK(email("x\xc2\xa0user@", d));     // NBSP
+    CHECK(!email("x@y@", d));              // two '@'
+    CHECK(!email("a/b@", d));
+    CHECK(!email("\xef\xbf\xbcuser@", d)); // unknown text before (U+FFFC): maybe "phúc@"
+    CHECK(!email("user@g m", d));
+    CHECK(!email("user", d));
+    CHECK(!email("user@gm", d, "xx", "xx"));  // the composing word is not what ends the text
+    // Telex changed the composing word: "yahoo" shows "yahô" — replace it, not append.
+    CHECK(email("user@yah\xc3\xb4", d, "yah\xc3\xb4", "yahoo"));
+    CHECK_EQ(d, ED("yahoo.com", "yah\xc3\xb4", "yahoo.com"));
+    CHECK(!email("user@yahoo.c\xc3\xb4", d, "c\xc3\xb4", "coo"));  // "yahoo.coo": no provider
+    CHECK(email("user@outl\xc3\xb4", d, "outl\xc3\xb4", "outloo"));
+    CHECK_EQ(d, ED("outlook.com", "outl\xc3\xb4", "outlook.com"));
+    CHECK(!email("user@gmail.\xc3\xb4", d, "\xc3\xb4", "oo"));  // "gmail.oo": no provider
+    // Cheap gate.
+    CHECK(emailWorthChecking("user@"));
+    CHECK(emailWorthChecking("hello user@gmail."));
+    CHECK(!emailWorthChecking("hello user"));
+    CHECK(!emailWorthChecking("@ and then a long text"));
+}
+
+void testEmailDomainSession() {
+    // Preedit: '@' → gmail.com at once (no helper round-trip); Tab inserts it raw.
+    Rig r(with(false, false, false, true));
+    type(r.s, r.m, "abc@");
+    CHECK_EQ(r.m.doc, std::string("abc@"));
+    CHECK(r.s.hint() != nullptr);
+    CHECK(r.s.hint()->kind == Kind::Email);
+    CHECK_EQ(r.m.pred, std::string("gmail.com"));
+    CHECK_EQ(r.m.aux, std::string("Tab"));
+    CHECK(press(r.s, r.m, ks::Tab, '\t'));
+    CHECK_EQ(r.m.doc, std::string("abc@gmail.com"));  // no space, no '@' twice
+    CHECK(r.m.pred.empty());
+    CHECK(!r.s.hint());
+    CHECK(!r.s.composing());
+    // Typed on after it: a new word, nothing re-toned with the domain.
+    type(r.s, r.m, " ok");
+    CHECK_EQ(r.m.doc + r.m.pre, std::string("abc@gmail.com ok"));
+
+    // While composing after '@' ("ic" in the preedit): only the missing part follows the word.
+    Rig c(with(false, false, false, true));
+    type(c.s, c.m, "abc@ic");
+    CHECK_EQ(c.m.pred, std::string("icloud.com"));
+    CHECK(press(c.s, c.m, ks::Tab, '\t'));
+    CHECK_EQ(c.m.doc, std::string("abc@icloud.com"));
+    CHECK(c.m.pre.empty());
+    CHECK(!c.s.composing());
+    // ⌫ right after does not re-open "icloud" as a Telex word: plain delete.
+    type(c.s, c.m, "<");
+    CHECK_EQ(c.m.doc + c.m.pre, std::string("abc@icloud.co"));
+
+    // Surrounding (in place) + click (= Tab).
+    Rig s(with(false, false, false, true), DisplayMode::Surrounding);
+    type(s.s, s.m, "abc@gm");
+    CHECK_EQ(s.m.pred, std::string("gmail.com"));
+    CHECK(s.s.chooseHint(s.m));
+    CHECK_EQ(s.m.doc, std::string("abc@gmail.com"));
+    CHECK(!s.s.chooseHint(s.m));
+
+    // '.' inside the domain: "gmail." → "com".
+    Rig dot(with(false, false, false, true));
+    type(dot.s, dot.m, "abc@gmail.");
+    CHECK_EQ(dot.m.pred, std::string("gmail.com"));
+    CHECK(press(dot.s, dot.m, ks::Tab, '\t'));
+    CHECK_EQ(dot.m.doc, std::string("abc@gmail.com"));
+
+    // Whole domain typed / no provider / not an address: nothing; no helper request either.
+    Rig w(with(false, false, false, true));
+    type(w.s, w.m, "abc@gmail.com");
+    CHECK(!w.s.hint());
+    type(w.s, w.m, " abc@zz");
+    CHECK(!w.s.hint());
+    type(w.s, w.m, " @");
+    CHECK(!w.s.hint());
+
+    // Esc: not again for this address; a new '@' offers again.
+    Rig e(with(false, false, false, true));
+    type(e.s, e.m, "abc@~");
+    CHECK(!e.s.hint());
+    type(e.s, e.m, "g");
+    CHECK(!e.s.hint());
+    CHECK(e.m.pred.empty());
+    type(e.s, e.m, " xyz@");
+    CHECK(e.s.hint() != nullptr);
+
+    // Any other key dismisses and goes on; Enter is never taken.
+    Rig k(with(false, false, false, true));
+    type(k.s, k.m, "abc@\n");
+    CHECK_EQ(k.m.doc, std::string("abc@\n"));
+    CHECK(!k.s.hint());
+
+    // word_prediction off: nothing at all.
+    Rig off(with(false, false, false, false));
+    type(off.s, off.m, "abc@gm");
+    CHECK(!off.s.hint());
+    CHECK(off.m.pred.empty());
+    CHECK(off.reqs.empty());
+    // Terminal / code editor (frontends: setEmailDomainsAllowed(false)): nothing.
+    Rig t(with(false, false, false, true));
+    t.s.setEmailDomainsAllowed(false);
+    type(t.s, t.m, "abc@");
+    CHECK(!t.s.hint());
+    // E-mail field (auto text off there): the domain is still offered.
+    Rig f(with(false, false, false, true));
+    f.s.setAutoTextAllowed(false);
+    type(f.s, f.m, "abc@");
+    CHECK_EQ(f.m.pred, std::string("gmail.com"));
+    // Direct (terminal mode): never.
+    Rig d(with(false, false, false, true), DisplayMode::Direct);
+    type(d.s, d.m, "abc@");
+    CHECK(!d.s.hint());
+    // Text before the caret unknown (not readable): the local part is not seen whole — nothing.
+    Rig u(with(false, false, false, true));
+    u.m.surrounding = false;
+    type(u.s, u.m, "abc@");
+    CHECK(!u.s.hint());
+    type(u.s, u.m, " abc@");  // …but after a space typed here it is
+    CHECK_EQ(u.m.pred, std::string("gmail.com"));
+}
+
 int main() {
     // The helper's learned-words store: a temp file, never ~/.local/share/viettelex.
     char learnTmpl[] = "/tmp/vt-learn-XXXXXX";
@@ -932,6 +1093,8 @@ int main() {
     testSmartPunctuationSession();
     testPredictionSession();
     testAcceptedSpaceSession();
+    testEmailDomainRule();
+    testEmailDomainSession();
     testLearnTracker();
     testLearnSession();
     testHelperEndToEnd();

@@ -35,7 +35,9 @@ struct CaretSuggestion {
     // Predict: gợi ý từ (auto_text.h, WordPrediction.swift) — `replace` = the word being
     // composed ("" = next word, insert only), ONE candidate (the top-ranked word), inserted with
     // a trailing space. Shown as the single entry of the frontend's candidate window.
-    enum class Kind { Math, Number, Typo, Tones, Date, Predict };
+    // Email: tên miền email (autotext::emailDomainSuggestion) — shown like Predict (one entry,
+    // "Tab"), computed in the IME process (no helper); `insert` is inserted raw, no space.
+    enum class Kind { Math, Number, Typo, Tones, Date, Predict, Email };
     Kind kind = Kind::Math;
     std::string display;  // shown near the caret ("= 36", "1.200.000 ₫", "tôi")
     std::string replace;  // tail of the text before the caret to replace ("" = insert only)

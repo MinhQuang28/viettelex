@@ -94,7 +94,7 @@ final class ControllerHarness {
         "b": 11, "q": 12, "w": 13, "e": 14, "r": 15, "y": 16, "t": 17, "1": 18, "2": 19,
         "3": 20, "4": 21, "6": 22, "5": 23, "9": 25, "7": 26, "8": 28, "0": 29,
         "o": 31, "u": 32, "i": 34, "p": 35, "l": 37, "j": 38, "'": 39, "k": 40,
-        ",": 43, "/": 44, "n": 45, "m": 46, ".": 47, " ": 49, "-": 27, "\"": 39, "*": 28,
+        ",": 43, "/": 44, "n": 45, "m": 46, ".": 47, " ": 49, "-": 27, "\"": 39, "*": 28, "@": 19,
     ]
 
     init(bundleID: String, text: String = "") {
@@ -108,7 +108,7 @@ final class ControllerHarness {
         ts += gap
         let lower = Character(ch.lowercased())
         let code = Self.keyCodes[lower] ?? 0
-        let shift = ch.isUppercase || ch == "\"" || ch == "*"
+        let shift = ch.isUppercase || ch == "\"" || ch == "*" || ch == "@"
         let s = String(ch)
         let ev = NSEvent.keyEvent(with: .keyDown, location: .zero, modifierFlags: shift ? [.shift] : [],
                                   timestamp: ts, windowNumber: 0, context: nil, characters: s,
@@ -170,7 +170,7 @@ final class ControllerHarness {
 
     static let charsForKeyCode: [UInt16: (plain: String, shifted: String)] = {
         var m: [UInt16: (String, String)] = [:]
-        for (c, code) in keyCodes where c != "\"" && c != "*" {
+        for (c, code) in keyCodes where c != "\"" && c != "*" && c != "@" {
             let s = String(c)
             m[code] = (s, s == "'" ? "\"" : s.uppercased())
         }
@@ -232,6 +232,7 @@ final class ControllerHarnessTests: XCTestCase {
     }
 
     override func tearDown() {
+        CaretHint.shared.setPendingForTesting(nil)
         Accessibility.testTrustOverride = nil
         SystemInlinePrediction.setForTesting(nil)
         AppState.shared.debugLogging = savedDebug
@@ -387,6 +388,52 @@ final class ControllerHarnessTests: XCTestCase {
         h.client.caret = h.client.text.length
         h.key(".")
         XCTAssertEqual(h.client.string, "a được x.", "màn hình lệch ⇒ không đụng gì: " + dump(h))
+    }
+
+    // MARK: Đuôi email (EmailDomainPrediction)
+
+    /// Tab chèn NGUYÊN VĂN phần còn thiếu, không dấu cách; chữ gõ tiếp không bị bỏ dấu ngược
+    /// vào tên miền ("coms" không thành "cóm").
+    func testEmailDomainAcceptInsertsRawAndResetsEngine() {
+        let savedReEdit = AppState.shared.reEditWord
+        defer { AppState.shared.reEditWord = savedReEdit }
+        AppState.shared.reEditWord = true      // re-edit bật là ca dễ hỏng nhất ("com" + s → "cóm")
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "mail ")
+        h.type("user@gm")
+        XCTAssertEqual(h.client.string, "mail user@gm", dump(h))
+        CaretHint.shared.setPendingForTesting(
+            EmailDomainPrediction.suggestion(before: h.client.string, typed: "gm", raw: "gm"))
+        h.keyCode(48, chars: "\t")
+        XCTAssertEqual(h.client.string, "mail user@gmail.com", dump(h))
+        h.type("s")
+        XCTAssertEqual(h.client.string, "mail user@gmail.coms", "engine reset — không bỏ dấu ngược: " + dump(h))
+        // Chỉ phím NGAY SAU: re-edit bình thường trở lại cho chữ gõ tay sau đó.
+    }
+
+    func testEmailDomainRightAfterAtThenTab() {
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "mail ")
+        h.type("user@")
+        XCTAssertEqual(h.client.string, "mail user@", dump(h))
+        CaretHint.shared.setPendingForTesting(EmailDomainPrediction.suggestion(before: h.client.string, typed: "", raw: ""))
+        h.keyCode(48, chars: "\t")
+        XCTAssertEqual(h.client.string, "mail user@gmail.com", "không lặp @: " + dump(h))
+        h.key(" ")
+        h.type("ok")
+        XCTAssertEqual(h.client.string, "mail user@gmail.com ok", dump(h))
+    }
+
+    /// Màn hình lệch (app đổi chữ) ở nhánh thay từ đang soạn ⇒ không đụng gì.
+    func testEmailDomainReplaceReReadsScreen() {
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "user@")
+        CaretHint.shared.setPendingForTesting(
+            CaretSuggestion(kind: .email, display: "yahoo.com", replace: "yahô", insert: "yahoo.com"))
+        h.keyCode(48, chars: "\t")
+        XCTAssertEqual(h.client.string, "user@", dump(h))
+        let h2 = ControllerHarness(bundleID: "com.apple.TextEdit", text: "user@yahô")
+        CaretHint.shared.setPendingForTesting(
+            CaretSuggestion(kind: .email, display: "yahoo.com", replace: "yahô", insert: "yahoo.com"))
+        h2.keyCode(48, chars: "\t")
+        XCTAssertEqual(h2.client.string, "user@yahoo.com", dump(h2))
     }
 
     func testAcceptSpaceReactionTable() {

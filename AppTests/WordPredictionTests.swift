@@ -4,6 +4,7 @@
 // ứng viên trên CaretHint, đo đạc; seed từ kế tiếp (một từ ngữ cảnh), tiếng Anh giữa câu Việt,
 // công tắc "Lọc từ nhạy cảm".
 import XCTest
+import TelexCore
 @testable import VietTelex
 
 final class WordPredictionTests: XCTestCase {
@@ -12,6 +13,69 @@ final class WordPredictionTests: XCTestCase {
     override func tearDown() {
         CaretHint.shared.setPendingForTesting(nil)
         SystemInlinePrediction.setForTesting(nil)
+    }
+
+    // MARK: Đuôi email (EmailDomainPrediction — song sinh iOS EmailDomains, Windows, Linux)
+
+    private func email(_ before: String, typed: String = "", raw: String? = nil) -> CaretSuggestion? {
+        EmailDomainPrediction.suggestion(before: before, typed: typed, raw: raw ?? typed)
+    }
+
+    func testEmailDomainRightAfterAtSuggestsGmail() {
+        XCTAssertEqual(email("user@"), CaretSuggestion(kind: .email, display: "gmail.com", replace: "", insert: "gmail.com"))
+        XCTAssertEqual(email("hello user@")?.display, "gmail.com")
+        XCTAssertEqual(email("<user@")?.display, "gmail.com")
+        XCTAssertEqual(email("a.b_c%d+e-f@")?.display, "gmail.com")
+    }
+
+    func testEmailDomainPrefixInsertsOnlyMissingPart() {
+        XCTAssertEqual(email("user@ic", typed: "ic"),
+                       CaretSuggestion(kind: .email, display: "icloud.com", replace: "", insert: "loud.com"))
+        XCTAssertEqual(email("user@gm", typed: "gm")?.insert, "ail.com")
+        XCTAssertEqual(email("user@GM", typed: "GM")?.insert, "ail.com", "không phân biệt hoa thường")
+        XCTAssertEqual(email("user@gmail.")?.insert, "com", "sau dấu chấm (ranh giới) — chỉ phần còn thiếu")
+        XCTAssertEqual(email("user@gmail.c", typed: "c")?.insert, "om")
+        XCTAssertEqual(email("user@o", typed: "o")?.display, "outlook.com")
+        XCTAssertEqual(email("user@y", typed: "y")?.display, "yahoo.com")
+        XCTAssertEqual(email("user@g", typed: "g")?.display, "gmail.com", "Gmail trước")
+    }
+
+    func testEmailDomainNoSuggestion() {
+        XCTAssertNil(email("user@gmail.com"), "đã gõ đủ")
+        XCTAssertNil(email("user@x", typed: "x"), "không khớp nhà cung cấp nào")
+        XCTAssertNil(email("@"), "phần trước @ rỗng")
+        XCTAssertNil(email("hi @"))
+        XCTAssertNil(email("phúc@"), "phần trước @ không phải [A-Za-z0-9._%+-]")
+        XCTAssertNil(email("x@y@"))
+        XCTAssertNil(email("user@gmail.com.vn"))
+        XCTAssertNil(email("hello"))
+        XCTAssertNil(email("user@gm", typed: "xx"), "từ đang soạn không khớp màn hình")
+    }
+
+    /// Telex đổi "yahoo" thành "yahô" khi gõ thô: khớp theo phím thô, thay đúng từ đang soạn.
+    func testEmailDomainMatchesRawKeysWhenTelexMangled() {
+        var e = TelexEngine()
+        for c in "yahoo" { _ = e.feed(c) }
+        XCTAssertNotEqual(e.composed, "yahoo", "tiền đề: Telex đổi oo")
+        let s = email("user@" + e.composed, typed: e.composed, raw: e.rawKeystrokes)
+        XCTAssertEqual(s, CaretSuggestion(kind: .email, display: "yahoo.com", replace: e.composed, insert: "yahoo.com"))
+        XCTAssertEqual(email("user@outlô", typed: "outlô", raw: "outloo"),
+                       CaretSuggestion(kind: .email, display: "outlook.com", replace: "outlô", insert: "outlook.com"))
+        XCTAssertNil(email("user@yahô", typed: "yahô", raw: "yahooo"), "phím thô quá tên miền")
+    }
+
+    func testEmailDomainIsPredictionFamilyAndTabAccepts() {
+        XCTAssertTrue(CaretSuggestion.Kind.email.isPrediction)
+        XCTAssertEqual(CaretHintLogic.surface(kind: .email, imkPath: true, hasCandidateWindow: true, source: .imkFirstRect), .panel)
+        XCTAssertEqual(CaretHintLogic.action(kind: .email, keyCode: CaretHintLogic.kTab, plain: true), .accept)
+        XCTAssertEqual(CaretHintLogic.action(kind: .email, keyCode: CaretHintLogic.kReturn, plain: true), .dismissPass,
+                       "Enter không cướp (gửi / xuống dòng)")
+    }
+
+    func testEmailTokenDetection() {
+        XCTAssertTrue(EmailDomainPrediction.looksLikeEmailToken("mail user@g"))
+        XCTAssertFalse(EmailDomainPrediction.looksLikeEmailToken("user@ gm"))
+        XCTAssertFalse(EmailDomainPrediction.looksLikeEmailToken("được"))
     }
 
     // MARK: Công tắc

@@ -295,6 +295,8 @@ void refreshFieldFlags(VtIBusEngine *self) {
     // URL / e-mail fields. IBus has no multi-line hint: the text start is never capitalised.
     self->session->setAutoTextAllowed(vt::autotext::appAllowed(*self->appId) && !field.terminal &&
                                       !field.urlOrEmail);
+    // Email-domain suggestion (part of word_prediction): e-mail / URL fields included.
+    self->session->setEmailDomainsAllowed(vt::autotext::appAllowed(*self->appId) && !field.terminal);
     self->session->setMultiline(false);
     // VIETTELEX_DEBUG=1 in ibus-daemon's environment: why a field got its mode (stderr).
     static const bool debug = std::getenv("VIETTELEX_DEBUG") != nullptr;

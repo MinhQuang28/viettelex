@@ -175,6 +175,10 @@ public:
     // (Fcitx5 CapabilityFlag::Multiline): only then the very start of the text is a sentence
     // start (a username / search box is not capitalised — macOS FocusedRole).
     void setAutoTextAllowed(bool allowed) { autoTextAllowed_ = allowed; }
+    // Email-domain suggestion ("user@" → gmail.com, part of word_prediction): `allowed` = not a
+    // terminal / code editor (frontends: autotext::appAllowed && !terminal). Unlike the rest of
+    // auto text it IS offered in URL / e-mail fields — that is where addresses are typed.
+    void setEmailDomainsAllowed(bool allowed) { emailAllowed_ = allowed; }
     void setMultiline(bool on) { multiline_ = on; }
     bool autoTextAllowed() const { return autoTextAllowed_; }
 
@@ -305,6 +309,13 @@ private:
     bool lastEmDashOurs_ = false;
     bool autoCappedWord_ = false, suppressAutoCap_ = false;
     std::string declinedPrediction_;
+    // Email-domain suggestion (autotext::emailDomainSuggestion), shown at once (a string check,
+    // no helper). declinedEmail_: Esc — not again for this address (until a new '@' / the
+    // text no longer looks like one).
+    bool emailAllowed_ = true;
+    bool declinedEmail_ = false;
+    bool offerEmailDomain(InputContext &ic);
+    bool applyEmailDomain(InputContext &ic);
     bool filter_ = true;          // Settings::filterSensitive — sent to the helper only when off
     // "Học từ bạn gõ" (Settings::learnWords; LearnedModel.swift in the helper, LearnStore.swift):
     // committed words this Session composed → "learn" lines (HintRequest::oneway). Only with word

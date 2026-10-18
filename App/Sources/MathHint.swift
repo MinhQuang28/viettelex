@@ -51,8 +51,14 @@ enum MathHintLogic {
 /// chèn thêm — kết quả phép tính), `insert` = chữ chèn vào.
 struct CaretSuggestion: Equatable {
     /// math/number: MathHint.swift; typo/tones/date: CaretSuggestions.swift;
-    /// predict: gợi ý từ (WordPrediction.swift).
-    enum Kind: Equatable { case math, number, typo, tones, date, predict }
+    /// predict: gợi ý từ (WordPrediction.swift); email: đuôi email "user@g" → gmail.com
+    /// (EmailDomainPrediction, WordPrediction.swift) — cùng họ gợi ý từ (ô nổi, click được,
+    /// nhường gợi ý khác) nhưng chèn nguyên văn, không dấu cách, không học.
+    enum Kind: Equatable {
+        case math, number, typo, tones, date, predict, email
+        /// Họ gợi ý từ (cài đặt "Show inline predictive text").
+        var isPrediction: Bool { self == .predict || self == .email }
+    }
     let kind: Kind
     let display: String
     let replace: String
@@ -301,7 +307,7 @@ enum CaretHintLogic {
     /// viên, gợi ý từ chỉ có một ứng viên, không số thứ tự (Phil 16/10/2026).
     static func surface(kind: CaretSuggestion.Kind, imkPath: Bool, hasCandidateWindow: Bool,
                         source: CaretSource) -> Surface {
-        guard kind != .predict else { return .panel }
+        guard !kind.isPrediction else { return .panel }
         return imkPath && hasCandidateWindow && source == .imkFirstRect ? .candidates : .panel
     }
 }
@@ -325,6 +331,8 @@ final class CaretHint {
     private var fruitlessTones = ToneRunLogic.FruitlessMemo()   // guarded by lock
     /// Gợi ý từ: chữ đang gõ đã Esc (không gợi ý lại khi từ vẫn bắt đầu bằng nó).
     private var declinedPrediction: String?                 // guarded by lock
+    /// Đuôi email đã Esc: không mời lại tới khi bắt đầu cụm mới (dấu cách / "@" mới).
+    private var declinedEmail = false                       // guarded by lock
     /// Gợi ý từ: hẹn giờ dừng-gõ đang chờ (MAIN).
     private var predictWork: DispatchWorkItem?
     /// Click ô nổi (gợi ý từ, đường IMK) → controller áp dụng (MAIN).
@@ -568,6 +576,7 @@ final class CaretHint {
             case .typo: rejectedTypos.add(String(p.replace.dropLast(1)))   // bỏ ký tự ranh giới
             case .tones: declinedTones = p.replace
             case .predict: declinedPrediction = p.replace.isEmpty ? nil : p.replace
+            case .email: declinedEmail = true
             default: break
             }
         }
@@ -611,7 +620,7 @@ final class CaretHint {
         predictWork?.cancel()
         let gen = keyGeneration
         let busy = lock.withLock { () -> Bool in
-            if typed.isEmpty { declinedPrediction = nil }       // từ mới: bỏ lời từ chối cũ
+            if typed.isEmpty { declinedPrediction = nil; declinedEmail = false }   // từ mới / "@" mới
             return pending != nil || PredictionLogic.muted(typed: typed, declined: declinedPrediction)
         }
         guard !busy else { return }
@@ -628,9 +637,16 @@ final class CaretHint {
                                client: IMKTextInput, controller: TelexInputController) {
         guard keyGeneration == gen, !isShowing, !IsSecureEventInputEnabled(), !SecureFieldDetector.isSecure,
               SystemInlinePrediction.isOn,
-              let before = Self.textBeforeCaret(client: client, window: PredictionLogic.window),
-              let req = PredictionLogic.request(before: before, typed: typed, english: english)
+              let before = Self.textBeforeCaret(client: client, window: PredictionLogic.window)
         else { return }
+        // Đuôi email ("user@", "user@g"): chỉ so chuỗi — hiện ngay, không qua hàng đợi nền.
+        if EmailDomainPrediction.looksLikeEmailToken(before) {
+            guard !lock.withLock({ declinedEmail }),
+                  let s = EmailDomainPrediction.suggestion(before: before, typed: typed, raw: raw) else { return }
+            present(s, before: before, client: client, controller: controller)
+            return
+        }
+        guard let req = PredictionLogic.request(before: before, typed: typed, english: english) else { return }
         work.async { [weak self] in
             guard let self, self.keyGeneration == gen else { return }
             let t0 = DispatchTime.now().uptimeNanoseconds
@@ -682,9 +698,9 @@ final class CaretHint {
     private func present(_ s: CaretSuggestion, before: String, client: IMKTextInput?,
                          controller: TelexInputController?) {
         // Gợi ý từ nhường mọi gợi ý khác đang hiện (sửa lỗi gõ, thêm dấu, ngày giờ…).
-        if s.kind == .predict, lock.withLock({ pending.map { $0.kind != .predict } ?? false }) { return }
+        if s.kind.isPrediction, lock.withLock({ pending.map { !$0.kind.isPrediction } ?? false }) { return }
         hideWindows()
-        pickController = s.kind == .predict ? controller : nil
+        pickController = s.kind.isPrediction ? controller : nil
         let screens = NSScreen.screens.map(\.frame)
         // Client IMK cho vị trí: đường IMK dùng chính client; đường tap mượn client của
         // controller đang active NẾU cùng app đang trước (firstRect thường đúng hơn AX).
@@ -809,7 +825,7 @@ final class CaretHint {
     private func showPanel<Note>(_ s: CaretSuggestion,
                                  place: (NSSize) -> (origin: NSPoint, basis: Note)?) -> Note? {
         // Một nhãn + "⇥ Tab" cho mọi loại; gợi ý từ (đường IMK) thì click cả ô = nhận.
-        let clickable = s.kind == .predict && pickController != nil
+        let clickable = s.kind.isPrediction && pickController != nil
         let label = HintLabel(labelWithString: s.display)
         label.font = .monospacedDigitSystemFont(ofSize: 14, weight: .semibold)
         let hint = HintLabel(labelWithString: "⇥ Tab")

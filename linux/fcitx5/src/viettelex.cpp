@@ -643,6 +643,8 @@ private:
         // Auto text (period / capitals / quotes / prediction): never in terminals, code
         // editors, URL / e-mail fields; text start counts as a sentence start only multi-line.
         st->session.setAutoTextAllowed(vt::autotext::appAllowed(st->appId) && !field.terminal && !field.urlOrEmail);
+        // Email-domain suggestion (part of word_prediction): e-mail / URL fields included.
+        st->session.setEmailDomainsAllowed(vt::autotext::appAllowed(st->appId) && !field.terminal);
         st->session.setMultiline((caps.toInteger() & kCapMultiline) != 0);
         // VIETTELEX_DEBUG=1 in Fcitx5's environment: why a field got its mode (journal / stderr).
         static const bool debug = std::getenv("VIETTELEX_DEBUG") != nullptr;
