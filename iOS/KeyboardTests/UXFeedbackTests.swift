@@ -477,6 +477,8 @@ final class ClipboardBarRegressionTests: XCTestCase {
 
     /// Bàn phím đổi chiều cao khi panel đang mở (xoay / host cấp lại khung): panel phải bám
     /// vùng phím — trước đây cao cố định + neo đáy ⇒ trồi lên đè dải gợi ý.
+    /// 18/10/2026 (bar mặc định Vừa 26pt): host cấp thiếu (240) ⇒ bar CO về chỗ còn lại (sàn 20),
+    /// đỉnh bar đứng yên; cấp đủ lại thì về đúng khung cũ.
     @MainActor func testPanelFollowsKeyAreaWhenKeyboardResizes() {
         let (kb, root, win, h) = makeHosted(height: 290)
         kb.showSuggestions(.init(nextWords: ["Em", "Anh", "Tôi"]))
@@ -487,8 +489,12 @@ final class ClipboardBarRegressionTests: XCTestCase {
             h.constant = height
             win.layoutIfNeeded()
             XCTAssertEqual(p.frame, kb.keyAreaFrame, "cao \(height)")
-            XCTAssertGreaterThanOrEqual(p.frame.minY, bar.maxY, "cao \(height): panel đè bar")
-            XCTAssertEqual(kb.debugStripLayout().bar, bar)
+            let now = kb.debugStripLayout().bar
+            XCTAssertGreaterThanOrEqual(p.frame.minY, now.maxY, "cao \(height): panel đè bar")
+            XCTAssertEqual(now.minY, bar.minY, "cao \(height): đỉnh bar đứng yên")
+            XCTAssertEqual(now.width, bar.width)
+            XCTAssertGreaterThanOrEqual(now.height, SuggestionBarHeight.baseRow, "cao \(height)")
+            if height >= 290 { XCTAssertEqual(now, bar, "cao \(height)") }
         }
         withExtendedLifetime(win) {}
     }

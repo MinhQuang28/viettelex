@@ -14,6 +14,7 @@ import com.viettelex.android.R
 import com.viettelex.keyboard.BarChip
 import com.viettelex.keyboard.BarLayout
 import com.viettelex.keyboard.SlotTapLatch
+import com.viettelex.keyboard.SuggestionBarHeight
 import com.viettelex.keyboard.SuggestionCount
 import com.viettelex.keyboard.SuggestionSet
 import com.viettelex.keyboard.SuggestionSlots
@@ -124,10 +125,14 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
     private fun tools(): Boolean = StripGeometry.toolsShown(hasContent, plane == Plane.EDIT, clipOpen)
 
     private val wordPaint = TextPaint(theme.text(StripGeometry.WORD_SP))
-    private val wordOff = theme.centerOffset(wordPaint)
+    private var wordOff = theme.centerOffset(wordPaint)
     /** Gboard nhấn mạnh gợi ý giữa (medium). */
     private val wordCenterPaint = TextPaint(theme.text(StripGeometry.WORD_SP, medium = true))
-    private val wordCenterOff = theme.centerOffset(wordCenterPaint)
+    private var wordCenterOff = theme.centerOffset(wordCenterPaint)
+    /** Strip MỞ (dp) theo "Chiều cao thanh gợi ý" ([SuggestionBarHeight]; mặc định Vừa = [KeyLayout.OPEN_STRIP]). */
+    var openStripDp = KeyLayout.OPEN_STRIP; private set
+    /** Tâm dọc nội dung bar khi mở (dp). */
+    private fun barCyDp() = KeyLayout.barCy(openStripDp)
     private val emojiPaint = theme.text(22f)
     private val emojiOff = theme.centerOffset(emojiPaint)
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG)
@@ -182,16 +187,18 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
 
     /** Chiều cao strip (dp → px) — root dùng để đặt vùng phím. */
     fun stripPx(): Float = if (!reserved) 0f
-        else theme.dp(KeyLayout.COLLAPSED_STRIP + (KeyLayout.OPEN_STRIP - KeyLayout.COLLAPSED_STRIP) * openness)
+        else theme.dp(KeyLayout.COLLAPSED_STRIP + (openStripDp - KeyLayout.COLLAPSED_STRIP) * openness)
 
     /** Chiều cao view = strip + 4 dp phủ lên mép hàng phím (nút nổi 18 dp). */
     fun viewHeightPx(): Int = if (!reserved) 0 else (stripPx() + theme.dp(4f)).toInt()
 
     /** [reserved]: giữ chỗ dải dù ô này không có gợi ý (bàn phím không đổi cao giữa các ô). */
     fun configure(enabled: Boolean, collapsed: Boolean, templatesEnabled: Boolean, reserved: Boolean = enabled,
-                  emojiButton: Boolean = false, slotSetting: Int = SuggestionCount.AUTO) {
+                  emojiButton: Boolean = false, slotSetting: Int = SuggestionCount.AUTO,
+                  barHeight: SuggestionBarHeight = SuggestionBarHeight.DEFAULT, landscapeCap: Boolean = false) {
         anim?.cancel()
         this.slotSetting = slotSetting
+        applyBarHeight(barHeight, landscapeCap)
         if (emojiButton != this.emojiButton) { this.emojiButton = emojiButton; layoutPaste() }
         this.suggestionsEnabled = enabled
         this.reserved = reserved || enabled
@@ -201,6 +208,20 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         lastSig = ""
         if (!enabled || collapsed) { clearContent(); notePasteOffer(false) }
         invalidate()
+    }
+
+    /** "Chiều cao thanh gợi ý": strip mở + cỡ chữ gợi ý (chỉ khi đổi — lúc hiện bàn phím, không mỗi phím). */
+    private fun applyBarHeight(h: SuggestionBarHeight, landscapeCap: Boolean) {
+        val open = h.openStripDp(landscapeCap)
+        val sp = theme.sp(h.wordSp(landscapeCap))
+        if (open == openStripDp && sp == wordPaint.textSize) return
+        openStripDp = open
+        if (sp != wordPaint.textSize) {
+            wordPaint.textSize = sp; wordCenterPaint.textSize = sp
+            wordOff = theme.centerOffset(wordPaint); wordCenterOff = theme.centerOffset(wordCenterPaint)
+        }
+        lastSet?.let { layoutSlots(it) }
+        layoutPaste()
     }
 
     fun setPlane(p: Plane) {
@@ -333,7 +354,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
 
     /** Chip clipboard kiểu Gboard: pill màu secondary container giữa bar, icon + "Dán" + mô tả. */
     private fun layoutPaste() {
-        val cy = theme.dp(KeyLayout.BAR_CY)
+        val cy = theme.dp(barCyDp())
         val h = theme.dp(StripGeometry.PILL_H)
         val icon = theme.dp(18f); val gap = theme.dp(6f); val padH = theme.dp(12f)
         val tW = pasteTitle.measureText(pasteTitleText); val sW = pasteSub.measureText(pasteSubText)
@@ -386,7 +407,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         val o = openness
         // Icon toolbar kiểu Gboard ở đúng vị trí ☰/⌄ cũ: nội suy giữa vị trí nổi (thu gọn)
         // và vị trí zone (mở).
-        val cyOpen = theme.dp(KeyLayout.BAR_CY)
+        val cyOpen = theme.dp(barCyDp())
         val cyFloat = theme.dp(7f)
         val cy = cyFloat + (cyOpen - cyFloat) * o
         if (burgerShown()) {
@@ -471,7 +492,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
 
     /** Pill giữa bar (cùng kiểu thẻ Dán) cho xem trước vuốt ⌫ / Khôi phục. */
     private fun drawChip(c: Canvas, text: String, alpha: Int, trunc: TextUtils.TruncateAt) {
-        val cy = theme.dp(KeyLayout.BAR_CY)
+        val cy = theme.dp(barCyDp())
         val padH = theme.dp(14f); val h = theme.dp(StripGeometry.PILL_H)
         val maxW = maxOf(0f, width - 2 * sideW() - 2 * padH)
         val t = TextUtils.ellipsize(text, chipText, maxW, trunc).toString()

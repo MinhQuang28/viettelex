@@ -106,6 +106,8 @@ object Keys {
     const val NUMBER_ROW_FULL_HEIGHT = "numberRowFullHeight"
     /** Int 0…48 (dp) — nâng bàn phím: đệm nền dưới hàng phím đáy, mặc định 0 (#112). */
     const val KEYBOARD_RAISE = "keyboardRaise"
+    /** String "low" | "medium" | "high" — chiều cao thanh gợi ý ([SuggestionBarHeight]), mặc định "medium". Tên như iOS App Group. */
+    const val SUGGESTION_BAR_HEIGHT = "suggestionBarHeight"
     /** Bool — giữ q…p ra 1…0 (chỉ khi hàng số tắt), mặc định BẬT — [KeyAlternates]. */
     const val LONG_PRESS_NUMBERS = "longPressNumbers"
     /** Bool — giữ a–l, z–m ra ký hiệu, mặc định TẮT — [KeyAlternates]. */

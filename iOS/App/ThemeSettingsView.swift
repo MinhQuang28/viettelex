@@ -32,6 +32,9 @@ struct ThemeSettingsView: View {
     @AppStorage(KeyGeometry.RowAdjust.key, store: groupDefaults) private var rowHeightAdjust = 0
     /// "Nâng bàn phím" 0…48pt (đệm dưới hàng phím đáy).
     @AppStorage(KeyGeometry.RowAdjust.raiseKey, store: groupDefaults) private var keyboardRaise = 0
+    /// "Chiều cao thanh gợi ý" Thấp/Vừa/Cao (SuggestionBarHeight, mặc định Vừa).
+    @AppStorage(SuggestionBarHeight.key, store: groupDefaults) private var suggestionBarHeight = SuggestionBarHeight.defaultValue.rawValue
+    private var barHeightValue: SuggestionBarHeight { SuggestionBarHeight.parse(suggestionBarHeight) }
     private var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     @AppStorage("numberRow", store: groupDefaults) private var numberRow = false
     @AppStorage(KeyGeometry.numberRowFullHeightKey, store: groupDefaults) private var numberRowFullHeight = false
@@ -53,14 +56,13 @@ struct ThemeSettingsView: View {
                                pad: UIDevice.current.userInterfaceIdiom == .pad, landscape: false,
                                rowHeightAdjust: rowHeightAdjust, numberRow: numberRow,
                                suggestions: showSuggestions, raise: keyboardRaise,
-                               numberRowFullHeight: numberRowFullHeight)
+                               numberRowFullHeight: numberRowFullHeight, barHeight: barHeightValue)
     }
 
     /// Strip gợi ý dọc (iPhone: theo bàn phím gốc — KeyGeometry.StockSize.openStrip).
     private var wallpaperStrip: CGFloat {
-        guard !isPad else { return Wallpaper.suggestionStrip }
         let w = min(UIScreen.main.bounds.width, UIScreen.main.bounds.height)
-        return KeyGeometry.StockSize.openStrip(width: w, landscape: false) ?? Wallpaper.suggestionStrip
+        return Wallpaper.openStrip(width: w, pad: isPad, landscape: false, stock: !isPad, barHeight: barHeightValue)
     }
 
     private static func loadPreviewImage() -> UIImage? {
@@ -190,6 +192,18 @@ struct ThemeSettingsView: View {
                            in: 0...Double(KeyGeometry.RowAdjust.raiseMax),
                            step: Double(KeyGeometry.RowAdjust.raiseStep))
                     Text(L("Thêm khoảng trống dưới hàng phím cuối để bàn phím nằm cao hơn."))
+                        .font(.footnote).foregroundStyle(.secondary)
+                }
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(L("Chiều cao thanh gợi ý"))
+                    Picker(L("Chiều cao thanh gợi ý"), selection: $suggestionBarHeight) {
+                        Text(L("Thấp")).tag(SuggestionBarHeight.low.rawValue)
+                        Text(L("Vừa")).tag(SuggestionBarHeight.medium.rawValue)
+                        Text(L("Cao")).tag(SuggestionBarHeight.high.rawValue)
+                    }
+                    .pickerStyle(.segmented)
+                    .labelsHidden()
+                    Text(L("Thanh gợi ý cao hơn thì dễ chạm trúng từ gợi ý hơn; bàn phím cao thêm đúng phần đó. Khi xoay ngang, mức Cao dùng như Vừa."))
                         .font(.footnote).foregroundStyle(.secondary)
                 }
                 settingToggle(L("Hiện logo Vᴛ"), L("Logo mờ ở góc phải phím cách."), isOn: $showSpaceLogo)

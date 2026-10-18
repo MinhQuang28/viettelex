@@ -128,8 +128,9 @@ class BackupTests {
             "keyboardTransparency" to 250, "keyLabelTransparency" to 35,
             BackupPrefs.SHORTCUTS_KEY to "# VietTelex — bảng gõ tắt\nko: không\n")
         val p = BackupPrefs.snapshot({ prefs[it] }, listOf(TemplateItem("", "a")), null)
-        assertEquals(56, p.settings!!.size)
+        assertEquals(57, p.settings!!.size)   // +suggestionBarHeight (18/10/2026)
         assertEquals(0, p.settings!![Keys.SUGGESTION_COUNT])   // số từ gợi ý: mặc định Tự động
+        assertEquals("medium", p.settings!![Keys.SUGGESTION_BAR_HEIGHT])   // chiều cao thanh gợi ý: mặc định Vừa
         assertEquals("1h", p.settings!![Keys.CLIPBOARD_TTL])   // giữ lịch sử clipboard: mặc định 1 giờ
         assertEquals("comma", p.settings!![Keys.SPACE_SIDE_KEY])   // phím cạnh dấu cách: mặc định ","
         assertEquals("bottom", p.settings!![Keys.EMOJI_KEY_PLACEMENT])   // nút emoji: mặc định hàng dưới

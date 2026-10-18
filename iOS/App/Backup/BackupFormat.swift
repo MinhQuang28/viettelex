@@ -62,6 +62,9 @@ enum BackupSettings {
         Spec(key: "clipboardTTL", kind: .string("1h", ["1h", "24h", "7d"])),
         Spec(key: "rowHeightAdjust", kind: .int(0, -10...10)),
         Spec(key: "keyboardRaise", kind: .int(0, 0...48)),   // "Nâng bàn phím" (cùng khoá Android)
+        // "Chiều cao thanh gợi ý" (SuggestionBarHeight) — cùng khoá + id Android; lạ ⇒ bỏ qua (máy giữ Vừa).
+        Spec(key: SuggestionBarHeight.key, kind: .string(SuggestionBarHeight.defaultValue.rawValue,
+                                                        SuggestionBarHeight.allCases.map(\.rawValue))),
         Spec(key: "shortcutsEnabled", kind: .bool(true)),
         Spec(key: "addTonesChip", kind: .bool(false)),
         Spec(key: "numberChips", kind: .bool(true)),

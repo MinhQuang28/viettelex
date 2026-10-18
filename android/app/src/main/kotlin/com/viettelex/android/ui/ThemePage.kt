@@ -387,6 +387,15 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
         RowDivider()
         KeyboardRaiseRow()
         RowDivider()
+        // "Chiều cao thanh gợi ý" Thấp / Vừa (mặc định) / Cao — SuggestionBarHeight, cùng khoá iOS.
+        ChoiceRow(Keys.SUGGESTION_BAR_HEIGHT, Prefs.D.suggestionBarHeight.id, tr("Chiều cao thanh gợi ý"),
+            tr("Thanh gợi ý cao hơn thì dễ chạm trúng từ gợi ý hơn; bàn phím cao thêm đúng phần đó. Khi xoay ngang, mức Cao dùng như Vừa."),
+            listOf(com.viettelex.keyboard.SuggestionBarHeight.LOW.id to tr("Thấp"),
+                com.viettelex.keyboard.SuggestionBarHeight.MEDIUM.id to tr("Vừa"),
+                com.viettelex.keyboard.SuggestionBarHeight.HIGH.id to tr("Cao"))) {
+            com.viettelex.keyboard.SuggestionBarHeight.of(it).id
+        }
+        RowDivider()
         BoolToggle(Keys.SHOW_SPACE_LOGO, Prefs.D.showSpaceLogo, tr("Hiện logo Vᴛ"), tr("Logo mờ ở góc phải phím cách."))
     }
 

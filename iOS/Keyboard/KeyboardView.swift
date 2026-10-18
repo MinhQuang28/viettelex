@@ -32,8 +32,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// (touch rơi sang app host). Dùng cho mọi nền phủ vùng bàn phím.
     static let touchableClear = UIColor(white: 0, alpha: 0.01)
 
-    /// Strip gợi ý khi mở. 36 → 30 (25/09/2026, so ảnh stock: vùng bar stock ≈53pt,
-    /// VietTelex ≈59pt — bàn phím cao hơn stock chủ yếu ở đây).
+    /// Strip gợi ý khi mở ở mức "Chiều cao thanh gợi ý" = Thấp (bố cục cũ). 36 → 30 (25/09/2026,
+    /// so ảnh stock: vùng bar stock ≈53pt, VietTelex ≈59pt), +4 đệm trên ⇒ 34. Mức Vừa (mặc định
+    /// từ 18/10/2026) / Cao cộng SuggestionBarHeight.delta (openStripNow).
     static let openStrip: CGFloat = 34
     private static var isPad: Bool { UIDevice.current.userInterfaceIdiom == .pad }
     /// Bo góc phím như stock iOS 26+ (cũ: 5).
@@ -567,15 +568,16 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         return b
     }()
 
-    /// Bar là HÀNG NỘI DUNG cố định 20pt ghim đỉnh (tâm chữ y=10), thụt 2 mép chừa chỗ
-    /// burgerZone/chevronZone (+ nút 📋) — gợi ý nằm giữa, không chồng lên nút mép.
-    /// Frame thường không đổi ⇒ SuggestionBar không layout lại.
+    /// Bar là HÀNG NỘI DUNG ghim đỉnh, cao barRowNow (20 ở mức Thấp, + delta "Chiều cao thanh
+    /// gợi ý"), thụt 2 mép chừa chỗ burgerZone/chevronZone (+ nút 📋) — gợi ý nằm giữa, không
+    /// chồng lên nút mép. Frame thường không đổi ⇒ SuggestionBar không layout lại.
     private func layoutSuggestionBar() {
         let w = Self.stripZoneWidth
         let right = w + barRightExtras
-        // Host cấp thiếu chiều cao ⇒ strip co (phím giữ nguyên): bar dời lên VỪA đủ để không
-        // đè hàng đầu (còn vừa thì đứng yên).
-        let h: CGFloat = 20
+        // Host cấp thiếu chiều cao ⇒ strip co (phím giữ nguyên): bar Vừa/Cao co về chỗ còn lại
+        // trước (sàn 20 = mức Thấp), hết chỗ mới dời lên VỪA đủ để không đè hàng đầu.
+        let room = rowsContainer.frame.height > 0 ? rowsContainer.frame.minY - Self.barTopPad : .greatestFiniteMagnitude
+        let h = max(min(barRowNow, room), min(barRowNow, SuggestionBarHeight.baseRow))
         let squeeze = rowsContainer.frame.height > 0
             ? min(0, rowsContainer.frame.minY - (Self.barTopPad + h)) : 0
         let f = CGRect(x: w, y: Self.barTopPad + squeeze, width: max(bounds.width - w - right, 0), height: h)
@@ -616,7 +618,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         chevronZone.imageView?.transform = .identity   // bar mở = chevron xuôi
         // Icon canh giữa trong vùng 20pt TRÊN CÙNG (tâm y≈10) để khớp chữ gợi ý,
         // thay vì canh giữa cả strip 36 (tâm y≈18 → icon thấp hơn chữ, user 2026-07-25).
-        let bottomInset = max(strip - 20 - Self.barTopPad, 0)
+        let bottomInset = max(strip - barRowNow - Self.barTopPad, 0)
         burgerZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
         chevronZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
     }
@@ -814,15 +816,41 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         keyboardRaise = CGFloat(KeyGeometry.RowAdjust.clampRaise(r))
         updateSuggestionChrome(); setNeedsLayout()
     }
+    /// Test hook "Chiều cao thanh gợi ý" (như applyAppearance đọc từ App Group).
+    func debugSetBarHeight(_ h: SuggestionBarHeight) {
+        barHeight = h
+        updateSuggestionChrome(); setNeedsLayout()
+    }
+    /// Test hook: thu gọn / mở bar không animation, không ghi UserDefaults.
+    func debugSetBarCollapsed(_ c: Bool) {
+        barCollapsed = c
+        updateSuggestionChrome(); setNeedsLayout()
+    }
+    var debugOpenStrip: CGFloat { openStripNow }
+    var debugBarRow: CGFloat { barRowNow }
+    var debugSlotFontSize: CGFloat { slotFont.pointSize }
+    /// Vùng chạm ô gợi ý đầu (toạ độ view) — bar + hitInsets.
+    var debugSlotHitRect: CGRect {
+        guard let b = slotButtons.first else { return .zero }
+        return convert(b.bounds.inset(by: b.hitInsets ?? .zero), from: b)
+    }
     #endif
     /// Strip gợi ý mở: iPhone = khoảng từ mép trên tới phím như thanh dự đoán stock (dọc 29:
     /// 29 + khe 11 = 40 ≈ stock 39.7–40); mặc định 34.
     private var openStripNow: CGFloat {
         let spec = rowSpec
-        guard spec.stock else { return Self.openStrip }
-        return KeyGeometry.StockSize.openStrip(width: bounds.width, landscape: isLandscapeNow,
-                                               homeButton: needsGlobe) ?? Self.openStrip
+        let base = spec.stock
+            ? KeyGeometry.StockSize.openStrip(width: bounds.width, landscape: isLandscapeNow,
+                                              homeButton: needsGlobe) ?? Self.openStrip
+            : Self.openStrip
+        return base + barHeight.delta(landscape: barLandscapeCap)
     }
+    /// "Chiều cao thanh gợi ý" (SuggestionBarHeight, mặc định Vừa) — đọc mỗi lần hiện (applyAppearance).
+    private var barHeight = SuggestionBarHeight.defaultValue
+    /// iPhone xoay ngang: mức Cao kẹp về Vừa (màn thấp). Máy gập mở / iPad: không kẹp.
+    private var barLandscapeCap: Bool { !Self.isPad && bounds.width > 0 && phoneForm == .landscape }
+    /// Hàng nội dung bar (chữ gợi ý + icon ☰/⌄/📋/😊): 20 ở mức Thấp, + delta ở Vừa/Cao.
+    private var barRowNow: CGFloat { barHeight.rowHeight(landscape: barLandscapeCap) }
     /// Headroom balloon phía trên hàng đầu (KeyLayout.headroom): chỉ chừa khi có thứ cần vẽ
     /// lên trên phím (ô phóng to / giữ phím ra ký tự phụ). Tắt cả hai ⇒ gợi ý tắt không còn
     /// dải trống 20pt (#119 "thừa khoảng trắng khi đã tắt các chức năng bổ trợ").
@@ -877,6 +905,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if !visible || barCollapsed { pasteCard.isHidden = true; notePasteOffer(false) }   // thu gọn / emoji plane
         lastSuggestionSig = nil   // chrome đổi → lượt show kế ghi lại (kể cả thẻ Dán)
         refreshCollapseButton(visible: visible)
+        refreshBarFonts()
         refreshBarHitInsets()
         layoutEmojiBarButton()   // 😊 Thanh trên: ẩn/hiện theo plane ngay (không đợi layoutSubviews)
     }
@@ -954,8 +983,16 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var slotButtons: [KeyButton] { suggestionBar.slots }
     private var emojiButtons: [KeyButton] { suggestionBar.emojis }
     private var slotDividers: [UIView] { suggestionBar.dividers }
-    private static let slotFont = UIFont.systemFont(ofSize: 17, weight: .regular)
-    private static let chipFont = UIFont.systemFont(ofSize: 14, weight: .regular)
+    /// Cỡ chữ ô gợi ý / chip theo "Chiều cao thanh gợi ý" (17/18/19, chip 14/15) — instance
+    /// cố định (setText so ===), chỉ đổi khi mức đổi (refreshBarFonts, lúc dựng chrome).
+    private var slotFont = UIFont.systemFont(ofSize: 17, weight: .regular)
+    private var chipFont = UIFont.systemFont(ofSize: 14, weight: .regular)
+    private func refreshBarFonts() {
+        let cap = barLandscapeCap
+        let s = barHeight.slotFontSize(landscape: cap), c = barHeight.chipFontSize(landscape: cap)
+        if slotFont.pointSize != s { slotFont = .systemFont(ofSize: s, weight: .regular) }
+        if chipFont.pointSize != c { chipFont = .systemFont(ofSize: c, weight: .regular) }
+    }
     private var barInkApplied: UIColor?
     private var barWired = false
 
@@ -1098,15 +1135,15 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         }
     }
 
-    /// Hit-area ô gợi ý nở xuống đúng phần strip còn lại dưới bar 20pt (strip preset 29 ≠ 34 —
-    /// xoay máy đổi strip ⇒ cập nhật, không lấn hàng Q–P).
+    /// Hit-area ô gợi ý nở xuống đúng phần strip còn lại dưới bar (barRowNow; strip preset 29 ≠ 34,
+    /// + delta "Chiều cao thanh gợi ý" — xoay máy / đổi mức đổi strip ⇒ cập nhật, không lấn hàng Q–P).
     private var barHitStrip: CGFloat = -1
     private func refreshBarHitInsets() {
         guard barWired else { return }
         let strip = openStripNow
         guard strip != barHitStrip else { return }
         barHitStrip = strip
-        let barHit = UIEdgeInsets(top: -8, left: -3, bottom: -max(strip - 20 - Self.barTopPad, 0), right: -3)
+        let barHit = UIEdgeInsets(top: -8, left: -3, bottom: -max(strip - barRowNow - Self.barTopPad, 0), right: -3)
         suggestionBar.hitInsets = UIEdgeInsets(top: barHit.top, left: 0, bottom: barHit.bottom, right: 0)
         for b in slotButtons + emojiButtons { b.hitInsets = barHit }
     }
@@ -1368,7 +1405,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         for (i, b) in slotButtons.enumerated() {
             if let t = texts[i] {
                 let chip = t.insert.hasPrefix(Self.clipTokenPrefix) || (t.insert == Self.pasteToken)
-                suggestionBar.setText(i, t.display, font: chip ? Self.chipFont : Self.slotFont)
+                suggestionBar.setText(i, t.display, font: chip ? chipFont : slotFont)
                 b.payload = t.insert
                 if b.isHidden { b.isHidden = false }
             } else {
@@ -1502,7 +1539,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if barCollapsed {
             emojiZone.contentEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 4, right: 0)
         } else {
-            let bottomInset = max(strip - 20 - Self.barTopPad, 0)
+            let bottomInset = max(strip - barRowNow - Self.barTopPad, 0)
             emojiZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
         }
     }
@@ -1523,7 +1560,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             clipZone.setImage(UIImage(systemName: "doc.on.clipboard",
                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .regular)), for: .normal)
             clipZone.tintColor = palette.barInk.ui.withAlphaComponent(overlayPanel == nil ? 0.45 : 0.9)
-            let bottomInset = max(strip - 20 - Self.barTopPad, 0)
+            let bottomInset = max(strip - barRowNow - Self.barTopPad, 0)
             clipZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
             bringSubviewToFront(clipZone)
         }
@@ -1787,6 +1824,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         spaceSideKey = SpaceSideKey.load(UserDefaultsProvider.shared)
         emojiKeyPlacement = EmojiKeyPlacement.load(UserDefaultsProvider.shared)
         suggestionBar.setting = SuggestionCount.load(UserDefaultsProvider.shared)   // "Số từ gợi ý"
+        barHeight = SuggestionBarHeight.load(UserDefaultsProvider.shared)   // "Chiều cao thanh gợi ý" — rebuild() cuối hàm áp
         // Bàn phím tách đôi (mặc định TẮT) — rebuild() cuối hàm áp nếu đổi.
         splitSetting = UserDefaultsProvider.shared?.bool(forKey: SplitLayout.settingKey) ?? false
         keyPreviewEnabled = Self.keyPreviewSetting(UserDefaultsProvider.shared)

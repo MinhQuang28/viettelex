@@ -148,6 +148,20 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(t.defaults.object(forKey: "autoCorrect") as? Bool, true)
     }
 
+    /// "Chiều cao thanh gợi ý" (suggestionBarHeight) đi theo sao lưu; mặc định "medium"; lạ ⇒ bỏ qua.
+    func testSnapshotIncludesSuggestionBarHeight() throws {
+        let (s, _) = makeStore()
+        XCTAssertEqual(s.snapshot(includeLearned: false).settings?[SuggestionBarHeight.key], .string("medium"))
+        s.defaults.set("high", forKey: SuggestionBarHeight.key)
+        let snap = s.snapshot(includeLearned: false)
+        XCTAssertEqual(snap.settings?[SuggestionBarHeight.key], .string("high"))
+        let (t, _) = makeStore()
+        _ = t.apply(try BackupCodec.decode(BackupCodec.encode(snap)))
+        XCTAssertEqual(SuggestionBarHeight.load(t.defaults), .high)
+        let bad = Data(#"{"format":"viettelex-backup","version":1,"settings":{"suggestionBarHeight":"huge"}}"#.utf8)
+        XCTAssertNil(try BackupCodec.decode(bad).settings?[SuggestionBarHeight.key])
+    }
+
     /// Ngôn ngữ giao diện (uiLanguage, kiểu chuỗi) đi theo sao lưu; mặc định "vi";
     /// giá trị lạ bị bỏ qua cả khi nhập file lẫn khi đồng bộ.
     func testUILanguageBackupRoundTrip() throws {

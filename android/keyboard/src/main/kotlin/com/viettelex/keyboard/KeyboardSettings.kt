@@ -96,6 +96,8 @@ data class KeyboardSettings(
     var numberRowFullHeight: Boolean = false,
     /** Nâng bàn phím 0…[KEYBOARD_RAISE_MAX] dp (đệm nền dưới hàng đáy) — mặc định 0. */
     var keyboardRaise: Int = 0,
+    /** "Chiều cao thanh gợi ý": Thấp / Vừa (mặc định) / Cao ([SuggestionBarHeight]). */
+    var suggestionBarHeight: SuggestionBarHeight = SuggestionBarHeight.DEFAULT,
     /** Giữ q…p ra 1…0 (chỉ khi hàng số tắt) — mặc định BẬT. Giống iOS. */
     var longPressNumbers: Boolean = true,
     /** Giữ a–l, z–m ra ký hiệu — mặc định TẮT. Giống iOS. */
@@ -192,6 +194,7 @@ data class KeyboardSettings(
             s.longPressNumbers = b(Keys.LONG_PRESS_NUMBERS, s.longPressNumbers)
             s.longPressSymbols = b(Keys.LONG_PRESS_SYMBOLS, s.longPressSymbols)
             s.spaceSideKey = SpaceSideKey.of(get(Keys.SPACE_SIDE_KEY))
+            s.suggestionBarHeight = SuggestionBarHeight.of(get(Keys.SUGGESTION_BAR_HEIGHT))
             s.emojiKeyPlacement = EmojiKeyPlacement.of(get(Keys.EMOJI_KEY_PLACEMENT))
             s.keyLabelSize = KeyLabelSize.of(get(Keys.KEY_LABEL_SIZE))
             s.oneHandMode = (get(Keys.ONE_HAND_MODE) as? String)?.takeIf { it == "left" || it == "right" } ?: "off"

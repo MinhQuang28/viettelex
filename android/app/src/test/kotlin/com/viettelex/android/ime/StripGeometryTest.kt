@@ -44,6 +44,12 @@ class StripGeometryTest {
         assertEquals(0.75f, KeyLayout.OPEN_STRIP / row, 0.01f)
         val half = StripGeometry.PILL_H / 2
         assertTrue(KeyLayout.BAR_CY - half >= 0f && KeyLayout.BAR_CY + half <= KeyLayout.OPEN_STRIP)
+        // Mọi mức "Chiều cao thanh gợi ý": pill / ô nhấn vẫn gọn trong dải.
+        for (h in com.viettelex.keyboard.SuggestionBarHeight.entries) {
+            val cy = KeyLayout.barCy(h.openStripDp)
+            assertTrue("$h", cy - half >= 0f && cy + half <= h.openStripDp)
+        }
+        assertEquals(KeyLayout.BAR_CY, KeyLayout.barCy(KeyLayout.OPEN_STRIP), 0f)
         assertTrue(StripGeometry.WORD_SP >= 16f)
         // Icon: thu gọn 14 dp, mở 22 dp (⌄ bớt 2), nội suy theo độ mở và kẹp 0…1.
         assertEquals(14f, StripGeometry.iconDp(0f), 0.001f)

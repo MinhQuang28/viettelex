@@ -45,6 +45,24 @@ class KeyLayoutTest {
         near(KeyLayout.stripDp(KeyLayout.stripReserved(false), false), 0f)
     }
 
+    /**
+     * "Chiều cao thanh gợi ý": strip mở theo mức, tổng bàn phím (ImeInsets.totalHeight) tăng ĐÚNG phần
+     * chênh strip; vùng phím, thu gọn (14) và tắt (0) giữ nguyên. Vừa = 42 dp như trước.
+     */
+    @Test fun suggestionBarHeightOnlyChangesOpenStrip() {
+        val keys = KeyLayout.keyAreaDp(false, false, 0)
+        val base = ImeInsets.totalHeight(KeyLayout.stripDp(true, false).toInt(), keys.toInt(), 0)
+        near(KeyLayout.stripDp(true, false, com.viettelex.keyboard.SuggestionBarHeight.DEFAULT.openStripDp), 42f)
+        for (h in com.viettelex.keyboard.SuggestionBarHeight.entries) {
+            val open = h.openStripDp(landscapeCap = false)
+            val total = ImeInsets.totalHeight(KeyLayout.stripDp(true, false, open).toInt(), keys.toInt(), 0)
+            assertEquals("$h", base + (open - KeyLayout.OPEN_STRIP).toInt(), total)
+            near(KeyLayout.stripDp(true, true, open), 14f)
+            near(KeyLayout.stripDp(false, false, open), 0f)
+            near(KeyLayout.keyAreaDp(false, false, 0), keys)
+        }
+    }
+
     @Test fun emojiSearchIsLettersBelowHeader() {
         // Ô tìm emoji: hàng trên 1/5 trống cho EmojiSearchBar, plane chữ đủ phím bên dưới.
         val head = KeyLayout.searchHeaderPx(H)
