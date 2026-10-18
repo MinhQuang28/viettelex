@@ -192,13 +192,16 @@ data class SuggestionSet(
      * đệm. StripView (#113): idle ⇒ vẫn hiện icon con trỏ + 📋 như Gboard khi chưa gõ.
      */
     val idle: Boolean = false,
+    /** Ứng viên inline thứ 3, 4… (chỉ khi "Số từ gợi ý" > 3 — [SuggestionCount]). */
+    val moreWords: List<String> = emptyList(),
 ) {
-    val isEmpty: Boolean get() = literal == null && word == null && word2 == null && emojis.isEmpty() &&
+    val isEmpty: Boolean get() = literal == null && word == null && word2 == null && moreWords.isEmpty() && emojis.isEmpty() &&
         nextWords.isEmpty() && number == null && math == null
     /** So để bỏ vẽ lại khi không đổi. */
     fun signature(): String = listOf(literal, word, word2, emojis.joinToString("\u0002"),
         nextWords.joinToString("\u0002"), paste.toString(), number, math,
-        clipChips.joinToString("\u0002") { it.label + "\u0003" + it.value }, action, actionLabel, idle.toString()).joinToString("\u0001")
+        clipChips.joinToString("\u0002") { it.label + "\u0003" + it.value }, action, actionLabel, idle.toString(),
+        moreWords.joinToString("\u0002")).joinToString("\u0001")
 
     companion object {
         /** Payload chạm thẻ Dán → truyền vào acceptSuggestion. */
@@ -326,6 +329,11 @@ class KeyboardSession(
     private var addTonesChip = false
     /** Công tắc chip số ([KeyboardSettings.numberChips]) — tắt ⇒ không đọc context sau chữ số. */
     private var numberChipsOn = true
+    /**
+     * Số ứng viên xin cho thanh gợi ý ("Số từ gợi ý", Tự động = 3). StripView có thể hiện ít hơn
+     * khi chật ([SuggestionCount.fit]) — phần dư bỏ, không tốn thêm gì ngoài ≤ 5 ứng viên.
+     */
+    private var slotWant = SuggestionCount.AUTO_SLOTS
     /** "Hiện kết quả phép tính" ([KeyboardSettings.mathResults]) + ô cho phép (không mật khẩu/URL/email). */
     private var mathOn = true
     /** Phím vừa gõ là "=" — chỉ khi đó mới đọc context tìm kết quả phép tính; phím khác ⇒ 0 việc. */
@@ -449,6 +457,7 @@ class KeyboardSession(
         tonesUndo = null; tonesDismissed = null; tonesCacheBefore = null; tonesCachePlan = null
         addTonesChip = settings.addTonesChip
         numberChipsOn = settings.numberChips
+        slotWant = SuggestionCount.resolved(settings.suggestionCount)
         mathOn = settings.mathResults && !field.isSecure && !field.passthrough && !field.urlField
         mathArmed = false; mathChip = null
         spaceFlickEnabled = settings.spaceSwipeLanguage
@@ -1151,19 +1160,19 @@ class KeyboardSession(
             // Tiếng Anh: từ kế tiếp cá nhân chỉ giữ từ tiếng Anh; đệm bằng từ Anh phổ biến
             val personal = if (prev != null) langModel.nextWords(prev, lastWord2, 12) else emptyList()
             padWords(SensitiveWords.filter(personal.filter { SwipeEnglish.containsIfLoaded(it.lowercase()) }, filterSensitive)
-                .take(3).map { caseForContext(it) }, 3)
+                .take(slotWant).map { caseForContext(it) }, slotWant)
         } else if (prev != null) {
             // SuggestRank.nextFill: có trigram tĩnh (prev2, prev) ⇒ bộ ba người dùng đã gõ, rồi trigram,
             // rồi cá nhân/seed; không ⇒ cá nhân/seed trước, lấp bằng bigram tĩnh; rồi mới topWords
             val p2 = lastWord2
             val personal = SensitiveWords.filter(langModel.nextWords(prev, p2, 6), filterSensitive)
             val n = SuggestRank.nextFill(prev, p2, personal, { w -> if (p2 == null) 0 else langModel.trigramCount(p2, prev, w) },
-                { SensitiveWords.filter(it, filterSensitive) })
-            padWords(n.map { caseForContext(displayCase(it, prev)) }, 3)
+                { SensitiveWords.filter(it, filterSensitive) }, need = slotWant)
+            padWords(n.map { caseForContext(displayCase(it, prev)) }, slotWant)
         } else {
-            val top = SensitiveWords.filter(langModel.topWords(6), filterSensitive)
-                .take(3).map { caseForContext(displayCase(it)) }
-            padWords(top, 3)
+            val top = SensitiveWords.filter(langModel.topWords(maxOf(6, slotWant + 3)), filterSensitive)
+                .take(slotWant).map { caseForContext(displayCase(it)) }
+            padWords(top, slotWant)
         }
         val number = refreshNumberChip(proxy)
         val math = refreshMathChip(proxy)
@@ -1252,6 +1261,7 @@ class KeyboardSession(
         val literal = if (predicted == composed) raw else composed
         var word: String? = null
         var word2: String? = null
+        var more: List<String> = emptyList()
         // Từ thêm tay (Từ điển cá nhân) khớp tiền tố: đứng đầu pool (freq cao) — lexicon
         // không có tên riêng/thuật ngữ nên VNSuggest không bao giờ đưa ra.
         val manualHits = langModel.manualCompletions(composed)
@@ -1271,6 +1281,8 @@ class KeyboardSession(
                 SuggestRank.rankInline(pool, pmi, Cp.count(composed), langModel::count, ctx), filterSensitive)
             word = ranked.firstOrNull()?.let { caseForContext(displayCase(it, lastWord), composed) }
             word2 = ranked.getOrNull(1)?.let { caseForContext(displayCase(it, lastWord), composed) }
+            // "Số từ gợi ý" 4–5: ứng viên hạng 3… (ô 1 = nguyên văn, ô 2–3 = word/word2)
+            if (slotWant > 3) more = ranked.drop(2).take(slotWant - 3).map { caseForContext(displayCase(it, lastWord), composed) }
         } else if (fix != null) {
             word = caseForContext(fix, composed)
         }
@@ -1285,16 +1297,22 @@ class KeyboardSession(
         // Bảng biên soạn không có → từ khoá tiếng Anh CLDR ("japan", "pizza") + mã nước IN HOA
         // ("JP"). Từ có dấu / âm tiết Việt không dấu không bao giờ khớp (EmojiSearch.typing).
         if (emojis.isEmpty()) emojis = EmojiSearch.typing(lastWord, composed, raw)
-        if (emojis.isEmpty()) {
-            val words = padWords(listOfNotNull(word, word2), 2, composed)
+        // Không có emoji lấp ô cuối → đệm cho đủ ô (literal + slotWant−1 từ). 1 ô: không đệm — ô
+        // duy nhất hiện ứng viên thật, không có thì nguyên văn (SuggestionSlots.arrange).
+        if (emojis.isEmpty() && slotWant > 1) {
+            val words = padWords(listOfNotNull(word, word2) + more, slotWant - 1, composed)
             word = words.firstOrNull()
-            word2 = if (words.size > 1) words.last() else null
+            word2 = words.getOrNull(1)
+            more = words.drop(2)
         }
         // Đang gõ đúng một chữ tắt: slot chính hiện nội dung sẽ bung (chạm = bung ngay).
         // Nội dung nhiều dòng không lên bar (gõ ranh giới vẫn bung).
         val preview = bridge.shortcutPreview
-        if (preview != null && !preview.contains('\n') && word != preview) { word2 = word ?: word2; word = preview }
-        return SuggestionSet(literal = literal, word = word, word2 = word2, emojis = emojis)
+        if (preview != null && !preview.contains('\n') && word != preview) {
+            if (word != null && word2 != null && more.isNotEmpty()) more = listOf(word2!!) + more
+            word2 = word ?: word2; word = preview
+        }
+        return SuggestionSet(literal = literal, word = word, word2 = word2, emojis = emojis, moreWords = more)
     }
 
     // MARK: nút Dán

@@ -61,8 +61,14 @@ object StripGeometry {
         width - zoneW - rightExtraW(clipW, clipButton, toolsShown, emojiButton)
 
     /** Mép trái/phải slot i (0..2) trong [barL, barR] → ghi vào [l]/[r]. */
-    fun thirds(barL: Float, barR: Float, l: FloatArray, r: FloatArray) {
-        val third = (barR - barL) / 3f
-        for (i in 0..2) { l[i] = barL + i * third; r[i] = if (i == 2) barR else l[i] + third }
+    fun thirds(barL: Float, barR: Float, l: FloatArray, r: FloatArray) = cells(barL, barR, 3, l, r)
+
+    /**
+     * [n] ô bằng nhau ("Số từ gợi ý" — SuggestionCount.fit) trong [barL, barR] → mép trái/phải ô
+     * i (0 until n) ghi vào [l]/[r]; ô cuối chạm đúng [barR].
+     */
+    fun cells(barL: Float, barR: Float, n: Int, l: FloatArray, r: FloatArray) {
+        val w = (barR - barL) / n
+        for (i in 0 until n) { l[i] = barL + i * w; r[i] = if (i == n - 1) barR else l[i] + w }
     }
 }

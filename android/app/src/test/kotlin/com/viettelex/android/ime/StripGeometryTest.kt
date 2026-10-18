@@ -20,6 +20,24 @@ class StripGeometryTest {
         assertEquals(r[0], l[1]); assertEquals(r[1], l[2])
     }
 
+    /** "Số từ gợi ý": n ô bằng nhau, liền nhau, ô cuối chạm mép phải; thirds = cells(3). */
+    @Test fun nEqualContiguousSlots() {
+        for (n in 1..5) {
+            val l = FloatArray(5); val r = FloatArray(5)
+            StripGeometry.cells(100f, 400f, n, l, r)
+            assertEquals(100f, l[0]); assertEquals(400f, r[n - 1])
+            for (i in 0 until n) assertEquals(300f / n, r[i] - l[i], 0.001f)
+            for (i in 1 until n) assertEquals(r[i - 1], l[i])
+        }
+        // điện thoại 360 dp, bar có gợi ý (icon con trỏ/📋 ẩn), nút 😊 trên thanh: 5 ô không vừa 44 dp ⇒ 4
+        val shown = StripGeometry.toolsShown(hasContent = true, editOpen = false, clipOpen = false)
+        val barL = StripGeometry.barLeft(KeyLayout.STRIP_ZONE_W, StripGeometry.TOOL_W, shown)
+        val plain = StripGeometry.barRight(360f, KeyLayout.STRIP_ZONE_W, StripGeometry.CLIP_W, true, shown) - barL
+        val emoji = StripGeometry.barRight(360f, KeyLayout.STRIP_ZONE_W, StripGeometry.CLIP_W, true, shown, emojiButton = true) - barL
+        assertEquals(5, com.viettelex.keyboard.SuggestionCount.fit(5, plain))
+        assertEquals(4, com.viettelex.keyboard.SuggestionCount.fit(5, emoji))
+    }
+
     @Test fun gboardProportions() {
         // #112: strip 42 dp ≈ 0.75 hàng phím chuẩn (56 dp); pill / ô nhấn nằm gọn trong dải.
         val row = KeyLayout.keyAreaDp(false, false, 0) / 4f

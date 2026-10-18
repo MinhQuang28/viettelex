@@ -50,6 +50,11 @@ import com.viettelex.keyboard.L10n
 import com.viettelex.keyboard.L10nTable
 import com.viettelex.android.shared.UiLang
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
+import com.viettelex.keyboard.SuggestionCount
 
 // Tab Tính Năng (27/09/2026): trang chính là 8 nhóm (icon + tên + tóm tắt trạng thái), mỗi
 // nhóm mở một trang con — thay cho danh sách dài mọi công tắc. Ô tìm kiếm lọc theo tên/từ
@@ -405,6 +410,8 @@ private fun GoiYPage(onBack: () -> Unit) {
     VTSection(header = tr("Thanh gợi ý")) {
         BoolToggle(Keys.SHOW_SUGGESTIONS, Prefs.D.showSuggestions, tr("Thanh gợi ý"), tr("Gợi ý từ + emoji, tự học từ bạn hay dùng (chỉ trên máy)."))
         RowDivider()
+        SuggestionCountRow()
+        RowDivider()
         BoolToggle(Keys.SUGGEST_IN_NO_SUGGEST_FIELDS, Prefs.D.suggestInNoSuggestFields, tr("Gợi ý cả khi ứng dụng tắt gợi ý"),
             tr("Ô mà ứng dụng tắt gợi ý (vd ô chat, thanh địa chỉ) vẫn gợi ý từ — không tự sửa, không học từ gõ ở đó. Mật khẩu, ẩn danh, ô số không bị ảnh hưởng."))
         RowDivider()
@@ -570,6 +577,41 @@ private fun SpaceSideKeyRow() = ChoiceRow(Keys.SPACE_SIDE_KEY, Prefs.D.spaceSide
     tr("Điện thoại: phím hẹp cạnh phím cách trên bàn chữ; Cả hai: dấu phẩy bên trái, dấu chấm bên phải phím cách. Máy tính bảng: Dấu phẩy, Dấu chấm hay Cả hai đều giữ hai phím , và . hai bên phím cách; Tắt bỏ cả hai. Ô email, đường dẫn giữ nguyên. Giữ dấu phẩy để chọn dấu câu khác. Tắt: phím cách rộng hơn; chạm phím cách hai lần vẫn ra dấu chấm."),
     listOf(SpaceSideKey.COMMA.id to tr("Dấu phẩy"), SpaceSideKey.PERIOD.id to tr("Dấu chấm"),
         SpaceSideKey.BOTH.id to tr("Cả hai"), SpaceSideKey.OFF.id to tr("Tắt"))) { SpaceSideKey.of(it).id }
+
+/**
+ * "Số từ gợi ý" ([SuggestionCount]): một hàng gọn − [giá trị] +, Tự động → 1 → … → 5 (− ở 1 về
+ * Tự động; hai đầu thì nút mờ). Cùng khoá + giá trị iOS.
+ */
+@Composable
+private fun SuggestionCountRow() {
+    val c = LocalVT.current
+    var v by rememberIntPref(Keys.SUGGESTION_COUNT, Prefs.D.suggestionCount)
+    val n = SuggestionCount.parse(v)
+    val value = if (n <= SuggestionCount.AUTO) tr("Tự động") else n.toString()
+    VTRow {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(tr("Số từ gợi ý"), style = VTType.body, color = c.label)
+            Text(tr("Tự động: 3 từ. Máy hẹp có thể hiện ít hơn để ô đủ rộng cho dễ chạm."),
+                style = VTType.footnote, color = c.secondary)
+        }
+        Row(Modifier.padding(start = 8.dp).clip(RoundedCornerShape(9.dp)).background(c.fill),
+            verticalAlignment = Alignment.CenterVertically) {
+            StepButton("−", tr("Bớt một từ gợi ý"), n > SuggestionCount.AUTO) { v = SuggestionCount.step(n, -1) }
+            Text(value, style = VTType.body, color = c.label, textAlign = TextAlign.Center, maxLines = 1,
+                modifier = Modifier.widthIn(min = 64.dp).semantics { contentDescription = tr("Số từ gợi ý") + ": " + value })
+            StepButton("+", tr("Thêm một từ gợi ý"), n < SuggestionCount.MAX) { v = SuggestionCount.step(n, 1) }
+        }
+    }
+}
+
+@Composable
+private fun StepButton(symbol: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+    val c = LocalVT.current
+    Box(Modifier.size(44.dp).clickable(enabled = enabled, onClick = onClick).semantics { contentDescription = description },
+        contentAlignment = Alignment.Center) {
+        Text(symbol, style = VTType.title3, color = if (enabled) c.accent else c.tertiary)
+    }
+}
 
 /** "Nút emoji": Hàng dưới (mặc định) / Thanh trên — [EmojiKeyPlacement]. */
 @Composable

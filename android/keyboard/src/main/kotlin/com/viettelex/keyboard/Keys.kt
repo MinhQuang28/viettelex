@@ -71,6 +71,8 @@ object Keys {
     const val ADD_TONES_CHIP = "addTonesChip"
     /** Chip số (đọc số thành chữ / tiền / máy tính nhanh) — mặc định BẬT; tắt ⇒ không đọc context sau chữ số. */
     const val NUMBER_CHIPS = "numberChips"
+    /** Int 0…5 — "Số từ gợi ý" ([SuggestionCount]): 0 = Tự động (3 ô). Tên như iOS App Group. */
+    const val SUGGESTION_COUNT = "suggestionCount"
     /** "Hiện kết quả phép tính" (Bool, mặc định BẬT) — chỉ đọc context ngay sau phím "=". */
     const val MATH_RESULTS = "mathResults"
     /**

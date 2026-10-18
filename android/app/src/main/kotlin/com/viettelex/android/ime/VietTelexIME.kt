@@ -402,7 +402,8 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         val emojiInStrip = com.viettelex.keyboard.EmojiKeyPlacement.inStrip(settings.emojiKeyPlacement,
             barOn && accessibility?.isTouchExplorationEnabled != true)
         st.configure(barOn, collapsed, settings.templatesEnabled,
-            reserved = KeyLayout.stripReserved(settings.showSuggestions), emojiButton = emojiInStrip)
+            reserved = KeyLayout.stripReserved(settings.showSuggestions), emojiButton = emojiInStrip,
+            slotSetting = settings.suggestionCount)
         applyFloating(settings.floatingKeyboard, settings)
         kb.setEditHasSelection(info.initialSelStart >= 0 && info.initialSelStart != info.initialSelEnd)
         st.setExtras(clipButton = settings.clipboardHistory, open = false)
