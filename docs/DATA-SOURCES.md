@@ -904,11 +904,13 @@ motherfucker, bullshit, holy shit…) — từ tục đều vào SensitiveWords 
 damn it… hiện được. 1.181 unigram / 1.000 bigram; keyprior.bin sinh lại (từ ASCII của seed).
 
 Cùng ngày (sau đó): khối `[sensitive-bigram]` của seed-curated.txt — cặp chửi/tục/tình dục/chê ngoại hình ghép từ hai
-TỪ THƯỜNG (thằng chó, sờ chim, nâng bi, kích dục, như lợn…) vừa vào seed vừa sinh bảng **SensitivePairs**
+TỪ THƯỜNG (thằng chó, sờ chim, nâng bi, kích dục, như cột…) vừa vào seed vừa sinh bảng **SensitivePairs**
 (`SensitiveWords.pairs` Swift/Kotlin, `windows/app/core/sensitive_pairs.inc`): lọc bật ⇒ không gợi ý từ sau ngay sau từ
 trước, cặp không thưởng ngữ cảnh (vuốt, xếp gợi ý, Thêm dấu). Thêm các lô tiếng lóng / Gen Z / tài chính / y tế chỉ
 khi vnlm.bin chưa đoán (hạng > 3), kèm cặp NEO (nước ngoài, bóng đá, ví dụ…) để cặp lóng không chiếm ô đầu sau từ rất
-thường. `--check` so file đã commit. 1.222 unigram / 1.281 bigram.
+thường. `--check` so file đã commit. 1.222 unigram / 1.281 bigram. Sau đó Phil bỏ lọc "con chó", "con gà", "óc chó",
+"như heo", "như bò", "như lợn" (nghĩa đen quá thường): "con chó" còn từ corpus, "óc chó" (hạt) thành cặp [bigram]
+thường, bốn cặp còn lại bỏ khỏi seed ⇒ 1.222 unigram / 1.277 bigram.
 
 ### Đo trước / sau giai đoạn 2 (tập KIỂM THỬ, JVM; "trước" = main 18/10/2026 sau giai đoạn 1)
 

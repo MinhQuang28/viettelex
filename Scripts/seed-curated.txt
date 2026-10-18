@@ -1079,6 +1079,7 @@ holy shit 4
 oh shit 3
 # bổ sung 18/10/2026 — cặp TOÀN từ thường, từ vựng trung tính (báo chí / văn viết) ⇒ hiện cho mọi người.
 # "sờ vào", "nâng cấp", "nâng cao" để "chim"/"cu"/"bi" không đứng đầu gợi ý sau "sờ"/"nâng" khi TẮT lọc.
+# "óc chó" (hạt óc chó; Phil bỏ khỏi [sensitive-bigram] 18/10/2026) giữ đứng đầu sau "óc" để "óc lợn" không lên đầu.
 # (hiếp dâm ở khối trên — "dâm" đã lọc theo từ.)
 hãm hiếp 3
 lăng nhăng 4
@@ -1086,6 +1087,7 @@ lăng loàn 3
 nâng cấp 5
 nâng cao 5
 sờ vào 4
+óc chó 4
 
 # bổ sung 18/10/2026 (Phil) — tiếng lóng / từ báo chí về ma tuý, cờ bạc, mại dâm, tội phạm: từ vựng mô tả,
 # KHÔNG phải chửi tục ⇒ hiện cho mọi người, trọng số thấp. Bỏ cặp vnlm.bin đã đoán hạng 1 (xóc đĩa, lô đề,
@@ -1394,7 +1396,6 @@ má mày 4
 vãi đái 3
 thằng chó 3
 đồ chó 3
-óc chó 4
 chó chết 3
 chó má 3
 như chó 3
@@ -1405,7 +1406,6 @@ thằng khốn 3
 thằng điên 3
 đồ điên 3
 mẹ mày 3
-con gà 4
 nâng bi 2
 sờ chim 2
 sờ cu 2
@@ -1426,27 +1426,22 @@ piss off 3
 kích dục 3
 massage kích 3
 chơi cave 3
-# bổ sung 18/10/2026 (Phil, lô 3): chửi ghép từ thường. "con chó" (cặp corpus, cũng nghĩa đen) — Phil xếp vào chửi
+# bổ sung 18/10/2026 (Phil, lô 3): chửi ghép từ thường. Phil bỏ lọc (cùng ngày) "con chó", "con gà", "óc chó",
+# "như heo", "như bò", "như lợn" — nghĩa đen quá thường: "con chó" còn từ corpus, "óc chó" ở [bigram], còn lại bỏ khỏi seed
 óc lợn 3
 não phẳng 3
 láo chó 3
-con chó 3
 # bổ sung 18/10/2026 (Phil, lô 4): tình dục (quay tay, phim heo, clip nóng, lộ clip)
 quay tay 3
 phim heo 3
 clip nóng 3
 lộ clip 3
-# chê ngoại hình (béo như lợn, đen như cột nhà cháy, mặt như cái mâm, lùn tịt, cò hương) — cặp đặc trưng câu chê
-như lợn 3
+# chê ngoại hình (đen như cột nhà cháy, mặt như cái mâm, lùn tịt, cò hương) — cặp đặc trưng câu chê
 như cột 3
 cái mâm 3
 lùn tịt 3
 cò hương 3
-# bổ sung 18/10/2026 (Phil, lô 5): béo như heo/lợn, ngu như bò/chó — chỉ cặp được (không theo trigram) ⇒ lọc
-# "như heo", "như bò" mọi ngữ cảnh (so sánh với heo/bò gần như luôn là câu chê); "chúa phòng" (công chúa
-# phòng trọ — "phòng trọ" đứng một mình vẫn hiện)
-như heo 3
-như bò 3
+# bổ sung 18/10/2026 (Phil, lô 5): "chúa phòng" (công chúa phòng trọ — "phòng trọ" đứng một mình vẫn hiện)
 chúa phòng 3
 # Gen Z: fuck boy (từ trước tục, từ sau thường)
 fuck boy 3

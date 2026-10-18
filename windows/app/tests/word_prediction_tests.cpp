@@ -326,6 +326,16 @@ TEST(prediction_slang_batches) {
     CHECK_EQ(cands("kích ", "", "", false, false), std::string("dục"));
     CHECK(cands("óc ").find("lợn") == std::string::npos);
     CHECK_EQ(cands("óc ", "", "", false, false), std::string("chó|lợn"));
+    // un-gated 18/10/2026 (literal meaning too common): con chó / con gà / óc chó / như heo|bò|lợn
+    CHECK_EQ(cands("óc "), std::string("chó"));
+    bool conCho = false;  // filter on: "con" -> "chó" (seed next word) is not dropped as a pair
+    for (const auto& w : predict::seedNext(U("con"))) conCho = conCho || (w == U("chó") && !predict::isSensitivePair(U("con"), w));
+    CHECK(conCho);
+    for (const char* pw : {"con chó", "con gà", "óc chó", "như heo", "như bò", "như lợn"}) {
+        const std::string s(pw);
+        const size_t sp = s.find(' ');
+        CHECK(!predict::isSensitivePair(U(s.substr(0, sp)), U(s.substr(sp + 1))));
+    }
     CHECK(cands("vãi ").find("nồi") != std::string::npos);
     CHECK(predict::isSensitive(U("cc")) && predict::isSensitive(U("đb")) && predict::isSensitive(U("lìn")));
     // tech / finance / health English words (gen-enlexicon SUPPLEMENT) + DisplayCase
