@@ -397,3 +397,21 @@ final class ContextEnglishFieldReportTests: XCTestCase {
         XCTAssertEqual(sentence("the position is", context: true), "the position is")
     }
 }
+
+// "dạa" is Vietnamese for the cross-word context: after it, an ambiguous word stays
+// Vietnamese exactly as after "dạ" (teencode "Dạa", 18/10/2026).
+final class ContextEnglishToneThenATests: XCTestCase {
+    func testElongatedWordClosesEnglishRun() {
+        for teencode in [true, false] {
+            var e = TelexEngine(); e.contextualEnglish = true; e.liveSpellCheck = true
+            e.teencode = teencode
+            var out = ""
+            for w in ["the", "daja", "is"] {
+                for ch in w { _ = e.feed(ch) }
+                out += e.commitText(autoRestore: true) + " "
+            }
+            XCTAssertEqual(out, teencode ? "the dạa í " : "the dậ í ")
+            XCTAssertFalse(e.previousWordEnglish)
+        }
+    }
+}

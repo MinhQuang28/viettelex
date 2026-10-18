@@ -233,6 +233,11 @@ final class AppState: @unchecked Sendable {
         var bracketVowels = false, contextualEnglish = true
         var collisionPrefersVietnamese = true
         var teencode = false
+        /// Auto-restore → engine `eagerEnglishRestore` (18/10/2026): with live spell-check,
+        /// "goog" restores to raw at the freeze instead of showing "gôg" until the
+        /// boundary. Tied to auto-restore because with it off the boundary KEEPS "gôgle",
+        /// and restoring early would change the committed text.
+        var autoRestore = true
     }
 
     func engineFlags() -> EngineFlags {
@@ -242,13 +247,13 @@ final class AppState: @unchecked Sendable {
                         quickTelex: _quickTelex, vniMode: _vniMode,
                         bracketVowels: _bracketVowels, contextualEnglish: _contextualEnglish,
                         collisionPrefersVietnamese: _collisionPrefersVietnamese,
-                        teencode: _teencode)
+                        teencode: _teencode, autoRestore: _autoRestore)
         }
     }
 
     /// Sanity net for the snapshot above: every engine toggle must be carried, or a
     /// setting silently stops reaching the engine. Bump when adding a flag.
-    static let engineFlagCount = 10
+    static let engineFlagCount = 11
 
     /// Tone-placement style. false (default) = old style (hòa, thủy); true = modern
     /// (hoà, thuý). See `TelexEngine.modernTone`.
@@ -1476,5 +1481,6 @@ extension TelexEngine {
         contextualEnglish = f.contextualEnglish
         collisionPrefersVietnamese = f.collisionPrefersVietnamese
         teencode = f.teencode
+        eagerEnglishRestore = f.autoRestore
     }
 }

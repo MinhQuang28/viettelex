@@ -55,6 +55,25 @@ final class ZeroAllocationTests: XCTestCase {
             "English/passthrough hot path allocated (\(delta) chunks over ~100k keys)")
     }
 
+    /// Eager English restore (18/10/2026): the freeze-moment table lookup is a binary
+    /// search over a StaticString — no heap. "google"/"windows" restore mid-word; the
+    /// returned insert ("oog") is a small string.
+    func testEagerEnglishRestoreIsAllocationFree() {
+        var e = TelexEngine()
+        e.liveSpellCheck = true
+        e.eagerEnglishRestore = true
+        warmUp(&e)
+        let before = chunksUsed()
+        for _ in 0..<2_000 {
+            for w in ["google", "windows", "facebook", "github"] {
+                for ch in w { _ = e.feed(ch) }
+                e.reset()
+            }
+        }
+        let delta = chunksUsed() - before
+        XCTAssertLessThan(delta, 50, "eager English restore allocated (\(delta) chunks)")
+    }
+
     /// Vietnamese typing: scratch work is allocation-free; the only permitted
     /// allocations are the returned insert Strings — which are small enough for
     /// Swift's inline small-string form, so in practice this path is also ~zero.

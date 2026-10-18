@@ -274,7 +274,14 @@ void TelexEngine::feedAscii(uint8_t ascii, Action& out) {
     if (liveSpellCheck && disabledAtCount_ == kNotDisabled && !prefixIsValid(newCount) &&
         elongationHeadCount(newCount, pTone_) <= 0) {
         disabledAtCount_ = rawCount_;
-        if (pTone_ != Tone::None) {
+        if (eagerRestoreApplies(newCount)) {
+            // Eager English restore: the whole word back to raw ("gôg" -> "goog").
+            disabledAtCount_ = 0;
+            rebuildParseState();
+            tonesFolded_ = false;
+            newCount = render();
+            takeSnapshots();
+        } else if (pTone_ != Tone::None) {
             pFoldTones_ = true;
             rebuildParseState();
             pFoldTones_ = false;
@@ -282,6 +289,18 @@ void TelexEngine::feedAscii(uint8_t ascii, Action& out) {
             newCount = render();
             takeSnapshots();
         }
+    }
+
+    // Eager English restore, deferred to key kFreezePrefixMinLength when the word froze
+    // earlier ("win" -> "ưin", decided at "wind").
+    if (eagerEnglishRestore && disabledAtCount_ != kNotDisabled && disabledAtCount_ > 0 &&
+        disabledAtCount_ < gen::kFreezePrefixMinLength && rawCount_ == gen::kFreezePrefixMinLength &&
+        eagerRestoreApplies(newCount)) {
+        disabledAtCount_ = 0;
+        rebuildParseState();
+        tonesFolded_ = false;
+        newCount = render();
+        takeSnapshots();
     }
 
     // Elongation unfreeze.
@@ -351,9 +370,58 @@ void TelexEngine::commitBoundary(bool autoRestore, Action& out) {
         for (int i = lcp; i < rawCount_; ++i) out.text[i - lcp] = raw_[i];
         out.text[out.length] = 0;
     }
-    captureReopen(wantsRestore);
+    // Teencode "Dạa" (Swift isToneThenATail): rewrite only the last character.
+    const bool elongate = !wantsRestore && outCount_ > 0 && isToneThenATail();
+    if (elongate) {
+        char32_t tail[2];
+        elongatedTail(tail);
+        setReplace(out, 1, tail, 2);
+    }
+    captureReopen(wantsRestore || elongate);
     updateContext(wantsRestore);
     resetWord();
+}
+
+// TEENCODE one-letter elongation "Dạa" (Swift `isToneThenATail`): "daja" commits "dạa"
+// instead of the invalid bare "dậ" — the tone was placed before the extra `a` came.
+bool TelexEngine::isToneThenATail() const {
+    if (!teencode || vniMode || markCancelled_ || overflowed_ || pCount_ < 2 || rawCount_ < 3 ||
+        lastEffTone_ == Tone::None)
+        return false;
+    const int last = pCount_ - 1;
+    if (letters_[last].base != 'a' || letters_[last].mark != Mark::Circumflex) return false;
+    if (lowercased(raw_[rawCount_ - 1]) != 'a' || rawLetter_[rawCount_ - 1] != last) return false;
+    if (outCount_ != pCount_) return false;
+    if (out_[outCount_ - 1] != applyTone(markedScalar('a', Mark::Circumflex, letters_[last].upper), lastEffTone_))
+        return false;
+    int r = rawCount_ - 2;
+    int tones = 0;
+    while (r >= 0 && isToneKeyAt(r)) { ++tones; --r; }
+    if (tones == 0 || r < 0 || lowercased(raw_[r]) != 'a' || rawLetter_[r] != last) return false;
+    return isValidHead(pCount_, lastEffTone_, true);
+}
+
+bool TelexEngine::isToneKeyAt(int r) const {
+    switch (lowercased(raw_[r])) {
+    case 's': case 'f': case 'r': case 'x': case 'j': break;
+    default: return false;
+    }
+    for (int j = 0; j < pToneKeyCount_; ++j)
+        if (toneKeys_[j] == r) return true;
+    return false;
+}
+
+void TelexEngine::elongatedTail(char32_t* two) const {
+    const int last = pCount_ - 1;
+    two[0] = applyTone(markedScalar('a', Mark::None, letters_[last].upper), lastEffTone_);
+    two[1] = static_cast<char32_t>(raw_[rawCount_ - 1]);
+}
+
+int TelexEngine::emitElongated(char16_t* buf, int cap) const {
+    char32_t tmp[kCapacity + 1];
+    for (int i = 0; i < outCount_ - 1; ++i) tmp[i] = out_[i];
+    elongatedTail(tmp + outCount_ - 1);
+    return emit(tmp, outCount_ + 1, buf, cap);
 }
 
 void TelexEngine::captureReopen(bool restored) {
@@ -563,9 +631,11 @@ int TelexEngine::commitText(bool autoRestore, char16_t* buf, int cap) {
     }
     bool wantsRestore = outCount_ > 0
         && (needsStandaloneWRunRestore() || (autoRestore && shouldRestoreRaw()));
-    captureReopen(wantsRestore);
+    const bool elongate = !wantsRestore && outCount_ > 0 && isToneThenATail();
+    n = wantsRestore ? emitRaw(raw_, rawCount_, buf, cap)
+        : elongate ? emitElongated(buf, cap) : emit(out_, outCount_, buf, cap);
+    captureReopen(wantsRestore || elongate);
     updateContext(wantsRestore);
-    n = wantsRestore ? emitRaw(raw_, rawCount_, buf, cap) : emit(out_, outCount_, buf, cap);
     resetWord();
     return n;
 }
@@ -574,6 +644,7 @@ int TelexEngine::peekCommitText(bool autoRestore, char16_t* buf, int cap) const 
     if (overflowed_) return emit(out_, outCount_, buf, cap);
     if (outCount_ > 0 && needsStandaloneWRunRestore()) return emitRaw(raw_, rawCount_, buf, cap);
     if (autoRestore && outCount_ > 0 && shouldRestoreRaw()) return emitRaw(raw_, rawCount_, buf, cap);
+    if (outCount_ > 0 && isToneThenATail()) return emitElongated(buf, cap);
     return emit(out_, outCount_, buf, cap);
 }
 
@@ -696,7 +767,7 @@ int TelexEngine::elongationHeadCount(int count, Tone tone) const {
     return -1;
 }
 
-bool TelexEngine::isValidHead(int k, Tone tone) const {
+bool TelexEngine::isValidHead(int k, Tone tone, bool plainLast) const {
     if (k < 1 || k > kCapacity) return false;
     Tone t = tone;
     if ((t == Tone::Grave || t == Tone::Hook || t == Tone::Tilde) && hasStopCoda(k) &&
@@ -706,10 +777,12 @@ bool TelexEngine::isValidHead(int k, Tone tone) const {
     if (onset != 0 && onsetSkip(onset) < k) {
         int n = writeCanon(onset, buf);
         for (int j = onsetSkip(onset); j < k; ++j)
-            buf[n++] = letterClass(renderLetters_[j].base, renderLetters_[j].mark);
+            buf[n++] = letterClass(renderLetters_[j].base,
+                                   plainLast && j == k - 1 ? Mark::None : renderLetters_[j].mark);
         if (SyllableValidator::isValidSyllable(buf, n, t, teencode)) return true;
     }
-    for (int j = 0; j < k; ++j) buf[j] = letterClass(renderLetters_[j].base, renderLetters_[j].mark);
+    for (int j = 0; j < k; ++j)
+        buf[j] = letterClass(renderLetters_[j].base, plainLast && j == k - 1 ? Mark::None : renderLetters_[j].mark);
     return SyllableValidator::isValidSyllable(buf, k, t, teencode);
 }
 
@@ -865,6 +938,24 @@ void TelexEngine::setCircumflex(int k) {
         letters_[k - 1].mark = Mark::None;
 }
 
+// Eager English restore gate (Swift `eagerRestoreApplies`) — only at the freeze moment.
+bool TelexEngine::eagerRestoreApplies(int n) const {
+    if (!eagerEnglishRestore || vniMode || pCancelled_ || rawCount_ < gen::kFreezePrefixMinLength ||
+        rawCount_ > gen::kFreezePrefixMaxLength)
+        return false;
+    bool differs = n != rawCount_;
+    for (int i = 0; !differs && i < n; ++i)
+        if (scratch_[i] != static_cast<char32_t>(raw_[i])) differs = true;
+    if (!differs) return false;
+    char w[kCapacity];
+    for (int i = 0; i < rawCount_; ++i) {
+        uint8_t b = raw_[i];
+        if (b >= 'A' && b <= 'Z') b |= 0x20;
+        w[i] = static_cast<char>(b);
+    }
+    return inEnglishList(gen::kEnglishFreezePrefixes, w, rawCount_);
+}
+
 void TelexEngine::recomputeFreeze() {
     if (disabledAtCount_ == 0 && upperToneKey_ && !liveSpellCheck) return;
     const int full = rawCount_;
@@ -874,8 +965,14 @@ void TelexEngine::recomputeFreeze() {
         rawCount_ = r;
         rebuildParseState();
         if (disabledAtCount_ == kNotDisabled && pCount_ > 0 && !prefixIsValid(pCount_)) {
-            (void)render();
-            if (elongationHeadCount(pCount_, pTone_) <= 0) disabledAtCount_ = r;
+            int n = render();
+            if (elongationHeadCount(pCount_, pTone_) <= 0)
+                disabledAtCount_ = eagerRestoreApplies(n) ? 0 : r;
+        } else if (eagerEnglishRestore && disabledAtCount_ != kNotDisabled && disabledAtCount_ > 0 &&
+                   disabledAtCount_ < gen::kFreezePrefixMinLength && r == gen::kFreezePrefixMinLength) {
+            rebuildFrozenAware();
+            int n = render();
+            if (eagerRestoreApplies(n)) disabledAtCount_ = 0;
         }
     }
     rawCount_ = full;

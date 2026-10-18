@@ -26,6 +26,7 @@ sv = read("SyllableValidator.swift")
 te = read("TelexEngine.swift")
 coll = read("EnglishCollisions.swift")
 ctx = read("EnglishContextWords.swift")
+frz = read("EnglishFreezePrefixes.swift")
 
 # ---- letter classes -------------------------------------------------------------
 MARKED = "âăêôơưđ"
@@ -109,6 +110,8 @@ tries = {
 }
 
 # ---- English word sets ----------------------------------------------------------
+freeze_min = re.search(r"static let minLength = (\d+)", frz).group(1)
+freeze_max = re.search(r"static let maxLength = (\d+)", frz).group(1)
 def blocks(text):
     return re.findall(r'"""\n(.*?)"""', text, re.S)
 def words(block):
@@ -119,6 +122,8 @@ def section(text, start, end):
     return text[i:j]
 
 collisions = [w for b in blocks(section(coll, "private static let list", None)) for w in words(b)]
+freeze = [w for b in blocks(section(frz, "private static let data", None)) for w in words(b)]
+assert freeze and freeze == sorted(freeze)
 neutral = [w for b in blocks(section(ctx, "static let neutralLoanwords", "static let maxLength")) for w in words(b)]
 ctxwords = [w for b in blocks(section(ctx, "private static let wordList", "private static let restoreOnlyList")) for w in words(b)]
 restore = [w for b in blocks(section(ctx, "private static let restoreOnlyList", None)) for w in words(b)]
@@ -182,6 +187,11 @@ with open(out, "w", encoding="utf-8") as f:
     emit_words(f, "kNeutralLoanwords", neutral)
     emit_words(f, "kFunctionWords", function)
     emit_words(f, "kContractionTails", tails)
+    f.write("// Eager English restore (EnglishFreezePrefixes.swift): raw prefixes at which an English\n")
+    f.write("// word freezes with marks on screen; probed once per word at the freeze moment.\n")
+    f.write(f"constexpr int kFreezePrefixMinLength = {freeze_min};\n")
+    f.write(f"constexpr int kFreezePrefixMaxLength = {freeze_max};\n")
+    emit_words(f, "kEnglishFreezePrefixes", freeze)
     f.write("// Predecessor gates (EnglishContextWords.predecessorGates): kGateWords[i] restores inside\n")
     f.write("// an English run only right after one of kGatePredecessors<i>. Rule order = bit order.\n")
     for i, (_, ps) in enumerate(gates):
@@ -193,6 +203,6 @@ with open(out, "w", encoding="utf-8") as f:
             + ", ".join(f"{{kGatePredecessors{i}, {len(set(ps))}}}" for i, (_, ps) in enumerate(gates)) + "};\n\n")
     f.write("}} // namespace vtx::gen\n")
 
-print(f"onsets={len(onsets_u)} rimes={len(rimes_u)} collisions={len(set(collisions))} "
+print(f"freeze={len(set(freeze))} onsets={len(onsets_u)} rimes={len(rimes_u)} collisions={len(set(collisions))} "
       f"ctx={len(set(ctxwords))} restore={len(set(restore))} neutral={len(set(neutral))} maxlen={maxlen} "
       f"function={len(set(function))} tails={len(set(tails))} gates={gates}")

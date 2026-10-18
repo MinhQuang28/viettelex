@@ -42,6 +42,7 @@ void vtx_set_flags(vtx_engine* h, uint32_t f) {
     e.contextualEnglish = (f & VTX_CONTEXTUAL_ENGLISH) != 0;
     e.englishWordRestore = (f & VTX_ENGLISH_WORD_RESTORE) != 0;
     e.collisionPrefersVietnamese = (f & VTX_COLLISION_PREFERS_VI) != 0;
+    e.eagerEnglishRestore = (f & VTX_EAGER_ENGLISH_RESTORE) != 0;
 }
 
 uint32_t vtx_get_flags(const vtx_engine* h) {
@@ -59,6 +60,7 @@ uint32_t vtx_get_flags(const vtx_engine* h) {
     if (e.contextualEnglish) f |= VTX_CONTEXTUAL_ENGLISH;
     if (e.englishWordRestore) f |= VTX_ENGLISH_WORD_RESTORE;
     if (e.collisionPrefersVietnamese) f |= VTX_COLLISION_PREFERS_VI;
+    if (e.eagerEnglishRestore) f |= VTX_EAGER_ENGLISH_RESTORE;
     return f;
 }
 

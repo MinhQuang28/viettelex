@@ -344,6 +344,8 @@ void Session::applySettings(const Settings &s) {
     vt_engine_set_flag(e_, VT_FLAG_VNI, s.vni);
     vt_engine_set_flag(e_, VT_FLAG_CONTEXTUAL_ENGLISH, s.contextualEnglish);
     vt_engine_set_flag(e_, VT_FLAG_COLLISION_PREFERS_VIETNAMESE, s.collisionPrefersVietnamese);
+    // "goog" not "gôg" mid-word — only with auto-restore (else the boundary keeps "gôgle").
+    vt_engine_set_flag(e_, VT_FLAG_EAGER_ENGLISH_RESTORE, s.autoRestore);
     autoRestore_ = s.autoRestore;
     underlineMisspelled_ = s.underlineMisspelled;
     shortcutsEnabled_ = s.shortcutsEnabled;

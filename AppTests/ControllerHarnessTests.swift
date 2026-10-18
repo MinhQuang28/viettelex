@@ -253,6 +253,64 @@ final class ControllerHarnessTests: XCTestCase {
         XCTAssertEqual(h.client.string, "a việt ", dump(h))
     }
 
+    // MARK: Eager English restore (18/10/2026)
+
+    /// "goog" thay vì "gôg" giữa từ: phím g thứ hai là MỘT lần ghi đè giữa từ (⌫1 + "oog")
+    /// qua đúng đường in-place của mọi phép biến đổi; dấu cách sau đó không ghi đè gì.
+    func testEagerEnglishRestoreInPlaceRewritesMidWordOnce() {
+        let saved = AppState.shared.autoRestore
+        defer { AppState.shared.autoRestore = saved }
+        AppState.shared.autoRestore = true
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "a ")
+        h.type("goog")
+        XCTAssertEqual(h.client.string, "a goog", dump(h))
+        h.type("le ")
+        XCTAssertEqual(h.client.string, "a google ", dump(h))
+        h.type("windows ")
+        XCTAssertEqual(h.client.string, "a google windows ", dump(h))
+    }
+
+    /// Tắt tự khôi phục ⇒ không eager (boundary giữ "gôgle" như cũ — chữ chốt không đổi).
+    func testEagerEnglishRestoreFollowsAutoRestore() {
+        let saved = AppState.shared.autoRestore
+        defer { AppState.shared.autoRestore = saved }
+        AppState.shared.autoRestore = false
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "a ")
+        h.type("goog")
+        XCTAssertEqual(h.client.string, "a gôg", dump(h))
+        h.type("le ")
+        XCTAssertEqual(h.client.string, "a gôgle ", dump(h))
+    }
+
+    /// Marked mode: composition hiện "goog" ngay, chốt "google".
+    func testEagerEnglishRestoreMarkedMode() {
+        let saved = AppState.shared.autoRestore
+        defer { AppState.shared.autoRestore = saved; FocusedFieldDetector._testSetMarked(false) }
+        AppState.shared.autoRestore = true
+        FocusedFieldDetector._testSetMarked(true)
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "a ")
+        h.type("goog")
+        XCTAssertEqual(h.client.string, "a goog", dump(h))
+        h.type("le ")
+        XCTAssertEqual(h.client.string, "a google ", dump(h))
+    }
+
+    // MARK: Teencode "Dạa" (18/10/2026)
+
+    /// Boundary rewrite ⌫1 + "ạa" qua đường in-place; teencode tắt (mặc định app) = "dậ".
+    func testTeencodeToneThenAInPlace() {
+        let saved = AppState.shared.teencode
+        defer { AppState.shared.teencode = saved }
+        AppState.shared.teencode = true
+        let h = ControllerHarness(bundleID: "com.apple.TextEdit", text: "a ")
+        h.type("daja ")
+        XCTAssertEqual(h.client.string, "a dạa ", dump(h))
+        AppState.shared.teencode = false
+        let g = ControllerHarness(bundleID: "com.apple.TextEdit", text: "a ")
+        g.type("daja ")
+        XCTAssertEqual(g.client.string, "a dậ ", dump(g))
+    }
+
     // MARK: Dấu chấm khi nhấn đúp phím cách
 
     /// Lỗi gốc: AppKit gọi commitComposition sau dấu cách native ⇒ shortcutTail.reset()

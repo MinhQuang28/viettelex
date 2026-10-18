@@ -68,6 +68,7 @@ inline bool toggleFlag(vtx::TelexEngine& e, char c, bool autoRestore) {
     case 'C': e.contextualEnglish = !e.contextualEnglish; break;
     case 'e': e.englishWordRestore = !e.englishWordRestore; break;
     case 'P': e.collisionPrefersVietnamese = !e.collisionPrefersVietnamese; break;
+    case 'E': e.eagerEnglishRestore = !e.eagerEnglishRestore; break;
     default: break;
     }
     return autoRestore;
@@ -89,6 +90,7 @@ inline bool configure(vtx::TelexEngine& e, const std::string& flags) {
         case 'C': e.contextualEnglish = true; break;
         case 'e': e.englishWordRestore = false; break;
         case 'P': e.collisionPrefersVietnamese = true; break;
+        case 'E': e.eagerEnglishRestore = true; break;
         default: break;
         }
     }

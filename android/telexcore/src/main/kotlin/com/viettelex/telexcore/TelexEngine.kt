@@ -31,6 +31,12 @@ class TelexEngine {
     var modernTone = false
     /** Live spell-check: stop transforming once the word can't be Vietnamese. */
     var liveSpellCheck = false
+    /**
+     * Eager English restore (Swift `eagerEnglishRestore`): at the freeze moment, a raw prefix in
+     * [EnglishFreezePrefixes] restores the whole word to raw ("goog", not "gôg"). Callers pass
+     * their effective auto-restore. Engine default OFF.
+     */
+    var eagerEnglishRestore = false
     /** Simple Telex: a standalone `w` stays literal. */
     var simpleTelex = false
     /** Teencode spelling (w→qu, z/dz→d, k before a/o/u, informal rimes). Engine default ON. */
@@ -125,6 +131,7 @@ class TelexEngine {
     /** Ghi đè toàn bộ trạng thái của [e] bằng bản này — checkpoint không cấp phát (EngineBridge.undoLastLetter). */
     fun copyInto(e: TelexEngine) {
         e.freeMarking = freeMarking; e.modernTone = modernTone; e.liveSpellCheck = liveSpellCheck
+        e.eagerEnglishRestore = eagerEnglishRestore
         e.simpleTelex = simpleTelex; e.teencode = teencode; e.quickTelex = quickTelex
         e.bracketVowels = bracketVowels; e.vniMode = vniMode; e.contextualEnglish = contextualEnglish
         e.previousWordEnglish = previousWordEnglish; e.englishWordRestore = englishWordRestore
@@ -205,7 +212,13 @@ class TelexEngine {
             elongationHeadCount(newCount, pTone) <= 0
         ) {
             disabledAtCount = rawCount
-            if (pTone != T.NONE) {
+            if (eagerRestoreApplies(newCount)) {
+                disabledAtCount = 0
+                rebuildParseState()
+                tonesFolded = false
+                newCount = render()
+                snapshotCancel()
+            } else if (pTone != T.NONE) {
                 pFoldTones = true
                 rebuildParseState()
                 pFoldTones = false
@@ -213,6 +226,18 @@ class TelexEngine {
                 newCount = render()
                 snapshotCancel()
             }
+        }
+
+        // Eager English restore, deferred to key minLength when the word froze earlier ("ưin").
+        if (eagerEnglishRestore && disabledAtCount != Int.MAX_VALUE && disabledAtCount > 0 &&
+            disabledAtCount < EnglishFreezePrefixes.minLength &&
+            rawCount == EnglishFreezePrefixes.minLength && eagerRestoreApplies(newCount)
+        ) {
+            disabledAtCount = 0
+            rebuildParseState()
+            tonesFolded = false
+            newCount = render()
+            snapshotCancel()
         }
 
         if (liveSpellCheck && disabledAtCount != Int.MAX_VALUE && !upperToneKey &&
@@ -291,7 +316,10 @@ class TelexEngine {
                 for (i in lcp until rawCount) sb.append(raw[i].toChar())
                 action = TelexAction.Replace(backspaces, sb.toString())
             }
-            captureReopen(wantsRestore)
+            // Teencode "Dạa" (Swift isToneThenATail): rewrite only the last character.
+            val elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+            if (elongate) action = TelexAction.Replace(1, elongatedTail())
+            captureReopen(wantsRestore || elongate)
             updateContext(wantsRestore)
             return action
         } finally {
@@ -530,9 +558,11 @@ class TelexEngine {
             }
             val wantsRestore = outCount > 0 &&
                 (needsStandaloneWRunRestore() || (autoRestore && shouldRestoreRaw()))
-            captureReopen(wantsRestore)
+            val elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+            val text = if (wantsRestore) rawKeystrokes else if (elongate) composedElongated() else composed
+            captureReopen(wantsRestore || elongate)
             updateContext(wantsRestore)
-            return if (wantsRestore) rawKeystrokes else composed
+            return text
         } finally {
             resetWord()
         }
@@ -543,7 +573,55 @@ class TelexEngine {
         if (overflowed) return composed
         if (outCount > 0 && needsStandaloneWRunRestore()) return rawKeystrokes
         if (autoRestore && outCount > 0 && shouldRestoreRaw()) return rawKeystrokes
+        if (outCount > 0 && isToneThenATail()) return composedElongated()
         return composed
+    }
+
+    /**
+     * TEENCODE one-letter elongation "Dạa" (Swift `isToneThenATail`): "daja" commits "dạa"
+     * instead of the invalid bare "dậ" — the tone was placed before the extra `a` came.
+     * Teencode only, Telex only, no cancel, tone keys between the target `a` and the final
+     * `a`, the â carries the tone, and the head with a plain `a` is a valid syllable.
+     */
+    private fun isToneThenATail(): Boolean {
+        if (!teencode || vniMode || markCancelled || overflowed || pCount < 2 || rawCount < 3 ||
+            lastEffTone == T.NONE
+        ) return false
+        val last = pCount - 1
+        if (lBase[last] != 'a'.code || lMark[last] != Mark.CIRCUMFLEX) return false
+        if (lowercased(raw[rawCount - 1]) != 'a'.code || rawLetter[rawCount - 1] != last) return false
+        if (outCount != pCount) return false
+        if (out[outCount - 1] != Tables.applyTone(Tables.markedScalar('a'.code, Mark.CIRCUMFLEX, lUpper[last]), lastEffTone)) return false
+        var r = rawCount - 2
+        var tones = 0
+        while (r >= 0 && isToneKey(r)) { tones++; r-- }
+        if (tones == 0 || r < 0 || lowercased(raw[r]) != 'a'.code || rawLetter[r] != last) return false
+        return isValidHead(pCount, lastEffTone, plainLast = true)
+    }
+
+    private fun isToneKey(r: Int): Boolean {
+        when (lowercased(raw[r])) {
+            's'.code, 'f'.code, 'r'.code, 'x'.code, 'j'.code -> {}
+            else -> return false
+        }
+        for (j in 0 until pToneKeyCount) if (toneKeys[j] == r) return true
+        return false
+    }
+
+    private fun elongatedTail(): String {
+        val last = pCount - 1
+        val toned = Tables.applyTone(Tables.markedScalar('a'.code, Mark.NONE, lUpper[last]), lastEffTone)
+        val sb = StringBuilder(3)
+        sb.appendCodePoint(toned)
+        sb.append(raw[rawCount - 1].toChar())
+        return sb.toString()
+    }
+
+    private fun composedElongated(): String {
+        val sb = StringBuilder(outCount + 1)
+        for (i in 0 until outCount - 1) sb.appendCodePoint(out[i])
+        sb.append(elongatedTail())
+        return sb.toString()
     }
 
     private fun rawIsEnglishCollision(): Boolean {
@@ -664,7 +742,7 @@ class TelexEngine {
         return -1
     }
 
-    private fun isValidHead(k: Int, tone: Int): Boolean {
+    private fun isValidHead(k: Int, tone: Int, plainLast: Boolean = false): Boolean {
         if (k < 1 || k > CAPACITY) return false
         var t = tone
         if ((t == T.GRAVE || t == T.HOOK || t == T.TILDE) && hasStopCoda(k) &&
@@ -675,11 +753,11 @@ class TelexEngine {
         if (onset != 0 && onsetSkip(onset) < k) {
             var n = writeCanon(onset, buf)
             for (j in onsetSkip(onset) until k) {
-                buf[n] = Tables.letterClass(rBase[j], rMark[j]); n++
+                buf[n] = Tables.letterClass(rBase[j], if (plainLast && j == k - 1) Mark.NONE else rMark[j]); n++
             }
             if (SyllableValidator.isValidSyllable(buf, n, t, teencode)) return true
         }
-        for (j in 0 until k) buf[j] = Tables.letterClass(rBase[j], rMark[j])
+        for (j in 0 until k) buf[j] = Tables.letterClass(rBase[j], if (plainLast && j == k - 1) Mark.NONE else rMark[j])
         return SyllableValidator.isValidSyllable(buf, k, t, teencode)
     }
 
@@ -759,7 +837,23 @@ class TelexEngine {
         return SyllableValidator.isValidPrefix(basesScratch, o, teencode)
     }
 
+    /** Eager English restore gate — only at the freeze moment (Swift `eagerRestoreApplies`). */
+    private fun eagerRestoreApplies(n: Int): Boolean {
+        if (!eagerEnglishRestore || vniMode || pCancelled ||
+            rawCount < EnglishFreezePrefixes.minLength || rawCount > EnglishFreezePrefixes.maxLength
+        ) return false
+        var differs = n != rawCount
+        if (!differs) {
+            for (i in 0 until n) if (scratch[i] != raw[i]) { differs = true; break }
+        }
+        if (!differs) return false
+        return EnglishFreezePrefixes.contains(raw, rawCount)
+    }
+
     // MARK: - Caller helpers
+
+    /** Freeze index (0 = whole word literal), null = not frozen (Swift `spellCheckFreezeAt`). */
+    val spellCheckFreezeAt: Int? get() = if (disabledAtCount == Int.MAX_VALUE) null else disabledAtCount
 
     /** TRUE while the current word has exceeded the 32-key capacity. */
     val isOverflowed: Boolean get() = overflowed
@@ -867,8 +961,16 @@ class TelexEngine {
             rawCount = r
             rebuildParseState()
             if (disabledAtCount == Int.MAX_VALUE && pCount > 0 && !prefixIsValid(pCount)) {
-                render()
-                if (elongationHeadCount(pCount, pTone) <= 0) disabledAtCount = r
+                val n = render()
+                if (elongationHeadCount(pCount, pTone) <= 0) {
+                    disabledAtCount = if (eagerRestoreApplies(n)) 0 else r
+                }
+            } else if (eagerEnglishRestore && disabledAtCount != Int.MAX_VALUE && disabledAtCount > 0 &&
+                disabledAtCount < EnglishFreezePrefixes.minLength && r == EnglishFreezePrefixes.minLength
+            ) {
+                rebuildFrozenAware()
+                val n = render()
+                if (eagerRestoreApplies(n)) disabledAtCount = 0
             }
             r++
         }

@@ -54,7 +54,8 @@ enum {
     VT_FLAG_VNI = 7,                          /* default false */
     VT_FLAG_CONTEXTUAL_ENGLISH = 8,           /* default false */
     VT_FLAG_ENGLISH_WORD_RESTORE = 9,         /* default TRUE  */
-    VT_FLAG_COLLISION_PREFERS_VIETNAMESE = 10 /* default false */
+    VT_FLAG_COLLISION_PREFERS_VIETNAMESE = 10, /* default false */
+    VT_FLAG_EAGER_ENGLISH_RESTORE = 11        /* default false; frontends pass auto-restore */
 };
 
 /* Lifecycle */

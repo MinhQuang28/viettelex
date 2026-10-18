@@ -175,6 +175,8 @@ class EngineBridge(settings: KeyboardSettings = KeyboardSettings()) {
         e.freeMarking = settings.freeMarking
         e.simpleTelex = settings.simpleTelex
         e.liveSpellCheck = settings.liveSpellCheck
+        // "goog" thay vì "gôg" giữa từ — chỉ khi tự khôi phục bật (boundary giữ nguyên).
+        e.eagerEnglishRestore = settings.autoRestore
         e.quickTelex = settings.quickTelex
         e.modernTone = settings.modernTone
         e.teencode = settings.teencode

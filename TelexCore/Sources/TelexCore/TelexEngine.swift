@@ -60,6 +60,18 @@ public struct TelexEngine {
     /// token. Preserved across `reset()`; the caller sets it from settings.
     public var liveSpellCheck = false
 
+    /// EAGER English restore (18/10/2026, maintainer-approved). Only acts together with
+    /// `liveSpellCheck`: at the ONE moment the word freezes, if the raw keys so far are
+    /// exactly the freeze prefix of a known English word (`EnglishFreezePrefixes`,
+    /// generated from enlexicon.bin), the whole word goes back to its raw keys right
+    /// away — "goog" instead of "gôg", the rest of "google" types plainly. A raw prefix
+    /// NOT in the table keeps the historical behaviour (marks stay until the boundary),
+    /// which protects Vietnamese typos and teencode. The check runs once per word, never
+    /// per key. Engine default OFF (library contract / golden); callers set it to their
+    /// EFFECTIVE auto-restore setting — with auto-restore off the boundary keeps "gôgle",
+    /// so restoring early would change the committed text. Preserved across `reset()`.
+    public var eagerEnglishRestore = false
+
     /// Simple Telex. When true, a STANDALONE `w` (no adjacent
     /// a/o/u to horn/breve) never becomes `ư` — it stays a literal `w`, so `ư` must be
     /// typed `uw` ("cw"→cw, not cư; "cuw"→cư). `w` still breves/horns an adjacent vowel
@@ -454,7 +466,18 @@ public struct TelexEngine {
         if liveSpellCheck, disabledAtCount == Int.max, !prefixIsValid(newCount),
            elongationHeadCount(newCount, tone: pTone) <= 0 {
             disabledAtCount = rawCount
-            if pTone != .none {
+            if eagerRestoreApplies(newCount) {
+                // EAGER English restore: freeze from the FIRST key, i.e. the whole word
+                // back to raw ("gôg" → "goog"). Same rebuild the upper-tone freeze uses;
+                // a pending tone cannot float either (every key is literal now).
+                disabledAtCount = 0
+                rebuildParseState()
+                tonesFolded = false
+                newCount = render()
+                markCancelled = pCancelled
+                toneCancelAt = pToneCancelAt
+                toneCancelSpan = pToneCancelSpan
+            } else if pTone != .none {
                 // Rebuild with pFoldTones: parseStep folds every TONE key back
                 // to its literal letter (see the tone branch), so the s in
                 // "installer" comes back as 's' instead of floating as sắc.
@@ -472,6 +495,21 @@ public struct TelexEngine {
                 toneCancelAt = pToneCancelAt
                 toneCancelSpan = pToneCancelSpan
             }
+        }
+
+        // Eager English restore, deferred: the word froze BEFORE the table's minimum
+        // length ("wi"+n → "ưin" for "windows", "awe" → "ăe" for "awesome"), so the
+        // decision waits for the 4th key — still one table lookup per word.
+        if eagerEnglishRestore, disabledAtCount != Int.max, disabledAtCount > 0,
+           disabledAtCount < EnglishFreezePrefixes.minLength,
+           rawCount == EnglishFreezePrefixes.minLength, eagerRestoreApplies(newCount) {
+            disabledAtCount = 0
+            rebuildParseState()
+            tonesFolded = false
+            newCount = render()
+            markCancelled = pCancelled
+            toneCancelAt = pToneCancelAt
+            toneCancelSpan = pToneCancelSpan
         }
 
         // Elongation UNFREEZE: the FIRST extra character can't be told apart from a
@@ -598,9 +636,79 @@ public struct TelexEngine {
             for i in lcp..<rawCount { s.append(Unicode.Scalar(raw[i])) }
             action = .replace(backspaces: backspaces, insert: String(s))
         }
-        captureReopen(restored: wantsRestore)
+        // Teencode one-letter elongation ("daja" → "dạa", not the invalid "dậ"): only the
+        // last character changes, so rewrite exactly that one.
+        let elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+        if elongate { action = .replace(backspaces: 1, insert: elongatedTail()) }
+        // The screen no longer shows `composed` (and no keystrokes re-compose "dạa"), so a
+        // ⌫ on the boundary must not re-open it — same as a restored word.
+        captureReopen(restored: wantsRestore || elongate)
         updateContext(restored: wantsRestore)
         return action
+    }
+
+    /// TEENCODE one-letter elongation "Dạa" (maintainer 18/10/2026). Telex reads the second
+    /// `a` of "daja" as the aa-circumflex and shows "dậ" — but a bare "â" never ends a
+    /// Vietnamese syllable (only ân/âng/âm/âp/ât/âc/âu/ây), and the key ORDER says what the
+    /// user meant: the tone was already placed ("dạ") when the extra `a` came, i.e. the
+    /// chat spelling "dạa" (= dạ), "màa", "hảa". At the boundary such a word commits as
+    /// the base syllable with its tone + a literal `a`.
+    /// Only when `teencode` is on (off = historical "dậ"), Telex only, no cancel, the last
+    /// raw key is the `a` that made the â, every key between the target `a` and it was a
+    /// TONE key, the â carries the word's tone, and the head ("dạ") is a valid syllable.
+    /// Plain "daa" (no tone in between) is the ordinary way to type â and stays "dâ".
+    /// "ă" is not covered: it only comes from `w`, which is no elongation of `a`.
+    /// Boundary-only, NON-mutating, allocation-free.
+    private func isToneThenATail() -> Bool {
+        guard teencode, !vniMode, !markCancelled, !overflowed, pCount >= 2, rawCount >= 3,
+              lastEffTone != .none else { return false }
+        let last = pCount - 1
+        guard letters[last].base == UInt8(ascii: "a"), letters[last].mark == .circumflex,
+              lowercased(raw[rawCount - 1]) == UInt8(ascii: "a"),
+              rawLetter[rawCount - 1] == last,
+              outCount == pCount,
+              out[outCount - 1] == Tables.applyTone(
+                  Tables.markedScalar(base: UInt8(ascii: "a"), mark: .circumflex, upper: letters[last].upper),
+                  lastEffTone) else { return false }
+        // Walk back over the tone keys right before the final `a` (at least one), then the
+        // target `a` itself must sit there.
+        var r = rawCount - 2
+        var tones = 0
+        while r >= 0, isToneKey(r) { tones += 1; r -= 1 }
+        guard tones > 0, r >= 0, lowercased(raw[r]) == UInt8(ascii: "a"), rawLetter[r] == last
+        else { return false }
+        return isValidHead(pCount, tone: lastEffTone, plainLast: true)
+    }
+
+    /// Raw key `r` was consumed as a deferred tone key (s f r x j).
+    private func isToneKey(_ r: Int) -> Bool {
+        switch lowercased(raw[r]) {
+        case UInt8(ascii: "s"), UInt8(ascii: "f"), UInt8(ascii: "r"),
+             UInt8(ascii: "x"), UInt8(ascii: "j"): break
+        default: return false
+        }
+        for j in 0..<pToneKeyCount where toneKeys[j] == r { return true }
+        return false
+    }
+
+    /// The rewritten last character(s) for `isToneThenATail`: "ậ" → "ạa" (case kept: the
+    /// toned vowel takes the â's case, the extra letter the final key's case).
+    private func elongatedTail() -> String {
+        let last = pCount - 1
+        let toned = Tables.applyTone(
+            Tables.markedScalar(base: UInt8(ascii: "a"), mark: .none, upper: letters[last].upper), lastEffTone)
+        var v = String.UnicodeScalarView()
+        v.append(Unicode.Scalar(toned)!)
+        v.append(Unicode.Scalar(raw[rawCount - 1]))
+        return String(v)
+    }
+
+    /// `composed` with the elongation rewrite applied (commitText / peek).
+    private func composedElongated() -> String {
+        var s = String.UnicodeScalarView()
+        for i in 0..<(outCount - 1) { s.append(Unicode.Scalar(out[i])!) }
+        s.append(contentsOf: elongatedTail().unicodeScalars)
+        return String(s)
     }
 
     /// Remember the just-committed word so a ⌫ on the boundary character can put it
@@ -986,9 +1094,11 @@ public struct TelexEngine {
         // (reusing the restore decision — no repeated checks).
         let wantsRestore = outCount > 0
             && (needsStandaloneWRunRestore() || (autoRestore && shouldRestoreRaw()))
-        captureReopen(restored: wantsRestore)
+        let elongate = !wantsRestore && outCount > 0 && isToneThenATail()
+        let text = wantsRestore ? rawKeystrokes : (elongate ? composedElongated() : composed)
+        captureReopen(restored: wantsRestore || elongate)
         updateContext(restored: wantsRestore)
-        return wantsRestore ? rawKeystrokes : composed
+        return text
     }
 
     /// Non-mutating twin of `commitText(autoRestore:)`: điều boundary SẼ chốt,
@@ -1005,6 +1115,7 @@ public struct TelexEngine {
         if autoRestore, outCount > 0, shouldRestoreRaw() {
             return rawKeystrokes
         }
+        if outCount > 0, isToneThenATail() { return composedElongated() }
         return composed
     }
 
@@ -1248,8 +1359,10 @@ public struct TelexEngine {
     /// half of the elongation split. Teencode onsets (w→qu, z→d, dz→d) fold exactly like
     /// `composedIsValidSyllable`, and the stop-coda tone rule is applied to the HEAD's
     /// coda. NON-mutating, stack buffer, no heap.
-    private func isValidHead(_ k: Int, tone: Tone) -> Bool {
+    private func isValidHead(_ k: Int, tone: Tone, plainLast: Bool = false) -> Bool {
         guard k >= 1, k <= Self.capacity else { return false }
+        // `plainLast`: judge the head with its LAST letter's mark dropped ("dậ" as "dạ").
+        func mark(_ j: Int) -> Mark { plainLast && j == k - 1 ? .none : renderLetters[j].mark }
         var t = tone
         if t == .grave || t == .hook || t == .tilde, hasStopCoda(k),
            !(t == .grave && isUkRime(k)) { t = .none }     // lockstep với render path
@@ -1258,15 +1371,13 @@ public struct TelexEngine {
                 var n = 0
                 for c in canon { buf[n] = Tables.letterClass(base: c, mark: .none); n += 1 }
                 for j in skip..<k {
-                    buf[n] = Tables.letterClass(base: renderLetters[j].base,
-                                                mark: renderLetters[j].mark)
+                    buf[n] = Tables.letterClass(base: renderLetters[j].base, mark: mark(j))
                     n += 1
                 }
                 if SyllableValidator.isValidSyllable(classes: buf, count: n, tone: t, teencode: teencode) { return true }
             }
             for j in 0..<k {
-                buf[j] = Tables.letterClass(base: renderLetters[j].base,
-                                            mark: renderLetters[j].mark)
+                buf[j] = Tables.letterClass(base: renderLetters[j].base, mark: mark(j))
             }
             return SyllableValidator.isValidSyllable(classes: buf, count: k, tone: t, teencode: teencode)
         }
@@ -1426,7 +1537,32 @@ public struct TelexEngine {
         return SyllableValidator.isValidPrefix(bases: basesScratch, count: out, teencode: teencode)
     }
 
+    /// Eager English restore gate, evaluated ONLY at the live-spell-check freeze moment
+    /// (forward typing, or its ⌫/replay twin in `recomputeFreeze`) — once per word.
+    /// `n` = letters just rendered into `scratch` for `raw[0..<rawCount]`.
+    /// Restores only when: the flag is on (caller's effective auto-restore), Telex (VNI
+    /// raw holds digits, never an English prefix), no deliberate cancel happened (a
+    /// cancel is the user's own escape — "gooogle" keeps its screen-truth), the screen
+    /// actually differs from the raw keys (else nothing to restore), and the raw keys are
+    /// exactly an English freeze prefix (table min length 4).
+    private func eagerRestoreApplies(_ n: Int) -> Bool {
+        guard eagerEnglishRestore, !vniMode, !pCancelled,
+              rawCount >= EnglishFreezePrefixes.minLength,
+              rawCount <= EnglishFreezePrefixes.maxLength else { return false }
+        var differs = n != rawCount
+        if !differs {
+            for i in 0..<n where scratch[i] != UInt32(raw[i]) { differs = true; break }
+        }
+        guard differs else { return false }
+        return raw.withUnsafeBufferPointer { EnglishFreezePrefixes.contains($0, count: rawCount) }
+    }
+
     // MARK: - Test / caller helpers
+
+    /// Raw index from which live spell-check froze the current word (0 = the whole word
+    /// is literal: eager English restore or a mixed-case upper-tone freeze), nil = not
+    /// frozen. For the gen-freeze-prefixes generator and callers' diagnostics.
+    public var spellCheckFreezeAt: Int? { disabledAtCount == Int.max ? nil : disabledAtCount }
 
     /// TRUE while the current word has exceeded the 32-key capacity. Callers need this
     /// to tell an overflow `.passthrough` (key NOT recorded — the app must render and
@@ -1609,8 +1745,20 @@ public struct TelexEngine {
                 // Same teencode-elongation escape forward typing applies. render()
                 // fills `renderLetters` for the split check; every buffer it touches is
                 // rebuilt by the caller's `rebuildFrozenAware()` + `render()` after.
-                _ = render()
-                if elongationHeadCount(pCount, tone: pTone) <= 0 { disabledAtCount = r }
+                let n = render()
+                if elongationHeadCount(pCount, tone: pTone) <= 0 {
+                    // Eager English restore decides on exactly what forward typing saw
+                    // at this key (raw[0..<r] + its render), so the replay agrees.
+                    disabledAtCount = eagerRestoreApplies(n) ? 0 : r
+                }
+            } else if eagerEnglishRestore, disabledAtCount != Int.max, disabledAtCount > 0,
+                      disabledAtCount < EnglishFreezePrefixes.minLength,
+                      r == EnglishFreezePrefixes.minLength {
+                // Deferred twin of feed(): render what forward typing showed at key 4
+                // (fold-aware, like the frozen word on screen) and decide there.
+                rebuildFrozenAware()
+                let n = render()
+                if eagerRestoreApplies(n) { disabledAtCount = 0 }
             }
             r += 1
         }
