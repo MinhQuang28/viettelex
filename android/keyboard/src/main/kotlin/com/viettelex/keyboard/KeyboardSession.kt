@@ -984,7 +984,8 @@ class KeyboardSession(
             swipeEnglishAlts = choice.englishAlternatives
         } else if (bridge.adoptWord(choice.word)) {
             swipeWord = choice.word
-            swipeAlts = choice.alternatives
+            // lọc bật: phương án tạo cặp nhạy cảm với từ trước (SensitiveWords.pairs) không hiện
+            swipeAlts = SensitiveWords.dropPairs(choice.alternatives, lastWord, filterSensitive)
             swipeEnglishAlts = choice.englishAlternatives
             if (scored.isNotEmpty()) revisable = Revisable(choice.word, scored, case)
             reviseUndo = revised
@@ -1116,7 +1117,7 @@ class KeyboardSession(
         if (base.size >= need) return base.take(need)
         // Tiếng Anh: không chặn main chờ nạp/sắp từ điển (IME hâm nóng nền khi vào EN) — chưa có ⇒ không đệm.
         val top = if (bridge.englishMode) SwipeEnglish.topIfReady ?: emptyList() else langModel.topWords(need + 12)
-        val cands = SensitiveWords.filter(top, filterSensitive)
+        val cands = SensitiveWords.filter(top, filterSensitive, after = lastWord)
             .map { caseForContext(displayCase(it), typed) }
         return SuggestionFill.pad(base, cands, need, typed)
     }
@@ -1159,15 +1160,15 @@ class KeyboardSession(
         val next: List<String> = if (bridge.englishMode) {
             // Tiếng Anh: từ kế tiếp cá nhân chỉ giữ từ tiếng Anh; đệm bằng từ Anh phổ biến
             val personal = if (prev != null) langModel.nextWords(prev, lastWord2, 12) else emptyList()
-            padWords(SensitiveWords.filter(personal.filter { SwipeEnglish.containsIfLoaded(it.lowercase()) }, filterSensitive)
+            padWords(SensitiveWords.filter(personal.filter { SwipeEnglish.containsIfLoaded(it.lowercase()) }, filterSensitive, after = prev)
                 .take(slotWant).map { caseForContext(it) }, slotWant)
         } else if (prev != null) {
             // SuggestRank.nextFill: có trigram tĩnh (prev2, prev) ⇒ bộ ba người dùng đã gõ, rồi trigram,
             // rồi cá nhân/seed; không ⇒ cá nhân/seed trước, lấp bằng bigram tĩnh; rồi mới topWords
             val p2 = lastWord2
-            val personal = SensitiveWords.filter(langModel.nextWords(prev, p2, 6), filterSensitive)
+            val personal = SensitiveWords.filter(langModel.nextWords(prev, p2, 6), filterSensitive, after = prev)
             val n = SuggestRank.nextFill(prev, p2, personal, { w -> if (p2 == null) 0 else langModel.trigramCount(p2, prev, w) },
-                { SensitiveWords.filter(it, filterSensitive) }, need = slotWant)
+                { SensitiveWords.filter(it, filterSensitive, after = prev) }, need = slotWant)
             padWords(n.map { caseForContext(displayCase(it, prev)) }, slotWant)
         } else {
             val top = SensitiveWords.filter(langModel.topWords(maxOf(6, slotWant + 3)), filterSensitive)
@@ -1270,15 +1271,19 @@ class KeyboardSession(
             manualHits.map { VNSuggest.Match(it, MANUAL_FREQ) } + pool.filter { it.word.lowercase() !in low }
         }
         if (pool.isNotEmpty()) {
-            val ctxKey = (lastWord ?: "") + "\u0001" + (lastWord2 ?: "")
+            val ctxKey = (lastWord ?: "") + "\u0001" + (lastWord2 ?: "") + (if (filterSensitive) "\u0001" else "")
             if (ctxKey != ctxCacheKey) {
-                // + cặp chọn tay (CuratedPairs) — chỉ xếp gợi ý đang gõ dở, không thêm từ kế tiếp
-                ctxCache = lastWord?.let { CuratedPairs.withNext(langModel.nextWords(it, lastWord2, 24), it, lastWord2).toSet() } ?: emptySet()
+                // + cặp chọn tay (CuratedPairs) — chỉ xếp gợi ý đang gõ dở, không thêm từ kế tiếp.
+                // Lọc bật: cặp nhạy cảm (SensitiveWords.pairs) không thưởng ngữ cảnh.
+                ctxCache = lastWord?.let {
+                    CuratedPairs.withNext(SensitiveWords.dropPairs(langModel.nextWords(it, lastWord2, 24), it, filterSensitive),
+                        it, lastWord2).toSet()
+                } ?: emptySet()
                 ctxCacheKey = ctxKey
             }
             val ctx = ctxCache
             val ranked = SensitiveWords.filter(
-                SuggestRank.rankInline(pool, pmi, Cp.count(composed), langModel::count, ctx), filterSensitive)
+                SuggestRank.rankInline(pool, pmi, Cp.count(composed), langModel::count, ctx), filterSensitive, after = lastWord)
             word = ranked.firstOrNull()?.let { caseForContext(displayCase(it, lastWord), composed) }
             word2 = ranked.getOrNull(1)?.let { caseForContext(displayCase(it, lastWord), composed) }
             // "Số từ gợi ý" 4–5: ứng viên hạng 3… (ô 1 = nguyên văn, ô 2–3 = word/word2)
@@ -1588,7 +1593,11 @@ class KeyboardSession(
 
     // MARK: thêm dấu cho câu không dấu (chỉ khi người dùng bấm chip — AddTones.kt)
 
-    private fun tonesPersonal() = AddTones.Personal(langModel::count, langModel::bigramCount)
+    /** Lọc bật: cặp nhạy cảm (SensitiveWords.pairs, có trong seed) không thưởng khi chọn dấu. */
+    private fun tonesPersonal(): AddTones.Personal {
+        val fs = filterSensitive
+        return AddTones.Personal(langModel::count) { a, b -> if (fs && SensitiveWords.isPair(a, b)) 0 else langModel.bigramCount(a, b) }
+    }
 
     /** Kế hoạch thêm dấu cho chữ trước con trỏ (cache theo văn bản); null = không mời. */
     private fun addTonesPlan(proxy: TextProxy): AddTones.Plan? {

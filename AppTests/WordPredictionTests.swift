@@ -221,7 +221,7 @@ final class WordPredictionTests: XCTestCase {
             let got = c(prev + " ", on: true)
             XCTAssertTrue(got.allSatisfy { !SensitiveWords.set.contains($0.lowercased()) }, "\(prev): \(got)")
         }
-        XCTAssertEqual(c("bú ", on: true), [])
+        XCTAssertEqual(c("bú ", on: true), ["đá"], "bú đá (tiếng lóng ma tuý) hiện; bú cu/lồn… không")
         XCTAssertEqual(c("bú ", on: false).first, "lồn")
         XCTAssertFalse(c("motherf", "motherf", english: true, on: true).contains { $0.lowercased() == "motherfucker" })
         XCTAssertEqual(c("motherf", "motherf", english: true, on: false).first, "motherfucker")
@@ -234,6 +234,87 @@ final class WordPredictionTests: XCTestCase {
         XCTAssertEqual(L.withVulgarEnglish(en, typed: "fu", rank: { _ in 0 }),
                        ["full", "fuck", "fucked", "fucker", "fucking", "fun"])
         XCTAssertEqual(L.withVulgarEnglish([], typed: "DI", rank: { _ in 0 }), ["DICK", "DICKHEAD"])
+    }
+
+    /// SensitivePairs (seed-curated [sensitive-bigram]): cặp chửi/tục ghép từ hai TỪ THƯỜNG — bật lọc ⇒
+    /// sau prev không bao giờ gợi ý word (từ kế tiếp, hoàn thành từ đang gõ) và cặp không thưởng ngữ
+    /// cảnh; tắt lọc ⇒ seed hiện như cũ.
+    func testSensitivePairsGatedByFilter() {
+        func c(_ before: String, _ typed: String = "", english: Bool = false, on: Bool) -> [String] {
+            guard let r = L.request(before: before, typed: typed, english: english) else { return [] }
+            return PredictionModel.shared.candidates(r, raw: typed, filterSensitive: on)
+        }
+        XCTAssertGreaterThanOrEqual(SensitiveWords.pairs.values.map(\.count).reduce(0, +), 30)
+        for (prev, words) in SensitiveWords.pairs {
+            for w in words {
+                XCTAssertFalse(SensitiveWords.set.contains(w), "\(prev) \(w): đã lọc theo từ")
+                let english = w == "it" || w == "off"
+                XCTAssertFalse(c(prev + " ", english: english, on: true).contains(w), "\(prev) → \(w)")
+                let t = String(w.prefix(max(1, min(2, w.count - 1))))
+                XCTAssertFalse(c(prev + " " + t, t, english: english, on: true).map { $0.lowercased() }.contains(w),
+                               "\(prev) \(t)… → \(w)")
+                XCTAssertTrue(PredictionModel.shared.seedNext(prev).contains(w), "seed \(prev) → \(w)")
+            }
+        }
+        XCTAssertEqual(c("sờ ", on: true), ["vào"])
+        XCTAssertEqual(c("sờ ", on: false), ["vào", "chim", "cu"])
+        XCTAssertEqual(c("nâng ", on: true), ["cao", "cấp"])
+        XCTAssertEqual(c("thằng ", on: true), [])
+        XCTAssertEqual(c("thằng ", on: false).first, "mặt")
+        XCTAssertEqual(c("damn ", english: true, on: true), [])
+        XCTAssertEqual(c("damn ", english: true, on: false), ["it"])
+        XCTAssertFalse(c("piss of", "of", english: true, on: true).contains("off"))
+        XCTAssertEqual(c("piss of", "of", english: true, on: false).first, "off")
+        // giữ hiện: từ vựng trung tính
+        XCTAssertFalse(SensitiveWords.isPair("lăng", "nhăng") || SensitiveWords.isPair("hãm", "hiếp"))
+        XCTAssertTrue(SensitiveWords.isPair("Thằng", "CHÓ"))
+        XCTAssertEqual(SensitiveWords.filter(["chó", "bé", "lồn"], after: "thằng", enabled: true), ["bé"])
+        XCTAssertEqual(SensitiveWords.filter(["chó", "bé", "lồn"], after: "thằng", enabled: false), ["chó", "bé", "lồn"])
+        XCTAssertEqual(SensitiveWords.dropPairs(["chó", "lồn"], after: "thằng", enabled: true), ["lồn"])
+    }
+
+    /// Lô tiếng lóng / chửi 18/10/2026 trên máy tính: từ kế tiếp seed hiện đúng, cặp lọc chỉ khi tắt lọc.
+    func testSlangBatchesOnDesktop() {
+        func c(_ before: String, _ typed: String = "", on: Bool = true) -> [String] {
+            guard let r = L.request(before: before, typed: typed, english: false) else { return [] }
+            return PredictionModel.shared.candidates(r, raw: typed, filterSensitive: on)
+        }
+        XCTAssertEqual(c("giang "), [], "giang hồ: vnlm.bin đã có (bigram một từ không đoán trên máy tính) ⇒ không thêm seed")
+        XCTAssertEqual(c("gen ").first, "Z", "gen z (DisplayCase chuỗi gen → Z)")
+        XCTAssertEqual(c("lạng ").first, "lách")
+        XCTAssertEqual(c("rửa ti", "ti").first, "tiền")
+        XCTAssertEqual(c("nước ").first, "ngoài")
+        XCTAssertEqual(c("xin "), ["lỗi", "chào", "phép"])
+        XCTAssertEqual(c("kích "), [])
+        XCTAssertEqual(c("kích ", on: false), ["dục"])
+        XCTAssertFalse(c("óc ").contains("lợn"))
+        XCTAssertEqual(c("óc ", on: false), ["chó", "lợn"])
+        XCTAssertTrue(c("vãi ").contains("nồi"))
+        for w in ["cc", "đb", "lìn"] { XCTAssertTrue(SensitiveWords.set.contains(w)) }
+        // từ công nghệ / tài chính (enlexicon SUPPLEMENT) gợi ý tiếng Anh trên máy tính
+        func en(_ t: String) -> [String] {
+            guard let r = L.request(before: t, typed: t, english: true) else { return [] }
+            return PredictionModel.shared.candidates(r, raw: t, filterSensitive: true)
+        }
+        XCTAssertTrue(en("kuber").contains("kubernetes"), "\(en("kuber"))")
+        XCTAssertTrue(en("stablec").contains("stablecoin"), "\(en("stablec"))")
+        XCTAssertTrue(en("typesc").contains("typescript"), "\(en("typesc"))")
+        XCTAssertTrue(en("viettel").contains("viettelex"), "\(en("viettel"))")
+        XCTAssertTrue(en("paracet").contains("paracetamol"), "\(en("paracet"))")
+        // tác giả: "Phil ␣" → Trinh (không dấu, hoa theo chuỗi DisplayCase)
+        XCTAssertEqual(c("Phil ").first, "Trinh")
+    }
+
+    /// Tiền pháp định + mã tiền tệ (18/10/2026): "tiền pháp" → định; USD/VNĐ/VND/USDT viết hoa, Bitcoin
+    /// hoa đầu, crypto/fiat giữ thường.
+    func testFiatAndCurrencyCase() {
+        guard let r = L.request(before: "tiền pháp ", typed: "", english: false) else { return XCTFail() }
+        XCTAssertEqual(PredictionModel.shared.candidates(r, raw: "", filterSensitive: true).first, "định")
+        for (w, d) in [("usd", "USD"), ("usdt", "USDT"), ("vnđ", "VNĐ"), ("vnd", "VND"), ("bitcoin", "Bitcoin"),
+                       ("crypto", "crypto"), ("fiat", "fiat")] {
+            XCTAssertEqual(DisplayCase.resolve(w), d)
+            XCTAssertNotNil(SeedData.unigrams[w], w)
+        }
     }
 
     /// Tiếng Anh giữa câu Việt: chỉ khi phím thô là tiền tố tiếng Anh rõ ràng hơn mọi cách đọc

@@ -250,7 +250,7 @@ TEST(prediction_macos_assertions) {
 TEST(prediction_vulgar_pairs_gated_by_filter) {
     for (const char* p : {"bú ", "liếm ", "móc ", "nứng ", "đầu ", "cái ", "thằng ", "con ", "như ", "vãi ", "mặt ", "sờ ", "hãm "})
         for (const auto& w : split(cands(p), '|')) CHECK(w.empty() || !predict::isSensitive(U(w)));
-    CHECK_EQ(cands("bú "), std::string());
+    CHECK_EQ(cands("bú "), std::string("đá"));  // bú đá (drug slang) visible; bú cu / bú lồn not
     CHECK(split(cands("bú ", "", "", false, false), '|')[0] == "lồn");
     CHECK(cands("motherf", "motherf", "motherf", true).find("motherfucker") == std::string::npos);
     CHECK(split(cands("motherf", "motherf", "motherf", true, false), '|')[0] == "motherfucker");
@@ -260,6 +260,96 @@ TEST(prediction_vulgar_pairs_gated_by_filter) {
     CHECK(predict::isEnglishVulgar(U("Bullshit")) && predict::isSensitive(U("bullshit")) && !predict::isSensitive(U("damn")));
     const std::vector<std::pair<std::u32string, int>> en = {{U("full"), 200}, {U("fun"), 120}};
     CHECK_EQ(join(predict::withVulgarEnglish(en, U("fu"))), std::string("full|fuck|fucking|fucked|fucker|fun"));
+}
+
+// SensitivePairs (seed-curated.txt [sensitive-bigram], = iOS SensitiveWords.pairs — read from the
+// generated Swift block, so the .inc cannot drift): two ordinary words, so the word filter cannot
+// catch them. Filter on => the word never follows prev (next word, completion after prev) and the
+// seed pair is no context bonus; filter off => the seed shows it.
+TEST(prediction_sensitive_pairs_gated_by_filter) {
+    std::ifstream f(VTX_KB_RESOURCES "/../SensitiveWords.swift");
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string sw = ss.str();
+    const size_t a = sw.find("static let pairs"), b = sw.find("END GENERATED SensitivePairs", a);
+    CHECK(a != std::string::npos && b != std::string::npos);
+    std::vector<std::pair<std::string, std::string>> pairs;
+    for (size_t line = sw.find("\n", a) + 1; line < b; line = sw.find("\n", line) + 1) {
+        const size_t e = sw.find("\n", line);
+        const std::string row = sw.substr(line, e - line);
+        const size_t k0 = row.find('"');
+        if (k0 == std::string::npos) continue;
+        const size_t k1 = row.find('"', k0 + 1);
+        const std::string prev = row.substr(k0 + 1, k1 - k0 - 1);
+        for (size_t p = row.find('"', row.find('[', k1)); p != std::string::npos; p = row.find('"', p + 1)) {
+            const size_t q = row.find('"', p + 1);
+            pairs.emplace_back(prev, row.substr(p + 1, q - p - 1));
+            p = q;
+        }
+    }
+    CHECK(pairs.size() >= 30);
+    for (const auto& [prev, word] : pairs) {
+        CHECK(predict::isSensitivePair(U(prev), U(word)));
+        CHECK(!predict::isSensitive(U(word)));
+        const bool english = word == "it" || word == "off";
+        for (const auto& w : split(cands(prev + " ", "", "", english), '|')) CHECK(w != word);
+        // completion after prev (typed = a proper prefix of word) never offers it either
+        const std::u32string uw = U(word);
+        const std::string t = S(uw.substr(0, std::min<size_t>(2, uw.size() - 1)));
+        for (const auto& w : split(cands(prev + " " + t, t, t, english), '|')) CHECK(w != word);
+        // filter off: the (unfiltered) seed next words have it
+        bool seen = false;
+        for (const auto& w : predict::seedNext(U(prev))) seen = seen || w == U(word);
+        CHECK(seen);
+    }
+    CHECK(predict::isSensitivePair(U("Thằng"), U("CHÓ")) && !predict::isSensitivePair(U("thằng"), U("bé")));
+    CHECK(!predict::isSensitivePair(U("lăng"), U("nhăng")) && !predict::isSensitivePair(U("hãm"), U("hiếp")));
+    CHECK_EQ(cands("sờ "), std::string("vào"));
+    CHECK_EQ(cands("sờ ", "", "", false, false), std::string("vào|chim|cu"));
+    CHECK_EQ(cands("thằng "), std::string());
+    CHECK(split(cands("thằng ", "", "", false, false), '|')[0] == "mặt");
+    CHECK_EQ(cands("nâng "), std::string("cao|cấp"));
+    CHECK_EQ(cands("chơi ", "", "", false, false), std::string("coin|gái|cave"));
+    CHECK_EQ(cands("damn ", "", "", true), std::string());
+    CHECK_EQ(cands("damn ", "", "", true, false), std::string("it"));
+}
+
+// = macOS testSlangBatchesOnDesktop.
+TEST(prediction_slang_batches) {
+    CHECK_EQ(cands("giang "), std::string());  // giang hồ: already in vnlm.bin => not seeded
+    CHECK(split(cands("gen "), '|')[0] == "Z");
+    CHECK(split(cands("lạng "), '|')[0] == "lách");
+    CHECK(split(cands("rửa ti", "ti", "ti"), '|')[0] == "tiền");
+    CHECK(split(cands("nước "), '|')[0] == "ngoài");
+    CHECK_EQ(cands("xin "), std::string("lỗi|chào|phép"));
+    CHECK_EQ(cands("kích "), std::string());
+    CHECK_EQ(cands("kích ", "", "", false, false), std::string("dục"));
+    CHECK(cands("óc ").find("lợn") == std::string::npos);
+    CHECK_EQ(cands("óc ", "", "", false, false), std::string("chó|lợn"));
+    CHECK(cands("vãi ").find("nồi") != std::string::npos);
+    CHECK(predict::isSensitive(U("cc")) && predict::isSensitive(U("đb")) && predict::isSensitive(U("lìn")));
+    // tech / finance / health English words (gen-enlexicon SUPPLEMENT) + DisplayCase
+    CHECK(cands("kuber", "kuber", "kuber", true).find("kubernetes") != std::string::npos);
+    CHECK(cands("viettel", "viettel", "viettel", true).find("viettelex") != std::string::npos);
+    CHECK(predict::displayCase(U("viettelex"), std::nullopt) == U("VietTelex"));
+    CHECK(predict::displayCase(U("kubernetes"), std::nullopt) == U("Kubernetes"));
+    CHECK(predict::displayCase(U("x"), U("chụp")) == U("X"));
+    CHECK(predict::displayCase(U("z"), U("gen")) == U("Z"));
+    CHECK(predict::displayCase(U("rust"), std::nullopt) == U("rust"));
+    CHECK(split(cands("Phil "), '|')[0] == "Trinh");
+}
+
+// Fiat / currencies (18/10/2026): "tiền pháp" → định; display casing of the currency codes.
+TEST(prediction_fiat_and_currency_case) {
+    CHECK(split(cands("tiền pháp "), '|')[0] == "định");
+    CHECK(predict::displayCase(U("usd"), std::nullopt) == U("USD"));
+    CHECK(predict::displayCase(U("usdt"), std::nullopt) == U("USDT"));
+    CHECK(predict::displayCase(U("vnđ"), std::nullopt) == U("VNĐ"));
+    CHECK(predict::displayCase(U("vnd"), std::nullopt) == U("VND"));
+    CHECK(predict::displayCase(U("bitcoin"), std::nullopt) == U("Bitcoin"));
+    CHECK(predict::displayCase(U("crypto"), std::nullopt) == U("crypto"));
+    CHECK(predict::displayCase(U("fiat"), std::nullopt) == U("fiat"));
+    CHECK(predict::seedCount("usd") > 0 && predict::seedCount("vnđ") > 0 && predict::seedCount("fiat") > 0);
 }
 
 // Phil 16/10/2026: "Tên " -> "gọi" was a one-word bigram guess. The static LM needs two

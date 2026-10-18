@@ -44,6 +44,10 @@ enum DisplayCase {
         "long": ["an"],
         "tây": ["ninh"],
         "new": ["york"], "san": ["francisco"], "hong": ["kong"],
+        // Gen Z ("gen" đứng một mình còn là gen di truyền ⇒ chỉ hoa "Z" sau "gen")
+        "gen": ["z"],
+        "chụp": ["x"],   // chụp X quang
+        "phil": ["trinh"],   // Phil Trinh (tác giả)
         // họ → đệm (chuỗi tên người)
         "nguyễn": ["văn", "thị", "đức", "minh", "ngọc", "hữu", "xuân", "thùy", "kim", "hồng", "quốc", "đình"],
         "trần": ["văn", "thị", "đức", "minh", "ngọc", "quốc"],
@@ -74,10 +78,16 @@ enum DisplayCase {
         "vinfast": "VinFast", "vietjet": "Vietjet", "fpt": "FPT",
         "arsenal": "Arsenal", "liverpool": "Liverpool", "chelsea": "Chelsea",
         "manchester": "Manchester", "bitcoin": "Bitcoin", "ethereum": "Ethereum",
-        "binance": "Binance", "netflix": "Netflix", "spotify": "Spotify",
+        "binance": "Binance", "usdt": "USDT", "usd": "USD", "vnđ": "VNĐ", "vnd": "VND",
+        "netflix": "Netflix", "spotify": "Spotify",
         "github": "GitHub", "claude": "Claude", "chatgpt": "ChatGPT",
         "tesla": "Tesla", "openai": "OpenAI", "anthropic": "Anthropic",
         "yahoo": "Yahoo", "hotmail": "Hotmail",
+        // công nghệ / AI / tài chính (18/10/2026)
+        "gemini": "Gemini", "grok": "Grok", "ubuntu": "Ubuntu", "copilot": "Copilot",
+        "docker": "Docker", "kubernetes": "Kubernetes", "javascript": "JavaScript", "typescript": "TypeScript", "llm": "LLM",
+        "nft": "NFT", "etf": "ETF", "ipo": "IPO", "defi": "DeFi",
+        "cloudflare": "Cloudflare", "golang": "Golang", "vpn": "VPN", "kotlin": "Kotlin", "panadol": "Panadol", "viettelex": "VietTelex", "phil": "Phil", "covid": "Covid",
         // OS / phần mềm
         "windows": "Windows", "macos": "macOS", "ios": "iOS",
         "android": "Android", "linux": "Linux", "chrome": "Chrome",

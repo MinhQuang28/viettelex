@@ -650,6 +650,10 @@ Chạy lại: `SWIPE_LANG_TUNE=1 SWIPE_LANG_CFGS='old;base' [SWIPE_TEST=1] ./gra
   ```
 - Dùng cho: gõ vuốt giai đoạn 3 (vuốt ra từ tiếng Anh xen trong câu Việt), công tắc
   "Vuốt từ tiếng Anh".
+- 18/10/2026: `SUPPLEMENT` trong script (từ công nghệ / AI / tài chính / y tế + viettelex, telex: kubernetes,
+  stablecoin, paracetamol…) — như từ mượn của repo, nằm NGOÀI 20.000 ⇒ bảng chỉ thêm (20.051 từ). Sinh lại cũng
+  kéo theo "ll"/"ve" (đuôi rút gọn đã có trong EnglishContextWords từ trước, bảng cũ chưa sinh lại) và bỏ
+  "landlords" (đuôi lấp Wikipedia). Từ nhạy cảm chỉ đọc khối `set` của SensitiveWords.swift.
 
 ### Nguồn
 
@@ -898,6 +902,13 @@ từ/cặp tục–tình dục–chửi thường gặp (bú lồn, địt nhau,
 motherfucker, bullshit, holy shit…) — từ tục đều vào SensitiveWords (ẩn khi bật lọc); cặp toàn từ thường (thằng chó,
 óc chó, lăng nhăng, hãm hiếp, sờ chim…) hiện cho mọi người, trọng số thấp; thêm "you"/"it" để thank you, love you,
 damn it… hiện được. 1.181 unigram / 1.000 bigram; keyprior.bin sinh lại (từ ASCII của seed).
+
+Cùng ngày (sau đó): khối `[sensitive-bigram]` của seed-curated.txt — cặp chửi/tục/tình dục/chê ngoại hình ghép từ hai
+TỪ THƯỜNG (thằng chó, sờ chim, nâng bi, kích dục, như lợn…) vừa vào seed vừa sinh bảng **SensitivePairs**
+(`SensitiveWords.pairs` Swift/Kotlin, `windows/app/core/sensitive_pairs.inc`): lọc bật ⇒ không gợi ý từ sau ngay sau từ
+trước, cặp không thưởng ngữ cảnh (vuốt, xếp gợi ý, Thêm dấu). Thêm các lô tiếng lóng / Gen Z / tài chính / y tế chỉ
+khi vnlm.bin chưa đoán (hạng > 3), kèm cặp NEO (nước ngoài, bóng đá, ví dụ…) để cặp lóng không chiếm ô đầu sau từ rất
+thường. `--check` so file đã commit. 1.222 unigram / 1.281 bigram.
 
 ### Đo trước / sau giai đoạn 2 (tập KIỂM THỬ, JVM; "trước" = main 18/10/2026 sau giai đoạn 1)
 

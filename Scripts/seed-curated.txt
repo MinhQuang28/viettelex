@@ -1,12 +1,14 @@
 # seed-curated.txt — LỚP CHỌN TAY của SeedData (seed UserLangModel), Scripts/gen-seed-data.py trộn
 # với phần sinh từ corpus hội thoại. Sửa file này rồi chạy lại generator (KHÔNG sửa SeedData.swift).
 #
-# Cú pháp: dòng "[pin]" / "[unigram]" / "[bigram]" mở một khối; "## chữ" = dòng chú thích chép
+# Cú pháp: dòng "[pin]" / "[unigram]" / "[bigram]" / "[sensitive-bigram]" mở một khối; "## chữ" = dòng chú thích chép
 # sang SeedData.swift (đầu một nhóm); "#" = chú thích chỉ ở đây.
 #   [pin]      từ trọng-số       — ÉP đúng trọng số (thứ tự ô trống: em > anh > tôi, SeedOrderTests)
 #   [unigram]  từ trọng-số       — gộp với corpus: lấy max
 #   [bigram]   từ1 từ2 trọng-số  — gộp với corpus: lấy max
 #   [exclude]  từ | từ1 từ2      — KHÔNG lấy từ corpus (thiên lệch nguồn: tên Tom của câu Tatoeba…)
+#   [sensitive-bigram] từ1 từ2 trọng-số — như [bigram] + vào bảng SensitivePairs: "Lọc từ nhạy cảm" BẬT
+#              thì không gợi ý từ2 sau từ1 (cặp chửi/tục ghép từ hai từ thường) — xem đầu khối
 # Tách 18/10/2026 từ SeedData.swift cũ (OpenSubtitles2018 + lớp chat/teencode + ~105 từ tiếng Anh
 # cap ≤ 18 + các khối bổ sung 24/07/2026): mọi từ KHÔNG phải âm tiết vnlexicon của khối đầu, toàn bộ
 # khối bổ sung (địa danh, thương hiệu, họ/tên, hệ điều hành, từ nhạy cảm cho SwipeVocab), cặp có từ
@@ -340,6 +342,21 @@ eth 4
 ethereum 4
 token 4
 usdt 4
+# bổ sung 18/10/2026 (Phil): tiền tệ — hiển thị USD/VNĐ/VND qua DisplayCase.proper
+usd 6
+vnđ 6
+vnd 4
+fiat 4
+# bổ sung 18/10/2026 (Phil): từ ngoại của cụm tiếng lóng / báo chí (sugar baby, karaoke tay vịn, hàng fake…) — ngoài
+# vnlexicon ⇒ seed ≥ 3 mới được gợi ý. KHÔNG thêm "three" (baby three): seed tiếng Anh cộng điểm cá nhân cho
+# vuốt tiếng Anh ⇒ vuốt "the" ra phương án "three" thay vì "the" (SwipeTypingTests)
+karaoke 4
+baby 4
+fake 4
+cave 3
+sugar 3
+daddy 3
+massage 3
 ## — bổ sung 2026-07-24 (3): thương hiệu nội bộ —
 printik 6
 senprints 6
@@ -462,6 +479,45 @@ dkm 3
 buscu 2
 bitch 4
 wtf 4
+# bổ sung 18/10/2026 (Phil, lô 3): viết tắt / nói tránh tục — cc (con cặc), đb (đầu buồi), lìn (= lồn) vào
+# SensitiveWords; đếch (= đéo, nhẹ) hiện cho mọi người (ngoài vnlexicon ⇒ ≥ 3)
+cc 3
+đb 2
+lìn 2
+đếch 4
+# bổ sung 18/10/2026 (Phil, lô 4): var (check var), anti/fan (anti fan) ngoài vnlexicon ⇒ ≥ 3; xỉn, dô (nhậu)
+var 3
+anti 3
+fan 4
+xỉn 4
+dô 4
+# bổ sung 18/10/2026 (Phil, Gen Z): ngoài vnlexicon ⇒ ≥ 3. gen (gen z — "gen" còn là gen di truyền nên
+# KHÔNG hoa sẵn; DisplayCase chuỗi gen → Z), gét (gét gô)
+gen 3
+z 3
+gét 3
+out 3
+red 3
+green 3
+flag 3
+# Gen Z lô 2 (từ ngoại / teencode ngoài vnlexicon ⇒ ≥ 3); fuckboy vào SensitiveWords
+trend 3
+idol 3
+drama 3
+mood 3
+up 3
+down 3
+trap 3
+boy 3
+xò 3
+fuckboy 2
+# tài chính (Phil 18/10/2026): margin (call margin)
+margin 3
+# y tế (Phil 18/10/2026): x (chụp x quang — DisplayCase chuỗi chụp → X), covid (hậu covid)
+x 3
+covid 4
+# tác giả (Phil 18/10/2026; tên đã công khai trong LICENSE): phil → trinh (DisplayCase "Phil Trinh", không dấu)
+phil 4
 
 [bigram]
 ## — cặp hội thoại của seed cũ (OpenSubtitles2018 + chọn tay 07/2026: anh ơi, ăn chưa, xin chào…; corpus mới đếm thiếu câu gọi/đáp ngắn) —
@@ -908,6 +964,9 @@ văn nam 4
 thị hoa 3
 tiền mã 5
 mã hóa 6
+# bổ sung 18/10/2026 (Phil): tiền pháp định (fiat)
+tiền pháp 5
+pháp định 5
 đồng coin 4
 ví điện 4
 điện tử 6
@@ -962,15 +1021,12 @@ lừa đảo 7
 cướp giật 4
 vãi lồn 5
 địt mẹ 5
-bố mày 7
 con đĩ 4
-thằng mặt 4
 mặt lồn 4
 dâm dê 4
 tục tĩu 4
 cả lồn 4
 đụ má 4
-má mày 4
 thối um 3
 đánh rắm 4
 sấp mặt 5
@@ -1017,18 +1073,324 @@ thế đéo 3
 đcm mày 3
 đẹp vl 3
 hay vl 3
-# bổ sung 18/10/2026 — chửi tiếng Anh (fuck/shit lọc; damn it, piss off hiện cho mọi người)
+# bổ sung 18/10/2026 — chửi tiếng Anh (fuck/shit lọc theo từ; damn it, piss off ở [sensitive-bigram])
 fuck off 4
 holy shit 4
 oh shit 3
-damn it 4
-piss off 3
-# bổ sung 18/10/2026 — cặp TOÀN từ thường (bộ lọc không chặn được ⇒ hiện cho mọi người): chửi nhẹ / từ
-# báo chí / Phil yêu cầu; trọng số thấp. "sờ vào", "nâng cấp", "nâng cao" để "chim"/"cu"/"bi" không đứng
-# đầu gợi ý sau "sờ"/"nâng". KHÔNG thêm cặp tình dục ghép từ từ thường (móc lốp, bú cu…).
+# bổ sung 18/10/2026 — cặp TOÀN từ thường, từ vựng trung tính (báo chí / văn viết) ⇒ hiện cho mọi người.
+# "sờ vào", "nâng cấp", "nâng cao" để "chim"/"cu"/"bi" không đứng đầu gợi ý sau "sờ"/"nâng" khi TẮT lọc.
+# (hiếp dâm ở khối trên — "dâm" đã lọc theo từ.)
 hãm hiếp 3
 lăng nhăng 4
 lăng loàn 3
+nâng cấp 5
+nâng cao 5
+sờ vào 4
+
+# bổ sung 18/10/2026 (Phil) — tiếng lóng / từ báo chí về ma tuý, cờ bạc, mại dâm, tội phạm: từ vựng mô tả,
+# KHÔNG phải chửi tục ⇒ hiện cho mọi người, trọng số thấp. Bỏ cặp vnlm.bin đã đoán hạng 1 (xóc đĩa, lô đề,
+# nặng lãi) và hạng 2–3 (ngáo đá, mát xa, khủng bố, giang hồ, chôm chỉa — quy tắc Phil: đã có thì không thêm).
+# Cặp nói thẳng chuyện tình dục (kích dục, massage kích dục, chơi cave) ở [sensitive-bigram].
+bú đá 3
+đập đá 3
+hút cần 3
+hất cùn 3
+bốn lù 3
+cá chà 3
+chà bặc 3
+nước vui 3
+bóng cười 3
+gái gọi 3
+gái ngành 3
+đi khách 3
+tàu nhanh 3
+qua đêm 3
+chân dài 3
+sugar baby 4
+bé ba 3
+bé đường 3
+sugar daddy 4
+bố đường 3
+má mì 3
+tú bà 3
+karaoke tay 3
+tay vịn 3
+đỏ đen 4
+game bài 4
+tất tay 3
+cháy tài 3
+tài khoản 4
+vay nặng 3
+bốc bát 3
+bát họ 3
+đại ca 3
+bảo kê 3
+hàng nóng 3
+bão đêm 3
+bốc đầu 3
+lạng lách 4
+lùa gà 3
+úp bô 3
+chạy án 3
+rửa tiền 4
+ăn trộm 4
+hàng dựng 3
+hàng fake 3
+# bổ sung 18/10/2026 (Phil, lô 3): cảm thán nói tránh, sạch (vãi nồi/đạn/linh hồn; đếch/méo = đéo nhẹ). "vãi chưởng"
+# vnlm.bin đã hạng 2 ⇒ không thêm
+vãi nồi 3
+vãi đạn 3
+vãi linh 3
+đếch biết 3
+méo biết 3
+
+# bổ sung 18/10/2026 (Phil, lô 4) — tiếng lóng đời thường / báo chí, hiện cho mọi người. Bỏ cặp vnlm.bin
+# đã đoán hạng ≤ 3: quắc cần, cần câu, bí tỉ, phần trăm, bôi trơn, cháu cha, ông cháu, con heo, cắm sừng, trà xanh,
+# ném đá, bóc phốt.
+# xin phép: giữ đứng trước xin link (trước đây "phép" chỉ đến từ bigram tĩnh lấp sau seed)
+xin phép 5
+xin link 3
+lên giường 3
+xếp hình 3
+check var 3
+tiểu tam 3
+đào mỏ 3
+say bí 3
+trăm phần 3
+không say 3
+say không 3
+không về 3
+phong bì 3
+lót tay 3
+con ông 3
+cửa sau 3
+ăn chặn 3
+ăn bớt 3
+chạy chức 3
+chạy điểm 3
+gạch đá 3
+cà khịa 4
+khẩu nghiệp 3
+anti fan 3
+trẻ trâu 4
+bố đời 3
+sống ảo 4
+# chê ngoại hình: chỉ cặp nghĩa thường của chuỗi (so sánh, cột nhà, nhà cháy — tin cháy nhà) hiện; cặp đặc
+# trưng câu chê (như lợn, như cột, cái mâm, lùn tịt, cò hương) ở [sensitive-bigram]
+béo như 3
+đen như 3
+mặt như 3
+như cái 3
+cột nhà 3
+nhà cháy 3
+
+# bổ sung 18/10/2026 (Phil, lô 5): gầy như que tăm (tả nhẹ), mong manh, công chúa phòng trọ (chỉ "chúa phòng" lọc),
+# ngu như (bò/chó lọc), lồn trâu / lồn mong (manh) — có từ SensitiveWords ⇒ lọc theo từ
+gầy như 3
+như que 3
+que tăm 3
+mong manh 3
+ngu như 3
+công chúa 3
+phòng trọ 3
+lồn trâu 3
+lồn mong 2
+# NEO: các khối trên cho từ trước rất thường (nước, bóng, cá, hàng, lên…) cặp seed đầu tiên ⇒ trên di động
+# cặp seed đứng TRƯỚC bigram tĩnh. Thêm cách đọc phổ biến nhất (vnlm.bin hạng 1) ở trọng số cao hơn để
+# tiếng lóng không chiếm ô đầu: "nước ␣" → ngoài/mắt, không phải "vui".
+nước ngoài 4
+nước mắt 4
+bóng đá 4
+cá nhân 4
+hàng hóa 4
+vay tiền 4
+phong cách 4
+tiểu thuyết 4
+đào tạo 4
+cắm trại 4
+khẩu trang 4
+mặt trời 4
+xếp hạng 4
+lên tới 4
+bé gái 4
+gái xinh 4
+cháy nổ 4
+bão lũ 4
+
+# bổ sung 18/10/2026 (Phil, Gen Z) — tiếng lóng giới trẻ, hiện cho mọi người. Bỏ cặp vnlm.bin hạng ≤ 3 (việt nam,
+# chữa lành, phấp phới, khét lẹt, giáp thứ);
+# "nóc nhà" vừa là cụm Phil vừa là NEO. "con giáp thứ 13": số không vào seed (không học được); "giáp thứ" đã có.
+gen z 3
+phông bạt 3
+báo thủ 3
+hệ lươn 3
+phú bà 3
+tổng tài 3
+người tối 3
+tối cổ 3
+out trình 3
+nóc nhà 4
+đỉnh nóc 3
+nóc kịch 3
+kịch trần 3
+trần bay 3
+bay phấp 3
+ô dề 3
+u là 3
+là trời 3
+ảo ma 3
+ma canada 3
+còn cái 3
+cái nịt 3
+trôn việt 3
+gét gô 3
+xu cà 3
+cà na 3
+red flag 3
+green flag 3
+đẩy thuyền 3
+con giáp 3
+nam thần 3
+vợ quốc 3
+quốc dân 3
+# NEO cho từ trước mới có cặp seed (xem khối NEO trên)
+phông nền 4
+tổng thống 4
+chữa bệnh 4
+đỉnh cao 4
+kịch bản 4
+khét tiếng 4
+ô tô 4
+ảo tưởng 4
+ma túy 4
+trôn ốc 4
+xu hướng 4
+đẩy mạnh 4
+vợ chồng 4
+
+# bổ sung 18/10/2026 (Phil, Gen Z lô 2) — vnlm.bin không có bigram tường minh (đã kiểm hạng): hiện cho mọi người.
+# Đã có (bỏ): căng đét, thả thính, bánh bèo, sang chảnh, chảnh chó, xàm xí, bung xõa, ngáo ngơ, thao túng tâm lý,
+# tấu hài, cạn lời, ngã ngửa, đỉnh chóp, lật kèo, chốt kèo, ăn cơm chó, toang rồi. "fuck boy" ở [sensitive-bigram].
+hóng biến 3
+ối dồi 3
+dồi ôi 3
+mãi mận 3
+mãi đỉnh 3
+mãi keo 3
+keo lỳ 3
+cẩu lương 3
+mỏ hỗn 3
+gáy sớm 3
+cháy phố 3
+thánh lầy 3
+xịn xò 3
+chanh sả 3
+quay xe 3
+xe cực 3
+cực gắt 3
+xin vía 3
+vía học 3
+học giỏi 3
+tra nam 3
+iu thương 3
+ny cũ 3
+ra dẻ 3
+hết cứu 3
+sì tin 3
+gờ ét 3
+quá dữ 3
+lên đồ 3
+lên đời 3
+đi bão 3
+đứng hình 3
+khó ở 3
+làm màu 3
+tới công 3
+công chuyện 3
+diễn sâu 3
+mất não 3
+bắt trend 3
+đu trend 3
+đu idol 3
+fan cứng 3
+hít drama 3
+chạy deadline 3
+tụt mood 3
+lên mood 3
+xỉu up 3
+up xỉu 3
+xỉu down 3
+trap boy 3
+# NEO (xem trên): cách đọc vnlm.bin hạng 1 giữ ô đầu sau từ trước rất thường
+chạy trốn 4
+đứng dậy 4
+tới đây 4
+diễn ra 4
+hết sức 4
+xe máy 4
+cực kỳ 4
+mãi mãi 4
+keo kiệt 4
+hóng mát 4
+tra cứu 4
+hít thở 4
+tụt xuống 4
+đu đủ 4
+
+# bổ sung 18/10/2026 (Phil, tài chính) — vnlm.bin không có bigram (hoặc hạng > 3): hiện cho mọi người. Đã có (bỏ):
+# cổ phiếu, chứng chỉ thường gặp (lãi suất, trái phiếu, lạm phát, tỷ giá, cắt lỗ, chốt lời, thanh khoản, phái sinh,
+# khớp lệnh, sao kê, trả góp…); "kịch trần" ở khối Gen Z.
+vàng nhẫn 3
+bắt đáy 3
+đu đỉnh 3
+chốt lãi 3
+mã chứng 3
+chứng khoán 3
+quỹ ngoại 3
+khối ngoại 3
+phiếu rác 3
+kịch sàn 3
+giảm sàn 3
+tăng trần 3
+ví lạnh 3
+ví nóng 3
+call margin 3
+sàn coin 3
+đào coin 3
+# NEO
+vàng bạc 4
+khối lượng 4
+giảm cân 4
+tăng cường 4
+ví dụ 5
+
+# bổ sung 18/10/2026 (Phil, y tế) — thiếu/yếu trong vnlm.bin. Đã có (bỏ): nhịn ăn, gián đoạn, sản giật (hạng ≤ 2)
+# và ~100 cụm thường (bệnh viện, xét nghiệm, huyết áp…).
+chụp x 3
+x quang 3
+ăn gián 3
+tập gym 3
+hậu covid 3
+test nhanh 3
+sinh thường 3
+tiền sản 3
+# NEO
+hậu quả 4
+
+# tác giả: Phil Trinh
+phil trinh 5
+
+[sensitive-bigram]
+# CẶP NHẠY CẢM ghép từ hai TỪ THƯỜNG (bộ lọc theo từ SensitiveWords không chặn được). Vào seed như
+# [bigram] (cùng cú pháp "từ1 từ2 trọng-số"), ĐỒNG THỜI sinh bảng SensitivePairs (iOS/macOS/Linux
+# SensitiveWords.swift, Android SensitiveWords.kt, Windows sensitive_pairs.inc): "Lọc từ nhạy cảm" BẬT
+# ⇒ sau từ1 không bao giờ gợi ý từ2 (từ kế tiếp, hoàn thành từ, phương án vuốt) và cặp không thưởng
+# ngữ cảnh (vuốt, xếp gợi ý đang gõ, Thêm dấu). TẮT lọc ⇒ như cặp thường. Cặp đã chứa từ của
+# SensitiveWords KHÔNG cần ở đây (lọc theo từ đã chặn).
+## — cặp chửi / tục ghép từ thường (chỉ hiện khi TẮT lọc) —
+bố mày 7
+thằng mặt 4
+má mày 4
 vãi đái 3
 thằng chó 3
 đồ chó 3
@@ -1045,9 +1407,46 @@ thằng điên 3
 mẹ mày 3
 con gà 4
 nâng bi 2
-nâng cấp 5
-nâng cao 5
-sờ vào 4
 sờ chim 2
 sờ cu 2
 rờ cu 2
+# bổ sung 18/10/2026 (Phil): tình dục / chửi thay chữ
+móc lốp 2
+bú cu 2
+nện nhau 2
+phang nhau 2
+xoạc nhau 2
+chơi gái 3
+đậu má 3
+đù má 3
+# chửi tiếng Anh ghép từ thường
+damn it 4
+piss off 3
+# bổ sung 18/10/2026 (Phil, lô 2): nói thẳng chuyện tình dục / mua dâm (cùng loại "chơi gái")
+kích dục 3
+massage kích 3
+chơi cave 3
+# bổ sung 18/10/2026 (Phil, lô 3): chửi ghép từ thường. "con chó" (cặp corpus, cũng nghĩa đen) — Phil xếp vào chửi
+óc lợn 3
+não phẳng 3
+láo chó 3
+con chó 3
+# bổ sung 18/10/2026 (Phil, lô 4): tình dục (quay tay, phim heo, clip nóng, lộ clip)
+quay tay 3
+phim heo 3
+clip nóng 3
+lộ clip 3
+# chê ngoại hình (béo như lợn, đen như cột nhà cháy, mặt như cái mâm, lùn tịt, cò hương) — cặp đặc trưng câu chê
+như lợn 3
+như cột 3
+cái mâm 3
+lùn tịt 3
+cò hương 3
+# bổ sung 18/10/2026 (Phil, lô 5): béo như heo/lợn, ngu như bò/chó — chỉ cặp được (không theo trigram) ⇒ lọc
+# "như heo", "như bò" mọi ngữ cảnh (so sánh với heo/bò gần như luôn là câu chê); "chúa phòng" (công chúa
+# phòng trọ — "phòng trọ" đứng một mình vẫn hiện)
+như heo 3
+như bò 3
+chúa phòng 3
+# Gen Z: fuck boy (từ trước tục, từ sau thường)
+fuck boy 3

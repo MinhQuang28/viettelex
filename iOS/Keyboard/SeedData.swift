@@ -2,12 +2,12 @@
 // Scripts/seed-curated.txt rồi chạy lại). Seed ban đầu cho UserLangModel (lần đầu chạy / sau khi
 // user bấm "Xoá từ đã học"). 797 âm tiết + 600 cặp từ corpus hội thoại
 // (OpenSubtitles v2024 + lát diễn đàn FineWeb-2 + Tatoeba — docs/DATA-SOURCES.md mục "SeedData") +
-// lớp chọn tay 381 từ / 400 cặp (chat/teencode, từ tiếng Anh cap ≤ 18, tên riêng, từ nhạy cảm).
+// lớp chọn tay 422 từ / 681 cặp (chat/teencode, từ tiếng Anh cap ≤ 18, tên riêng, từ nhạy cảm).
 // Weight log-scale 50·(c/c_max)^0.3, max 50 — user gõ thật (+1/lần, accepted +2) sẽ vượt seed sau
 // vài ngày; decay tuần làm seed mờ dần.
 import Foundation
 
-// PERF: computed var (không phải stored let) — literal ~2100 entries chỉ build
+// PERF: computed var (không phải stored let) — literal ~2500 entries chỉ build
 // khi thật sự seed (store trống), giải phóng ngay sau đó thay vì găm
 // ~150-250KB suốt đời keyboard; seedIfEmpty nhận @autoclosure nên store đã có
 // dữ liệu thì literal không bao giờ được build.
@@ -151,7 +151,9 @@ enum SeedData {
         "vân": 8, "ví": 8, "bùi": 7, "huỳnh": 7, "lâm": 7, "ngô": 7, "nhi": 7, "phan": 7,
         "thúy": 7, "trịnh": 7, "tú": 7, "võ": 7, "đặng": 7, "đỗ": 7, "bitcoin": 6, "kiên": 6,
         "my": 6, "sàn": 6, "trâm": 6, "yến": 6, "đinh": 6, "đào": 6, "coin": 5, "crypto": 5,
-        "lệnh": 5, "binance": 4, "blockchain": 4, "eth": 4, "ethereum": 4, "token": 4, "usdt": 4,
+        "lệnh": 5, "binance": 4, "blockchain": 4, "eth": 4, "ethereum": 4, "token": 4, "usdt": 4, "usd": 6,
+        "vnđ": 6, "vnd": 4, "fiat": 4, "karaoke": 4, "baby": 4, "fake": 4, "cave": 3, "sugar": 3,
+        "daddy": 3, "massage": 3,
         // — bổ sung 2026-07-24 (3): thương hiệu nội bộ —
         "printik": 6, "senprints": 6,
         // — bổ sung 2026-07-24 (4): tên đệm —
@@ -170,7 +172,11 @@ enum SeedData {
         "dmm": 3, "đcmm": 2, "dcmm": 2, "clm": 2, "clg": 2, "vcc": 2, "dume": 2, "motherfucker": 3,
         "asshole": 3, "bullshit": 4, "dick": 3, "dickhead": 2, "pussy": 3, "bastard": 3, "dumbass": 3, "fucking": 4,
         "fucked": 3, "fucker": 2, "shitty": 2, "stfu": 3, "damn": 4, "piss": 3, "cl": 4, "dcm": 3,
-        "đkm": 3, "dkm": 3, "điếm": 3, "buscu": 2, "bitch": 4, "wtf": 4,
+        "đkm": 3, "dkm": 3, "điếm": 3, "buscu": 2, "bitch": 4, "wtf": 4, "cc": 3, "đb": 2,
+        "lìn": 2, "đếch": 4, "var": 3, "anti": 3, "fan": 4, "xỉn": 4, "dô": 4, "gen": 3,
+        "z": 3, "gét": 3, "out": 3, "red": 3, "green": 3, "flag": 3, "trend": 3, "idol": 3,
+        "drama": 3, "mood": 3, "up": 3, "down": 3, "trap": 3, "boy": 3, "xò": 3, "fuckboy": 2,
+        "margin": 3, "x": 3, "covid": 4, "phil": 4,
     ] }
 
     static var bigrams: [(String, String, Int)] { [
@@ -351,8 +357,9 @@ enum SeedData {
         // — bổ sung 2026-07-24 (2): tên ghép + cụm crypto —
         ("tuấn", "anh", 9), ("quốc", "anh", 5), ("minh", "anh", 6), ("ngọc", "anh", 6), ("phương", "anh", 6),
         ("lan", "anh", 5), ("hải", "anh", 4), ("mai", "anh", 5), ("thanh", "tùng", 5), ("minh", "tuấn", 5),
-        ("văn", "nam", 4), ("thị", "hoa", 3), ("tiền", "mã", 5), ("mã", "hóa", 6), ("đồng", "coin", 4),
-        ("ví", "điện", 4), ("điện", "tử", 6), ("sàn", "binance", 3), ("giá", "bitcoin", 4), ("chơi", "coin", 4),
+        ("văn", "nam", 4), ("thị", "hoa", 3), ("tiền", "mã", 5), ("mã", "hóa", 6), ("tiền", "pháp", 5),
+        ("pháp", "định", 5), ("đồng", "coin", 4), ("ví", "điện", 4), ("điện", "tử", 6), ("sàn", "binance", 3),
+        ("giá", "bitcoin", 4), ("chơi", "coin", 4),
         // — bổ sung 2026-07-24 (4): họ→đệm, đệm→tên (18/10/2026: nguyễn văn 10 → 11 — giữ "Văn" đứng đầu sau "Nguyễn" khi corpus cho văn = thị) —
         ("nguyễn", "văn", 11), ("nguyễn", "thị", 10), ("trần", "văn", 8), ("trần", "thị", 8), ("lê", "văn", 8),
         ("lê", "thị", 8), ("phạm", "văn", 7), ("phạm", "thị", 7), ("hoàng", "văn", 6), ("hoàng", "thị", 6),
@@ -365,22 +372,80 @@ enum SeedData {
         // — cặp nhạy cảm / chửi —
         ("như", "cứt", 6), ("ngon", "vl", 8), ("mệt", "vl", 6), ("đau", "vcl", 4), ("fuck", "you", 6),
         ("vãi", "cả", 4), ("lừa", "đảo", 7), ("cướp", "giật", 4), ("vãi", "lồn", 5), ("địt", "mẹ", 5),
-        ("bố", "mày", 7), ("con", "đĩ", 4), ("thằng", "mặt", 4), ("mặt", "lồn", 4), ("dâm", "dê", 4),
-        ("tục", "tĩu", 4), ("cả", "lồn", 4), ("đụ", "má", 4), ("má", "mày", 4), ("thối", "um", 3),
-        ("đánh", "rắm", 4), ("sấp", "mặt", 5), ("ngu", "si", 4), ("đần", "độn", 4), ("thối", "tha", 4),
-        ("khốn", "nạn", 6), ("mất", "dạy", 4), ("bú", "lồn", 4), ("bú", "cặc", 4), ("bú", "buồi", 3),
-        ("liếm", "lồn", 4), ("liếm", "buồi", 3), ("móc", "lồn", 3), ("nứng", "lồn", 3), ("hãm", "lồn", 3),
-        ("cái", "lồn", 4), ("thằng", "lồn", 3), ("như", "lồn", 3), ("địt", "nhau", 4), ("đụ", "nhau", 3),
-        ("đụ", "mẹ", 4), ("chịch", "nhau", 4), ("sờ", "trym", 2), ("đầu", "buồi", 4), ("đầu", "cặc", 3),
-        ("mặt", "cặc", 3), ("vãi", "cặc", 4), ("con", "cặc", 3), ("như", "cặc", 3), ("vãi", "cứt", 4),
-        ("đồ", "đĩ", 3), ("hiếp", "dâm", 4), ("đéo", "biết", 5), ("đéo", "hiểu", 4), ("đéo", "cần", 4),
-        ("đéo", "có", 4), ("đéo", "phải", 4), ("đéo", "gì", 3), ("cái", "đéo", 4), ("thế", "đéo", 3),
-        ("đm", "mày", 4), ("đcm", "mày", 3), ("đẹp", "vl", 3), ("hay", "vl", 3), ("fuck", "off", 4),
-        ("holy", "shit", 4), ("oh", "shit", 3), ("damn", "it", 4), ("piss", "off", 3), ("hãm", "hiếp", 3),
-        ("lăng", "nhăng", 4), ("lăng", "loàn", 3), ("vãi", "đái", 3), ("thằng", "chó", 3), ("đồ", "chó", 3),
-        ("óc", "chó", 4), ("chó", "chết", 3), ("chó", "má", 3), ("như", "chó", 3), ("thằng", "ngu", 4),
-        ("đồ", "ngu", 4), ("thằng", "khốn", 3), ("đồ", "khốn", 3), ("thằng", "điên", 3), ("đồ", "điên", 3),
-        ("mẹ", "mày", 3), ("con", "gà", 4), ("nâng", "bi", 2), ("nâng", "cấp", 5), ("nâng", "cao", 5),
-        ("sờ", "vào", 4), ("sờ", "chim", 2), ("sờ", "cu", 2), ("rờ", "cu", 2),
+        ("con", "đĩ", 4), ("mặt", "lồn", 4), ("dâm", "dê", 4), ("tục", "tĩu", 4), ("cả", "lồn", 4),
+        ("đụ", "má", 4), ("thối", "um", 3), ("đánh", "rắm", 4), ("sấp", "mặt", 5), ("ngu", "si", 4),
+        ("đần", "độn", 4), ("thối", "tha", 4), ("khốn", "nạn", 6), ("mất", "dạy", 4), ("bú", "lồn", 4),
+        ("bú", "cặc", 4), ("bú", "buồi", 3), ("liếm", "lồn", 4), ("liếm", "buồi", 3), ("móc", "lồn", 3),
+        ("nứng", "lồn", 3), ("hãm", "lồn", 3), ("cái", "lồn", 4), ("thằng", "lồn", 3), ("như", "lồn", 3),
+        ("địt", "nhau", 4), ("đụ", "nhau", 3), ("đụ", "mẹ", 4), ("chịch", "nhau", 4), ("sờ", "trym", 2),
+        ("đầu", "buồi", 4), ("đầu", "cặc", 3), ("mặt", "cặc", 3), ("vãi", "cặc", 4), ("con", "cặc", 3),
+        ("như", "cặc", 3), ("vãi", "cứt", 4), ("đồ", "đĩ", 3), ("hiếp", "dâm", 4), ("đéo", "biết", 5),
+        ("đéo", "hiểu", 4), ("đéo", "cần", 4), ("đéo", "có", 4), ("đéo", "phải", 4), ("đéo", "gì", 3),
+        ("cái", "đéo", 4), ("thế", "đéo", 3), ("đm", "mày", 4), ("đcm", "mày", 3), ("đẹp", "vl", 3),
+        ("hay", "vl", 3), ("fuck", "off", 4), ("holy", "shit", 4), ("oh", "shit", 3), ("hãm", "hiếp", 3),
+        ("lăng", "nhăng", 4), ("lăng", "loàn", 3), ("nâng", "cấp", 5), ("nâng", "cao", 5), ("sờ", "vào", 4),
+        ("bú", "đá", 3), ("đập", "đá", 3), ("hút", "cần", 3), ("hất", "cùn", 3), ("bốn", "lù", 3),
+        ("cá", "chà", 3), ("chà", "bặc", 3), ("nước", "vui", 3), ("bóng", "cười", 3), ("gái", "gọi", 3),
+        ("gái", "ngành", 3), ("đi", "khách", 3), ("tàu", "nhanh", 3), ("qua", "đêm", 3), ("chân", "dài", 3),
+        ("sugar", "baby", 4), ("bé", "ba", 3), ("bé", "đường", 3), ("sugar", "daddy", 4), ("bố", "đường", 3),
+        ("má", "mì", 3), ("tú", "bà", 3), ("karaoke", "tay", 3), ("tay", "vịn", 3), ("đỏ", "đen", 4),
+        ("game", "bài", 4), ("tất", "tay", 3), ("cháy", "tài", 3), ("tài", "khoản", 4), ("vay", "nặng", 3),
+        ("bốc", "bát", 3), ("bát", "họ", 3), ("đại", "ca", 3), ("bảo", "kê", 3), ("hàng", "nóng", 3),
+        ("bão", "đêm", 3), ("bốc", "đầu", 3), ("lạng", "lách", 4), ("lùa", "gà", 3), ("úp", "bô", 3),
+        ("chạy", "án", 3), ("rửa", "tiền", 4), ("ăn", "trộm", 4), ("hàng", "dựng", 3), ("hàng", "fake", 3),
+        ("vãi", "nồi", 3), ("vãi", "đạn", 3), ("vãi", "linh", 3), ("đếch", "biết", 3), ("méo", "biết", 3),
+        ("xin", "phép", 5), ("xin", "link", 3), ("lên", "giường", 3), ("xếp", "hình", 3), ("check", "var", 3),
+        ("tiểu", "tam", 3), ("đào", "mỏ", 3), ("say", "bí", 3), ("trăm", "phần", 3), ("không", "say", 3),
+        ("say", "không", 3), ("không", "về", 3), ("phong", "bì", 3), ("lót", "tay", 3), ("con", "ông", 3),
+        ("cửa", "sau", 3), ("ăn", "chặn", 3), ("ăn", "bớt", 3), ("chạy", "chức", 3), ("chạy", "điểm", 3),
+        ("gạch", "đá", 3), ("cà", "khịa", 4), ("khẩu", "nghiệp", 3), ("anti", "fan", 3), ("trẻ", "trâu", 4),
+        ("bố", "đời", 3), ("sống", "ảo", 4), ("béo", "như", 3), ("đen", "như", 3), ("mặt", "như", 3),
+        ("như", "cái", 3), ("cột", "nhà", 3), ("nhà", "cháy", 3), ("gầy", "như", 3), ("như", "que", 3),
+        ("que", "tăm", 3), ("mong", "manh", 3), ("ngu", "như", 3), ("công", "chúa", 3), ("phòng", "trọ", 3),
+        ("lồn", "trâu", 3), ("lồn", "mong", 2), ("nước", "ngoài", 4), ("nước", "mắt", 4), ("bóng", "đá", 4),
+        ("cá", "nhân", 4), ("hàng", "hóa", 4), ("vay", "tiền", 4), ("phong", "cách", 4), ("tiểu", "thuyết", 4),
+        ("đào", "tạo", 4), ("cắm", "trại", 4), ("khẩu", "trang", 4), ("mặt", "trời", 4), ("xếp", "hạng", 4),
+        ("lên", "tới", 4), ("bé", "gái", 4), ("gái", "xinh", 4), ("cháy", "nổ", 4), ("bão", "lũ", 4),
+        ("gen", "z", 3), ("phông", "bạt", 3), ("báo", "thủ", 3), ("hệ", "lươn", 3), ("phú", "bà", 3),
+        ("tổng", "tài", 3), ("người", "tối", 3), ("tối", "cổ", 3), ("out", "trình", 3), ("nóc", "nhà", 4),
+        ("đỉnh", "nóc", 3), ("nóc", "kịch", 3), ("kịch", "trần", 3), ("trần", "bay", 3), ("bay", "phấp", 3),
+        ("ô", "dề", 3), ("u", "là", 3), ("là", "trời", 3), ("ảo", "ma", 3), ("ma", "canada", 3),
+        ("còn", "cái", 3), ("cái", "nịt", 3), ("trôn", "việt", 3), ("gét", "gô", 3), ("xu", "cà", 3),
+        ("cà", "na", 3), ("red", "flag", 3), ("green", "flag", 3), ("đẩy", "thuyền", 3), ("con", "giáp", 3),
+        ("nam", "thần", 3), ("vợ", "quốc", 3), ("quốc", "dân", 3), ("phông", "nền", 4), ("tổng", "thống", 4),
+        ("chữa", "bệnh", 4), ("đỉnh", "cao", 4), ("kịch", "bản", 4), ("khét", "tiếng", 4), ("ô", "tô", 4),
+        ("ảo", "tưởng", 4), ("ma", "túy", 4), ("trôn", "ốc", 4), ("xu", "hướng", 4), ("đẩy", "mạnh", 4),
+        ("vợ", "chồng", 4), ("hóng", "biến", 3), ("ối", "dồi", 3), ("dồi", "ôi", 3), ("mãi", "mận", 3),
+        ("mãi", "đỉnh", 3), ("mãi", "keo", 3), ("keo", "lỳ", 3), ("cẩu", "lương", 3), ("mỏ", "hỗn", 3),
+        ("gáy", "sớm", 3), ("cháy", "phố", 3), ("thánh", "lầy", 3), ("xịn", "xò", 3), ("chanh", "sả", 3),
+        ("quay", "xe", 3), ("xe", "cực", 3), ("cực", "gắt", 3), ("xin", "vía", 3), ("vía", "học", 3),
+        ("học", "giỏi", 3), ("tra", "nam", 3), ("iu", "thương", 3), ("ny", "cũ", 3), ("ra", "dẻ", 3),
+        ("hết", "cứu", 3), ("sì", "tin", 3), ("gờ", "ét", 3), ("quá", "dữ", 3), ("lên", "đồ", 3),
+        ("lên", "đời", 3), ("đi", "bão", 3), ("đứng", "hình", 3), ("khó", "ở", 3), ("làm", "màu", 3),
+        ("tới", "công", 3), ("công", "chuyện", 3), ("diễn", "sâu", 3), ("mất", "não", 3), ("bắt", "trend", 3),
+        ("đu", "trend", 3), ("đu", "idol", 3), ("fan", "cứng", 3), ("hít", "drama", 3), ("chạy", "deadline", 3),
+        ("tụt", "mood", 3), ("lên", "mood", 3), ("xỉu", "up", 3), ("up", "xỉu", 3), ("xỉu", "down", 3),
+        ("trap", "boy", 3), ("chạy", "trốn", 4), ("đứng", "dậy", 4), ("tới", "đây", 4), ("diễn", "ra", 4),
+        ("hết", "sức", 4), ("xe", "máy", 4), ("cực", "kỳ", 4), ("mãi", "mãi", 4), ("keo", "kiệt", 4),
+        ("hóng", "mát", 4), ("tra", "cứu", 4), ("hít", "thở", 4), ("tụt", "xuống", 4), ("đu", "đủ", 4),
+        ("vàng", "nhẫn", 3), ("bắt", "đáy", 3), ("đu", "đỉnh", 3), ("chốt", "lãi", 3), ("mã", "chứng", 3),
+        ("chứng", "khoán", 3), ("quỹ", "ngoại", 3), ("khối", "ngoại", 3), ("phiếu", "rác", 3), ("kịch", "sàn", 3),
+        ("giảm", "sàn", 3), ("tăng", "trần", 3), ("ví", "lạnh", 3), ("ví", "nóng", 3), ("call", "margin", 3),
+        ("sàn", "coin", 3), ("đào", "coin", 3), ("vàng", "bạc", 4), ("khối", "lượng", 4), ("giảm", "cân", 4),
+        ("tăng", "cường", 4), ("ví", "dụ", 5), ("chụp", "x", 3), ("x", "quang", 3), ("ăn", "gián", 3),
+        ("tập", "gym", 3), ("hậu", "covid", 3), ("test", "nhanh", 3), ("sinh", "thường", 3), ("tiền", "sản", 3),
+        ("hậu", "quả", 4), ("phil", "trinh", 5),
+        // — cặp chửi / tục ghép từ thường (chỉ hiện khi TẮT lọc) —
+        ("bố", "mày", 7), ("thằng", "mặt", 4), ("má", "mày", 4), ("vãi", "đái", 3), ("thằng", "chó", 3),
+        ("đồ", "chó", 3), ("óc", "chó", 4), ("chó", "chết", 3), ("chó", "má", 3), ("như", "chó", 3),
+        ("thằng", "ngu", 4), ("đồ", "ngu", 4), ("thằng", "khốn", 3), ("đồ", "khốn", 3), ("thằng", "điên", 3),
+        ("đồ", "điên", 3), ("mẹ", "mày", 3), ("con", "gà", 4), ("nâng", "bi", 2), ("sờ", "chim", 2),
+        ("sờ", "cu", 2), ("rờ", "cu", 2), ("móc", "lốp", 2), ("bú", "cu", 2), ("nện", "nhau", 2),
+        ("phang", "nhau", 2), ("xoạc", "nhau", 2), ("chơi", "gái", 3), ("đậu", "má", 3), ("đù", "má", 3),
+        ("damn", "it", 4), ("piss", "off", 3), ("kích", "dục", 3), ("massage", "kích", 3), ("chơi", "cave", 3),
+        ("óc", "lợn", 3), ("não", "phẳng", 3), ("láo", "chó", 3), ("quay", "tay", 3), ("phim", "heo", 3),
+        ("clip", "nóng", 3), ("lộ", "clip", 3), ("như", "lợn", 3), ("như", "cột", 3), ("cái", "mâm", 3),
+        ("lùn", "tịt", 3), ("cò", "hương", 3), ("như", "heo", 3), ("như", "bò", 3), ("chúa", "phòng", 3),
+        ("fuck", "boy", 3),
     ] }
 }

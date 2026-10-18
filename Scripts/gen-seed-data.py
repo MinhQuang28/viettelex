@@ -22,6 +22,9 @@ Usage:
   python3 Scripts/gen-seed-data.py --unigrams U.tsv --bigrams B.tsv [--out iOS/Keyboard/SeedData.swift]
   python3 Scripts/gen-seed-data.py --corpus-from-seed   (chỉ sửa seed-curated.txt / SensitiveWords, không có
        U.tsv/B.tsv: giữ nguyên khối corpus của SeedData.swift hiện có; dừng nếu từ mới lọc nằm trong khối đó)
+  python3 Scripts/gen-seed-data.py --corpus-from-seed --check   (so với file đã commit; khác ⇒ exit 1)
+  Cũng ghi bảng SensitivePairs (khối [sensitive-bigram]) vào iOS/Keyboard/SensitiveWords.swift,
+  android/…/SensitiveWords.kt (giữa dòng BEGIN/END GENERATED) và windows/app/core/sensitive_pairs.inc.
   rồi: python3 android/keyboard/scripts/export-ios-data.py . (seed.tsv), Scripts/gen-seed-next.sh,
        python3 windows/app/tools/gen_seed_unigrams.py, windows/app/tools/gen_prediction_golden.sh
 """
@@ -54,21 +57,31 @@ def read_tsv(path, n_key):
     return out
 
 
+SENSITIVE_PAIRS = "sensitive-bigram"
+
+
 def read_curated(path):
-    """→ pins {w: c}, groups [(kind, title|None, [(key tuple, c)])], loại {từ | "a b"}."""
-    pins, groups, kind, excl = {}, [], None, set()
+    """→ pins {w: c}, groups [(kind, title|None, [(key tuple, c)])], loại {từ | "a b"}, cặp nhạy cảm
+    [(a, b)] (khối [sensitive-bigram]: vào seed như [bigram] + bảng SensitivePairs)."""
+    pins, groups, kind, excl, spairs = {}, [], None, set(), []
     for raw in open(path, encoding="utf-8"):
         line = raw.strip()
         if not line or (line.startswith("#") and not line.startswith("##")): continue
+        gk = "bigram" if kind == SENSITIVE_PAIRS else kind
         if line.startswith("["):
-            kind = line.strip("[]"); groups.append((kind, None, [])); continue
+            kind = line.strip("[]")
+            groups.append(("bigram" if kind == SENSITIVE_PAIRS else kind, None, [])); continue
         if line.startswith("##"):
-            groups.append((kind, line[2:].strip(), [])); continue
+            groups.append((gk, line[2:].strip(), [])); continue
         *ws, c = unicodedata.normalize("NFC", line).split()
         if kind == "pin": pins[ws[0]] = int(c)
         elif kind == "exclude": excl.add(" ".join(ws + [c]))
-        else: groups[-1][2].append((tuple(ws), int(c)))
-    return pins, groups, excl
+        else:
+            groups[-1][2].append((tuple(ws), int(c)))
+            if kind == SENSITIVE_PAIRS:
+                assert len(ws) == 2 and all(w == w.lower() for w in ws), line
+                spairs.append(tuple(ws))
+    return pins, groups, excl, spairs
 
 
 def swift_lines(items, per_line, fmt):
@@ -86,6 +99,8 @@ def main():
                     help="lấy khối corpus từ SeedData.swift hiện có (khi chỉ sửa seed-curated.txt và không "
                          "có U.tsv/B.tsv); chỉ đúng khi từ mới thêm vào SensitiveWords/[exclude] không nằm "
                          "trong khối corpus")
+    ap.add_argument("--check", action="store_true",
+                    help="chỉ so với file đã commit (SeedData.swift + bảng SensitivePairs); khác ⇒ exit 1")
     ap.add_argument("--curated", default=os.path.join(ROOT, "Scripts/seed-curated.txt"))
     ap.add_argument("--out", default=os.path.join(ROOT, "iOS/Keyboard/SeedData.swift"))
     ap.add_argument("--n-uni", type=int, default=500)
@@ -95,7 +110,12 @@ def main():
     a = ap.parse_args()
 
     sens = sensitive_words()
-    pins, groups, excl = read_curated(a.curated)
+    pins, groups, excl, spairs = read_curated(a.curated)
+    # từ SAU là từ thường (từ tục đã lọc theo từ); từ TRƯỚC có thể tục ("fuck boy": người dùng tự gõ "fuck",
+    # lọc theo từ không chặn được "boy" sau nó)
+    bad = [p for p in spairs if p[1] in sens]
+    assert not bad, f"[sensitive-bigram]: từ sau đã lọc theo từ (SensitiveWords) — để ở [bigram]: {bad}"
+    assert len(set(spairs)) == len(spairs), "cặp nhạy cảm trùng"
     if a.corpus_from_seed:
         corpus_uni, corpus_bi = corpus_from_seed(a.out)
         bad = [w for w in corpus_uni if w in sens or w in excl] + \
@@ -104,7 +124,61 @@ def main():
     else:
         assert a.unigrams and a.bigrams, "cần --unigrams/--bigrams (hoặc --corpus-from-seed)"
         corpus_uni, corpus_bi = corpus_from_tsv(a, sens, pins, excl)
-    write_out(a, pins, groups, corpus_uni, corpus_bi)
+    outs = {a.out: seed_swift(a, pins, groups, corpus_uni, corpus_bi)}
+    outs.update(sensitive_pair_outputs(spairs))
+    stale = []
+    for path, text in outs.items():
+        cur = open(path, encoding="utf-8").read() if os.path.exists(path) else None
+        if cur == text: continue
+        stale.append(os.path.relpath(path, ROOT))
+        if not a.check: open(path, "w", encoding="utf-8").write(text)
+    if a.check:
+        if stale:
+            print("lỗi thời — chạy lại Scripts/gen-seed-data.py: " + ", ".join(stale), file=sys.stderr); sys.exit(1)
+        print("SeedData + SensitivePairs khớp seed-curated.txt", file=sys.stderr)
+    else:
+        print(f"SensitivePairs: {len(spairs)} cặp; ghi lại: {', '.join(stale) or '(không đổi)'}", file=sys.stderr)
+
+
+BEGIN = "BEGIN GENERATED SensitivePairs"
+END = "END GENERATED SensitivePairs"
+
+
+def splice(path, body, comment):
+    """Thay khối giữa dòng chú thích BEGIN/END (giữ nguyên phần còn lại của file viết tay)."""
+    src = open(path, encoding="utf-8").read()
+    lines = src.split("\n")
+    b = next(i for i, l in enumerate(lines) if BEGIN in l)
+    e = next(i for i, l in enumerate(lines) if END in l)
+    indent = lines[b][:len(lines[b]) - len(lines[b].lstrip())]
+    head = f"{indent}{comment} {BEGIN} — Scripts/gen-seed-data.py từ Scripts/seed-curated.txt [sensitive-bigram]; KHÔNG sửa tay."
+    return "\n".join(lines[:b] + [head] + [indent + x if x else x for x in body] + [lines[e]] + lines[e + 1:])
+
+
+def sensitive_pair_outputs(spairs):
+    by = {}
+    for x, y in spairs: by.setdefault(x, []).append(y)
+    keys = sorted(by, key=lambda k: k.encode("utf-8"))
+    def q(s): return '"' + s + '"'
+    sw = ["static let pairs: [String: Set<String>] = ["]
+    sw += [f"    {q(k)}: [{', '.join(q(v) for v in sorted(by[k]))}]," for k in keys]
+    sw += ["]"]
+    kt = ["val pairs: Map<String, Set<String>> = hashMapOf("]
+    kt += [f"    {q(k)} to hashSetOf({', '.join(q(v) for v in sorted(by[k]))})," for k in keys]
+    kt += [")"]
+    rows = sorted((f"{x} {y}" for x, y in spairs), key=lambda r: r.encode("utf-8"))
+    inc = ["// GENERATED by Scripts/gen-seed-data.py from Scripts/seed-curated.txt [sensitive-bigram]. Do not edit.",
+           f"// SensitivePairs: {len(rows)} \"prev word\" pairs of two ordinary words, sorted by UTF-8 bytes —",
+           "// with \"Lọc từ nhạy cảm\" on, `word` is never suggested after `prev` (isSensitivePair).",
+           "const char* const kSensitivePairs[] = {"]
+    inc += [f"    {q(r)}," for r in rows] + ["};", ""]
+    sw_path = os.path.join(ROOT, "iOS/Keyboard/SensitiveWords.swift")
+    kt_path = os.path.join(ROOT, "android/keyboard/src/main/kotlin/com/viettelex/keyboard/SensitiveWords.kt")
+    return {
+        sw_path: splice(sw_path, sw, "//"),
+        kt_path: splice(kt_path, kt, "//"),
+        os.path.join(ROOT, "windows/app/core/sensitive_pairs.inc"): "\n".join(inc),
+    }
 
 
 def corpus_from_seed(path):
@@ -142,7 +216,7 @@ def corpus_from_tsv(a, sens, pins, excl):
     return corpus_uni, corpus_bi
 
 
-def write_out(a, pins, groups, corpus_uni, corpus_bi):
+def seed_swift(a, pins, groups, corpus_uni, corpus_bi):
     # gộp max với corpus
     for kind, _, items in groups:
         for key, c in items:
@@ -200,9 +274,9 @@ enum SeedData {{
     ] }}
 }}
 """
-    open(a.out, "w", encoding="utf-8").write(swift)
-    print(f"{a.out}: {n_u} unigram ({len(corpus_uni)} corpus+pin, {n_cu} chọn tay), "
+    print(f"{os.path.relpath(a.out, ROOT)}: {n_u} unigram ({len(corpus_uni)} corpus+pin, {n_cu} chọn tay), "
           f"{n_b} bigram ({len(corpus_bi)} corpus, {n_cb} chọn tay)", file=sys.stderr)
+    return swift
 
 
 if __name__ == "__main__":

@@ -47,7 +47,7 @@ final class SwipeEnglishTests: XCTestCase {
 
     func testLexiconLoadsAndBuckets() {
         let e = SwipeEnglish.lexicon
-        XCTAssertTrue((10_000...20_000).contains(e.count), "\(e.count)")
+        XCTAssertTrue((10_000...20_100).contains(e.count), "\(e.count)")   // 20.000 + SUPPLEMENT của gen-enlexicon
         XCTAssertTrue(SwipeEnglish.contains("check") && SwipeEnglish.contains("mail"))
         XCTAssertFalse(SwipeEnglish.contains("a"))
         XCTAssertFalse(SwipeEnglish.contains("fuck"))

@@ -121,7 +121,9 @@ object TouchSim {
 
     /** Từ chat/viết tắt trong seed (không phải âm tiết Việt), theo trọng số seed. */
     fun chatWords(n: Int, rng: Random): List<List<String>> {
-        val items = SeedData.unigrams.filter { (w, _) -> w.all { it in 'a'..'z' } && !VNSuggest.contains(w) }.toList()
+        // ≥ 2 chữ: chữ đơn của seed ("z" gen z, "x" chụp x quang — 18/10/2026) không phải từ chat, chạm lệch một
+        // phím thì không gì sửa được ⇒ chỉ thêm nhiễu cho mẫu
+        val items = SeedData.unigrams.filter { (w, _) -> w.length >= 2 && w.all { it in 'a'..'z' } && !VNSuggest.contains(w) }.toList()
         val w = items.map { Math.exp(0.06 * (it.second * 5.1 - 255)) }
         val tot = w.sum()
         return List(n) {

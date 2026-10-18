@@ -1,5 +1,7 @@
 # Gõ tắt → từ vựng vuốt (SwipeVocab.shortcutEntries) — fixture CHUNG iOS (SwipeShortcutTests.swift)
 # và Android (SwipeShortcutTests.kt). [table]: khoá<TAB>nội dung; [entries]: từ<TAB>tần suất, đúng thứ tự;
+# (18/10/2026: "VietTelex" nay có trong enlexicon ⇒ không còn là mục gõ tắt — vuốt tiếng Anh + DisplayCase lo; fixture
+# đổi sang "VietKey" để vẫn thử từ hoa giữa từ chỉ có trong gõ tắt.)
 # [swipe]: đường vuốt (chữ không dấu)<TAB>Shift (lower|capitalized|upper)<TAB>chữ chèn.
 [table]
 vn	Việt Nam
@@ -14,7 +16,7 @@ VN	Việt Nam
 x	xin
 đc	được
 addr	12 Đường Lê Lợi, Quận 1, TP.HCM
-gt	VietTelex,
+gt	VietKey,
 ok	okay
 [entries]
 addr	120
@@ -29,7 +31,7 @@ vn	120
 đc	120
 Printik	100
 SenPrints	100
-VietTelex	100
+VietKey	100
 [swipe]
 vn	lower	Việt Nam
 vn	capitalized	Việt Nam
@@ -37,4 +39,4 @@ vn	upper	Việt Nam
 sdt	lower	0912 345 678
 senprints	lower	SenPrints
 senprints	upper	SENPRINTS
-viettelex	lower	VietTelex
+vietkey	lower	VietKey

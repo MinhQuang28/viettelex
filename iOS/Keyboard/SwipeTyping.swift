@@ -246,7 +246,7 @@ final class SwipeTyping {
                              case sc: SwipeCase)
         -> (choice: Choice, cands: [SwipeCandidate], ctx: Context)? {
         guard layout != nil, path.count >= 2 else { return nil }
-        let ctx = Context(next: Set(contextWords.map { $0.lowercased() }), count: count,
+        let ctx = Context(next: Self.contextSet(contextWords, prev: prev), count: count,
                           prev: prev, prev2: prev2, lm: lm, learnedCase: learnedCase, properNouns: properNouns)
         let d = decoder
         // từ tiếng Anh: chỉ điểm cá nhân/từ kế tiếp (bigram tĩnh là của âm tiết Việt)
@@ -265,6 +265,14 @@ final class SwipeTyping {
         }
         let pool = englishOnly ? Self.englishOnly(cands) : cands
         return Self.pick(pool, context: ctx, case: sc).map { ($0, pool, ctx) }
+    }
+
+    /// Từ kế tiếp cá nhân/seed sau `prev` → tập ngữ cảnh (chữ thường) của cú vuốt. "Lọc từ nhạy cảm"
+    /// bật (SwipeVocab.filterSensitive, cùng công tắc) ⇒ bỏ cặp nhạy cảm (SensitiveWords.pairs): seed
+    /// "sờ chim" không thưởng "chim" sau "sờ". Tắt lọc ⇒ nguyên văn. = Android SwipeSuggest.context.
+    static func contextSet(_ words: [String], prev: String?,
+                           filter: Bool = SwipeVocab.filterSensitive) -> Set<String> {
+        Set(SensitiveWords.dropPairs(words, after: prev, enabled: filter).map { $0.lowercased() })
     }
 
     /// Chế độ Tiếng Anh (vuốt phím cách): chỉ giữ ứng viên tiếng Anh — decode chạy với
@@ -369,7 +377,7 @@ final class SwipeTyping {
             if proxy.contextBeforeInput?.hasSuffix(rec.word) == true,
                bridge.replaceSwipeWord(with: newCased, accepted: false, proxy: proxy) {
                 revised = Revision(old: rec.word, new: newCased)
-                let nctx = Context(next: Set((nextWords?(new, prev2) ?? []).map { $0.lowercased() }),
+                let nctx = Context(next: Self.contextSet(nextWords?(new, prev2) ?? [], prev: new),
                                    count: count, prev: new, prev2: prev2, lm: lm, learnedCase: learnedCase,
                                    properNouns: properNouns)
                 let re = SwipeRevise.rerank(full.cands, old: full.ctx.word, oldLambda: full.ctx.lambdaFreq,

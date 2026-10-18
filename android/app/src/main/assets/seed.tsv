@@ -1075,6 +1075,17 @@ u	eth	4
 u	ethereum	4
 u	token	4
 u	usdt	4
+u	usd	6
+u	vnđ	6
+u	vnd	4
+u	fiat	4
+u	karaoke	4
+u	baby	4
+u	fake	4
+u	cave	3
+u	sugar	3
+u	daddy	3
+u	massage	3
 u	printik	6
 u	senprints	6
 u	hồng	7
@@ -1179,6 +1190,36 @@ u	điếm	3
 u	buscu	2
 u	bitch	4
 u	wtf	4
+u	cc	3
+u	đb	2
+u	lìn	2
+u	đếch	4
+u	var	3
+u	anti	3
+u	fan	4
+u	xỉn	4
+u	dô	4
+u	gen	3
+u	z	3
+u	gét	3
+u	out	3
+u	red	3
+u	green	3
+u	flag	3
+u	trend	3
+u	idol	3
+u	drama	3
+u	mood	3
+u	up	3
+u	down	3
+u	trap	3
+u	boy	3
+u	xò	3
+u	fuckboy	2
+u	margin	3
+u	x	3
+u	covid	4
+u	phil	4
 b	có	thể	50
 b	chúng	ta	49
 b	anh	ấy	43
@@ -2043,6 +2084,8 @@ b	văn	nam	4
 b	thị	hoa	3
 b	tiền	mã	5
 b	mã	hóa	6
+b	tiền	pháp	5
+b	pháp	định	5
 b	đồng	coin	4
 b	ví	điện	4
 b	điện	tử	6
@@ -2095,15 +2138,12 @@ b	lừa	đảo	7
 b	cướp	giật	4
 b	vãi	lồn	5
 b	địt	mẹ	5
-b	bố	mày	7
 b	con	đĩ	4
-b	thằng	mặt	4
 b	mặt	lồn	4
 b	dâm	dê	4
 b	tục	tĩu	4
 b	cả	lồn	4
 b	đụ	má	4
-b	má	mày	4
 b	thối	um	3
 b	đánh	rắm	4
 b	sấp	mặt	5
@@ -2152,11 +2192,267 @@ b	hay	vl	3
 b	fuck	off	4
 b	holy	shit	4
 b	oh	shit	3
-b	damn	it	4
-b	piss	off	3
 b	hãm	hiếp	3
 b	lăng	nhăng	4
 b	lăng	loàn	3
+b	nâng	cấp	5
+b	nâng	cao	5
+b	sờ	vào	4
+b	bú	đá	3
+b	đập	đá	3
+b	hút	cần	3
+b	hất	cùn	3
+b	bốn	lù	3
+b	cá	chà	3
+b	chà	bặc	3
+b	nước	vui	3
+b	bóng	cười	3
+b	gái	gọi	3
+b	gái	ngành	3
+b	đi	khách	3
+b	tàu	nhanh	3
+b	qua	đêm	3
+b	chân	dài	3
+b	sugar	baby	4
+b	bé	ba	3
+b	bé	đường	3
+b	sugar	daddy	4
+b	bố	đường	3
+b	má	mì	3
+b	tú	bà	3
+b	karaoke	tay	3
+b	tay	vịn	3
+b	đỏ	đen	4
+b	game	bài	4
+b	tất	tay	3
+b	cháy	tài	3
+b	tài	khoản	4
+b	vay	nặng	3
+b	bốc	bát	3
+b	bát	họ	3
+b	đại	ca	3
+b	bảo	kê	3
+b	hàng	nóng	3
+b	bão	đêm	3
+b	bốc	đầu	3
+b	lạng	lách	4
+b	lùa	gà	3
+b	úp	bô	3
+b	chạy	án	3
+b	rửa	tiền	4
+b	ăn	trộm	4
+b	hàng	dựng	3
+b	hàng	fake	3
+b	vãi	nồi	3
+b	vãi	đạn	3
+b	vãi	linh	3
+b	đếch	biết	3
+b	méo	biết	3
+b	xin	phép	5
+b	xin	link	3
+b	lên	giường	3
+b	xếp	hình	3
+b	check	var	3
+b	tiểu	tam	3
+b	đào	mỏ	3
+b	say	bí	3
+b	trăm	phần	3
+b	không	say	3
+b	say	không	3
+b	không	về	3
+b	phong	bì	3
+b	lót	tay	3
+b	con	ông	3
+b	cửa	sau	3
+b	ăn	chặn	3
+b	ăn	bớt	3
+b	chạy	chức	3
+b	chạy	điểm	3
+b	gạch	đá	3
+b	cà	khịa	4
+b	khẩu	nghiệp	3
+b	anti	fan	3
+b	trẻ	trâu	4
+b	bố	đời	3
+b	sống	ảo	4
+b	béo	như	3
+b	đen	như	3
+b	mặt	như	3
+b	như	cái	3
+b	cột	nhà	3
+b	nhà	cháy	3
+b	gầy	như	3
+b	như	que	3
+b	que	tăm	3
+b	mong	manh	3
+b	ngu	như	3
+b	công	chúa	3
+b	phòng	trọ	3
+b	lồn	trâu	3
+b	lồn	mong	2
+b	nước	ngoài	4
+b	nước	mắt	4
+b	bóng	đá	4
+b	cá	nhân	4
+b	hàng	hóa	4
+b	vay	tiền	4
+b	phong	cách	4
+b	tiểu	thuyết	4
+b	đào	tạo	4
+b	cắm	trại	4
+b	khẩu	trang	4
+b	mặt	trời	4
+b	xếp	hạng	4
+b	lên	tới	4
+b	bé	gái	4
+b	gái	xinh	4
+b	cháy	nổ	4
+b	bão	lũ	4
+b	gen	z	3
+b	phông	bạt	3
+b	báo	thủ	3
+b	hệ	lươn	3
+b	phú	bà	3
+b	tổng	tài	3
+b	người	tối	3
+b	tối	cổ	3
+b	out	trình	3
+b	nóc	nhà	4
+b	đỉnh	nóc	3
+b	nóc	kịch	3
+b	kịch	trần	3
+b	trần	bay	3
+b	bay	phấp	3
+b	ô	dề	3
+b	u	là	3
+b	là	trời	3
+b	ảo	ma	3
+b	ma	canada	3
+b	còn	cái	3
+b	cái	nịt	3
+b	trôn	việt	3
+b	gét	gô	3
+b	xu	cà	3
+b	cà	na	3
+b	red	flag	3
+b	green	flag	3
+b	đẩy	thuyền	3
+b	con	giáp	3
+b	nam	thần	3
+b	vợ	quốc	3
+b	quốc	dân	3
+b	phông	nền	4
+b	tổng	thống	4
+b	chữa	bệnh	4
+b	đỉnh	cao	4
+b	kịch	bản	4
+b	khét	tiếng	4
+b	ô	tô	4
+b	ảo	tưởng	4
+b	ma	túy	4
+b	trôn	ốc	4
+b	xu	hướng	4
+b	đẩy	mạnh	4
+b	vợ	chồng	4
+b	hóng	biến	3
+b	ối	dồi	3
+b	dồi	ôi	3
+b	mãi	mận	3
+b	mãi	đỉnh	3
+b	mãi	keo	3
+b	keo	lỳ	3
+b	cẩu	lương	3
+b	mỏ	hỗn	3
+b	gáy	sớm	3
+b	cháy	phố	3
+b	thánh	lầy	3
+b	xịn	xò	3
+b	chanh	sả	3
+b	quay	xe	3
+b	xe	cực	3
+b	cực	gắt	3
+b	xin	vía	3
+b	vía	học	3
+b	học	giỏi	3
+b	tra	nam	3
+b	iu	thương	3
+b	ny	cũ	3
+b	ra	dẻ	3
+b	hết	cứu	3
+b	sì	tin	3
+b	gờ	ét	3
+b	quá	dữ	3
+b	lên	đồ	3
+b	lên	đời	3
+b	đi	bão	3
+b	đứng	hình	3
+b	khó	ở	3
+b	làm	màu	3
+b	tới	công	3
+b	công	chuyện	3
+b	diễn	sâu	3
+b	mất	não	3
+b	bắt	trend	3
+b	đu	trend	3
+b	đu	idol	3
+b	fan	cứng	3
+b	hít	drama	3
+b	chạy	deadline	3
+b	tụt	mood	3
+b	lên	mood	3
+b	xỉu	up	3
+b	up	xỉu	3
+b	xỉu	down	3
+b	trap	boy	3
+b	chạy	trốn	4
+b	đứng	dậy	4
+b	tới	đây	4
+b	diễn	ra	4
+b	hết	sức	4
+b	xe	máy	4
+b	cực	kỳ	4
+b	mãi	mãi	4
+b	keo	kiệt	4
+b	hóng	mát	4
+b	tra	cứu	4
+b	hít	thở	4
+b	tụt	xuống	4
+b	đu	đủ	4
+b	vàng	nhẫn	3
+b	bắt	đáy	3
+b	đu	đỉnh	3
+b	chốt	lãi	3
+b	mã	chứng	3
+b	chứng	khoán	3
+b	quỹ	ngoại	3
+b	khối	ngoại	3
+b	phiếu	rác	3
+b	kịch	sàn	3
+b	giảm	sàn	3
+b	tăng	trần	3
+b	ví	lạnh	3
+b	ví	nóng	3
+b	call	margin	3
+b	sàn	coin	3
+b	đào	coin	3
+b	vàng	bạc	4
+b	khối	lượng	4
+b	giảm	cân	4
+b	tăng	cường	4
+b	ví	dụ	5
+b	chụp	x	3
+b	x	quang	3
+b	ăn	gián	3
+b	tập	gym	3
+b	hậu	covid	3
+b	test	nhanh	3
+b	sinh	thường	3
+b	tiền	sản	3
+b	hậu	quả	4
+b	phil	trinh	5
+b	bố	mày	7
+b	thằng	mặt	4
+b	má	mày	4
 b	vãi	đái	3
 b	thằng	chó	3
 b	đồ	chó	3
@@ -2173,9 +2469,35 @@ b	đồ	điên	3
 b	mẹ	mày	3
 b	con	gà	4
 b	nâng	bi	2
-b	nâng	cấp	5
-b	nâng	cao	5
-b	sờ	vào	4
 b	sờ	chim	2
 b	sờ	cu	2
 b	rờ	cu	2
+b	móc	lốp	2
+b	bú	cu	2
+b	nện	nhau	2
+b	phang	nhau	2
+b	xoạc	nhau	2
+b	chơi	gái	3
+b	đậu	má	3
+b	đù	má	3
+b	damn	it	4
+b	piss	off	3
+b	kích	dục	3
+b	massage	kích	3
+b	chơi	cave	3
+b	óc	lợn	3
+b	não	phẳng	3
+b	láo	chó	3
+b	quay	tay	3
+b	phim	heo	3
+b	clip	nóng	3
+b	lộ	clip	3
+b	như	lợn	3
+b	như	cột	3
+b	cái	mâm	3
+b	lùn	tịt	3
+b	cò	hương	3
+b	như	heo	3
+b	như	bò	3
+b	chúa	phòng	3
+b	fuck	boy	3

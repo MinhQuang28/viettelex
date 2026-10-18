@@ -102,6 +102,10 @@ bool casingEvidence(const std::u32string& word, const std::u32string& prev);
 std::u32string suggestionCase(const std::u32string& w, const std::u32string& typed);
 bool isSensitive(const std::u32string& w);  // SensitiveWords.set (lowercased)
 bool isEnglishVulgar(const std::u32string& w);  // SensitiveWords.english (lowercased)
+// SensitiveWords.isPair: (prev, word) ∈ SensitivePairs (sensitive_pairs.inc, generated from
+// Scripts/seed-curated.txt [sensitive-bigram]) — with the filter on, `word` is never suggested after
+// `prev` and the seed pair gives no context bonus.
+bool isSensitivePair(const std::u32string& prev, const std::u32string& word);
 // PredictionLogic.withVulgarEnglish: filter OFF — merge the English vulgar words (absent from
 // enlexicon) starting with `typed` into (word, lexicon freq) hits at SensitiveWords.englishFreq.
 std::vector<std::u32string> withVulgarEnglish(const std::vector<std::pair<std::u32string, int>>& en,

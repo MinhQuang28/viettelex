@@ -34,6 +34,17 @@ private func typed(_ s: String, app: Bool = true) -> String {
 
 final class ContextEnglishLoanwordTests: XCTestCase {
 
+    /// Tên app (Phil 18/10/2026): "viettelex" / "telex" gõ ra nguyên văn — không bị Telex hoá (x = dấu ngã,
+    /// ee = ê) — cả giữa câu Việt lẫn sau một từ tiếng Anh.
+    func testAppNameStaysLiteral() {
+        XCTAssertEqual(typed("viettelex"), "viettelex")
+        XCTAssertEqual(typed("booj gox viettelex"), "bộ gõ viettelex")
+        XCTAssertEqual(typed("the viettelex app"), "the viettelex app")
+        XCTAssertEqual(typed("kieeur telex"), "kiểu telex")
+        XCTAssertEqual(typed("viettelex", app: false), "viettelex")
+        XCTAssertEqual(typed("Phil trinh"), "Phil trinh", "tên tác giả: trinh không dấu")
+    }
+
     func testFieldReportSuggestionBenTren() {
         XCTAssertEqual(typed("suggestion been treen"), "suggestion bên trên")
         XCTAssertEqual(typed("suggestion been treen", app: false), "suggestion bên trên")

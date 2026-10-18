@@ -21,6 +21,14 @@ class EngineBridgeTests {
         return proxy.text
     }
 
+    /** Tên app (Phil 18/10/2026): "viettelex"/"telex" gõ ra nguyên văn (x = ngã, ee = ê không áp). = TelexCore testAppNameStaysLiteral. */
+    @Test fun testAppNameStaysLiteral() {
+        assertEquals("viettelex ", type("viettelex "))
+        assertEquals("bộ gõ viettelex ", type("booj gox viettelex "))
+        assertEquals("kiểu telex ", type("kieeur telex "))
+        assertEquals("tên tác giả: trinh không dấu", "Phil trinh ", type("Phil trinh "))
+    }
+
     /**
      * composeTrial dùng lại MỘT engine mỗi luồng (RAM-AUDIT #8): kết quả phải y hệt engine mới
      * tinh, bất kể lượt trước để lại gì (từ dài tràn, VNI, hủy dấu, chữ hoa…).
@@ -235,8 +243,8 @@ class SeedDataTests {
 
     @Test fun testSeedSizesMatchIOS() {
         val s = SeedData.load()
-        assertEquals(1181, s.unigrams.size)
-        assertEquals(1000, s.bigrams.size)
+        assertEquals(1222, s.unigrams.size)
+        assertEquals(1281, s.bigrams.size)
     }
 }
 
@@ -293,13 +301,134 @@ class SeedVulgarPairsTests {
             val on = SensitiveWords.filter(m.nextWords(prev, limit = 24), true)
             assertTrue("$prev: $on", on.none { it.lowercase() in SensitiveWords.set })
         }
-        assertEquals(emptyList<String>(), SensitiveWords.filter(m.nextWords("bú", limit = 6), true))
+        assertEquals("bú cu: SensitivePairs; bú đá hiện", listOf("đá"), SensitiveWords.filter(m.nextWords("bú", limit = 6), true, after = "bú"))
         assertEquals("lồn", m.nextWords("bú", limit = 6).first())
         assertEquals(listOf("tiên", "tư"), SensitiveWords.filter(m.nextWords("đầu", limit = 3), true))
         assertEquals(listOf("vào"), m.nextWords("sờ", limit = 1))
         assertEquals(listOf("cao"), m.nextWords("nâng", limit = 1))
         assertEquals(listOf("you"), m.nextWords("thank", limit = 1))
         assertEquals(emptyList<String>(), SensitiveWords.filter(m.nextWords("holy", limit = 3), true))
+    }
+}
+
+/**
+ * Song sinh iOS SensitiveWordsTests.testSensitivePairsGated: cặp chửi/tục ghép từ hai TỪ THƯỜNG
+ * (SensitiveWords.pairs, sinh từ seed-curated [sensitive-bigram]). Bật lọc ⇒ với MỌI cặp: từ kế tiếp
+ * sau prev không có word, vuốt sau prev không được thưởng ngữ cảnh seed, Thêm dấu không thưởng; tắt ⇒ có.
+ */
+class SensitivePairsTests {
+    @Before fun setUp() = TestAssets.install()
+
+    private fun model() = UserLangModel().also {
+        it.isKnownWord = { w -> VNSuggest.contains(w) }
+        it.seedIfEmpty(SeedData.unigrams, SeedData.bigrams)
+    }
+
+    @Test fun testSensitivePairsGated() {
+        val m = model()
+        val pairs = SensitiveWords.pairs.flatMap { (p, ws) -> ws.map { p to it } }
+        assertTrue(pairs.size >= 30)
+        val seedPairs = SeedData.bigrams.map { "${it.first} ${it.second}" }.toSet()
+        for ((prev, w) in pairs) {
+            assertTrue("cặp nhạy cảm phải có trong seed: $prev $w", "$prev $w" in seedPairs)
+            assertFalse(w in SensitiveWords.set)
+            val raw = m.nextWords(prev, limit = 24)
+            assertTrue("tắt lọc: $prev → $w phải hiện ($raw)", w in raw)
+            val on = SensitiveWords.filter(raw, true, after = prev)
+            assertFalse("$prev: $on", w in on)
+            val next = SuggestRank.nextFill(prev, null, on, { 0 }, { SensitiveWords.filter(it, true, after = prev) }, need = 5)
+            assertFalse("nextFill $prev: $next", w in next)
+            // vuốt: lọc bật ⇒ không +NEXT_BONUS từ cặp seed; tắt ⇒ có (lm = null: chỉ phần cá nhân)
+            val ctxOn = SwipeSuggest.context(m, prev, null, lm = null, filterSensitive = true)
+            val ctxOff = SwipeSuggest.context(m, prev, null, lm = null, filterSensitive = false)
+            assertEquals("vuốt $prev → $w", SwipeSuggest.NEXT_BONUS, ctxOff.word(w) - ctxOn.word(w), 1e-4f)
+        }
+        assertEquals(listOf("vào"), SensitiveWords.filter(m.nextWords("sờ", limit = 6), true, after = "sờ"))
+        assertEquals(listOf("vào", "chim", "cu"), m.nextWords("sờ", limit = 3))
+        assertFalse("bi" in SensitiveWords.filter(m.nextWords("nâng", limit = 6), true, after = "nâng"))
+        assertFalse("chó" in SensitiveWords.filter(m.nextWords("thằng", limit = 24), true, after = "Thằng"))
+        assertEquals(listOf("má"), m.nextWords("đậu", limit = 1))
+        assertEquals(listOf("nhau"), m.nextWords("phang", limit = 1))
+        for ((a, b) in listOf("lăng" to "nhăng", "lăng" to "loàn", "hãm" to "hiếp", "lừa" to "đảo", "khốn" to "nạn")) {
+            assertFalse(SensitiveWords.isPair(a, b))
+            assertTrue("$a $b", b in SensitiveWords.filter(m.nextWords(a, limit = 24), true, after = a))
+        }
+        assertEquals(listOf("lồn"), SensitiveWords.dropPairs(listOf("chó", "lồn"), "thằng", true))
+        assertEquals(listOf("chó", "lồn"), SensitiveWords.dropPairs(listOf("chó", "lồn"), "thằng", false))
+        // Thêm dấu: closure như KeyboardSession.tonesPersonal
+        val pair = { fs: Boolean -> { a: String, b: String -> if (fs && SensitiveWords.isPair(a, b)) 0 else m.bigramCount(a, b) } }
+        assertTrue(pair(false)("sờ", "chim") > 0)
+        assertEquals(0, pair(true)("sờ", "chim"))
+    }
+
+    /** Song sinh iOS testSlangAndInsultBatches. */
+    @Test fun testSlangAndInsultBatches() {
+        val m = model()
+        fun on(p: String) = SensitiveWords.filter(m.nextWords(p, limit = 24), true, after = p)
+        assertEquals("lách", on("lạng").first())
+        assertEquals(listOf("baby", "daddy"), on("sugar"))
+        assertEquals("tay", on("karaoke").first())
+        assertEquals("biết", on("đếch").first())
+        assertTrue("tiền" in on("rửa"))
+        assertTrue("coin" in on("chơi"))
+        for (w in listOf("nồi", "đạn", "linh")) assertTrue(w, w in on("vãi"))
+        for ((p, w) in listOf("kích" to "dục", "massage" to "kích", "chơi" to "cave", "chơi" to "gái", "óc" to "lợn",
+                              "não" to "phẳng", "láo" to "chó", "con" to "chó", "quay" to "tay", "phim" to "heo",
+                              "clip" to "nóng", "lộ" to "clip", "như" to "lợn", "như" to "heo", "như" to "bò", "như" to "cột",
+                              "cái" to "mâm", "lùn" to "tịt", "cò" to "hương", "chúa" to "phòng")) {
+            assertTrue(SensitiveWords.isPair(p, w))
+            assertFalse("$p $w", w in on(p))
+            assertTrue("tắt lọc: $p $w", w in m.nextWords(p, limit = 24))
+        }
+        for (w in listOf("cc", "đb", "lìn")) { assertTrue(w in SensitiveWords.set); assertTrue((SeedData.unigrams[w] ?: 0) > 0) }
+        for ((p, w) in listOf("cà" to "khịa", "trẻ" to "trâu", "sống" to "ảo", "gen" to "z", "báo" to "thủ", "ô" to "dề", "xu" to "cà",
+                              "phong" to "bì", "check" to "var", "anti" to "fan", "xin" to "link", "phòng" to "trọ", "que" to "tăm",
+                              "mong" to "manh", "gầy" to "như")) assertTrue("$p $w", w in on(p))
+        for ((p, w) in listOf("nước" to "ngoài", "bóng" to "đá", "cá" to "nhân", "hàng" to "hóa", "lên" to "tới", "xin" to "lỗi",
+                              "khẩu" to "trang", "đào" to "tạo")) assertEquals(p, w, on(p).first())
+        assertEquals("Z", DisplayCase.resolve("z", "gen"))
+        assertEquals("Canada", DisplayCase.resolve("canada", "ma"))
+        assertEquals("gen di truyền", "gen", DisplayCase.resolve("gen"))
+        assertEquals("gô", on("gét").first())
+        assertTrue("teencode trong vnlexicon", VNSuggest.contains("khum") && VNSuggest.contains("dề") && VNSuggest.contains("na"))
+        assertFalse(SensitiveWords.isPair("phòng", "trọ") || SensitiveWords.isPair("cột", "nhà") || SensitiveWords.isPair("nhà", "cháy"))
+        assertFalse("LOL tiếng Anh", "lol" in SensitiveWords.set)
+        assertFalse("đếch" in SensitiveWords.set || "méo" in SensitiveWords.set)
+    }
+
+    /** Song sinh iOS testFiatAndCurrencyCase. */
+    @Test fun testFiatAndCurrencyCase() {
+        val m = model()
+        assertEquals(listOf("định"), m.nextWords("pháp", "tiền", 1))
+        assertTrue("pháp" in m.nextWords("tiền", limit = 3))
+        for ((w, d) in listOf("usd" to "USD", "usdt" to "USDT", "vnđ" to "VNĐ", "vnd" to "VND", "bitcoin" to "Bitcoin",
+                              "crypto" to "crypto", "fiat" to "fiat")) {
+            assertEquals(d, DisplayCase.resolve(w))
+            assertTrue(w, (SeedData.unigrams[w] ?: 0) > 0)
+        }
+        for ((w, d) in listOf("gemini" to "Gemini", "grok" to "Grok", "ubuntu" to "Ubuntu", "copilot" to "Copilot",
+                              "docker" to "Docker", "kubernetes" to "Kubernetes", "javascript" to "JavaScript",
+                              "typescript" to "TypeScript", "llm" to "LLM", "nft" to "NFT", "etf" to "ETF", "ipo" to "IPO",
+                              "defi" to "DeFi", "chatgpt" to "ChatGPT", "github" to "GitHub", "cursor" to "cursor",
+                              "stablecoin" to "stablecoin", "cloudflare" to "Cloudflare", "golang" to "Golang", "vpn" to "VPN",
+                              "kotlin" to "Kotlin", "panadol" to "Panadol", "viettelex" to "VietTelex", "telex" to "telex",
+                              "keto" to "keto", "rust" to "rust")) {
+            assertEquals(d, DisplayCase.resolve(w))
+        }
+        fun on(p: String) = SensitiveWords.filter(m.nextWords(p, limit = 24), true, after = p)
+        for ((p, w) in listOf("bắt" to "đáy", "đu" to "đỉnh", "khối" to "ngoại", "ví" to "lạnh", "call" to "margin", "vàng" to "nhẫn"))
+            assertTrue("$p $w", w in on(p))
+        assertEquals("NEO: ví dụ vẫn đứng đầu", "dụ", on("ví").first())
+        for ((p, w) in listOf("chụp" to "x", "x" to "quang", "tập" to "gym", "hậu" to "covid", "test" to "nhanh", "sinh" to "thường"))
+            assertTrue("$p $w", w in on(p))
+        assertEquals("X", DisplayCase.resolve("x", "chụp"))
+        assertEquals("Covid", DisplayCase.resolve("covid"))
+        assertEquals("trinh", on("phil").first())
+        assertEquals("Phil", DisplayCase.resolve("phil"))
+        assertEquals("Trinh", DisplayCase.resolve("trinh", "Phil"))
+        assertEquals("trinh", DisplayCase.resolve("trinh"))
+        for (w in listOf("kubernetes", "stablecoin", "viettelex", "paracetamol", "cloudflare"))
+            assertTrue("enlexicon: $w", SwipeEnglish.indexOf(w) >= 0)
     }
 }
 

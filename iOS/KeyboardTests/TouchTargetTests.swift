@@ -50,9 +50,9 @@ final class TouchTargetTests: XCTestCase {
 
     /// Số chốt từ Android TouchSimTests.parityNumbers — cùng dữ liệu ⇒ cùng trie.
     func testParityWithKotlin() throws {
-        XCTAssertEqual(prior.trie.nodeCount, 63257)
+        XCTAssertEqual(prior.trie.nodeCount, 63370)
         let cases: [(String, Character, Float)] = [
-            ("", "t", 0.16052505), ("", "z", 2.4178255e-5), ("th", "a", 0.25838506), ("ng", "u", 0.49238884),
+            ("", "t", 0.16052505), ("", "z", 2.420141e-5), ("th", "a", 0.25838506), ("ng", "u", 0.49238884),
             ("k", "o", 0.002160288), ("tie", "e", 0.99860436), ("dd", "u", 0.17761526), ("hel", "l", 0.17500657),
         ]
         for (raw, c, want) in cases {
