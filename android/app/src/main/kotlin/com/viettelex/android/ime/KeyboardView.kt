@@ -218,6 +218,7 @@ class KeyboardView(
         set(v) {
             if (field != v) {
                 field = v; if (!v && !translateEnabled) textToolsMode = false
+                closeEmptyToolsOnly()
                 refreshTemplatesPane()
                 if (plane == Plane.EDIT) rebuild()
             }
@@ -229,21 +230,24 @@ class KeyboardView(
         set(v) {
             if (field != v) {
                 field = v; if (!v && !textToolsEnabled) textToolsMode = false
+                closeEmptyToolsOnly()
                 refreshTemplatesPane()
                 if (plane == Plane.EDIT) rebuild()
             }
         }
 
+    /** Ô ☰ (TemplatesMenu): mẫu câu / chỉ công cụ (Mẫu câu tắt) / ẩn. */
+    val leftZone get() = TemplatesMenu.leftZone(templatesEnabled, textToolsEnabled || translateEnabled)
+
+    /** Chỉ-công-cụ đang mở mà công cụ vừa tắt ⇒ lưới rỗng: về bàn phím chữ. */
+    private fun closeEmptyToolsOnly() {
+        if (plane == Plane.TEMPLATES && leftZone == TemplatesMenu.LeftZone.NONE) setPlane(Plane.LETTERS)
+    }
+
     private fun refreshTemplatesPane() {
-        if (textToolsMode) {
-            templatesPane.setItems(emptyList())
-            templatesPane.setExtras(listOf(tr("‹ Mẫu câu") to TOOLS_BACK) +
-                (if (textToolsEnabled) TextTool.entries.map { it.label to it.id } else emptyList()) +
-                (if (translateEnabled) listOf(tr("Dịch") to TOOLS_TRANSLATE) else emptyList()), gear = false)
-        } else {
-            templatesPane.setItems(templates)
-            templatesPane.setExtras(if (textToolsEnabled || translateEnabled) listOf(tr("⚒️ Công cụ") to TOOLS_ENTRY) else emptyList(), gear = true)
-        }
+        val p = TemplatesMenu.pane(textToolsMode, templatesEnabled, textToolsEnabled, translateEnabled)
+        templatesPane.setItems(if (p.showTemplates) templates else emptyList())
+        templatesPane.setExtras(p.extras, gear = p.gear)
         if (plane == Plane.TEMPLATES) rebuild()
     }
     var keyAreaPx = theme.dp(218f); private set
@@ -630,7 +634,7 @@ class KeyboardView(
     }
 
     fun setPlane(p: Plane) {
-        if (p == Plane.TEMPLATES && !templatesEnabled) return
+        if (p == Plane.TEMPLATES && leftZone == TemplatesMenu.LeftZone.NONE) return
         if (plane == p) return
         // Rời plane chữ sang ?123 / =\< / emoji: tắt Caps Lock + shift một-lần (như iOS stock;
         // Phil 06/10/2026). Về chữ IME đánh giá lại viết hoa đầu câu (onPlaneChanged).
@@ -670,8 +674,9 @@ class KeyboardView(
         if (plane == Plane.EDIT) invalidate()
     }
 
+    /** ☰: mẫu câu, hoặc (Mẫu câu tắt) thẳng danh sách công cụ — TemplatesMenu.pane. */
     fun toggleTemplates() {
-        if (!templatesEnabled) return
+        if (leftZone == TemplatesMenu.LeftZone.NONE) return
         setPlane(if (plane == Plane.TEMPLATES) Plane.LETTERS else Plane.TEMPLATES)
     }
 
@@ -2055,9 +2060,9 @@ class KeyboardView(
         const val BS_INTERVAL = 90L
         const val GLOBE_HOLD_MS = 500L
         const val RETURN_HOLD_MS = 450L
-        private const val TOOLS_ENTRY = "\uE000tools"
-        private const val TOOLS_BACK = "\uE000back"
-        private const val TOOLS_TRANSLATE = "\uE000translate"
+        private const val TOOLS_ENTRY = TemplatesMenu.TOOLS_ENTRY
+        private const val TOOLS_BACK = TemplatesMenu.TOOLS_BACK
+        private const val TOOLS_TRANSLATE = TemplatesMenu.TOOLS_TRANSLATE
         const val EDIT_HOLD_MS = 400L
         const val EDIT_REPEAT_MS = 70L
     }

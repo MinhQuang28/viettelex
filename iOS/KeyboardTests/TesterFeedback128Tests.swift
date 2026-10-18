@@ -90,6 +90,70 @@ final class TesterFeedback128Tests: XCTestCase {
         XCTAssertEqual(KeyboardView.leftZone(templatesEnabled: false, pad: false, split: true), .none)
     }
 
+    /// ☰ hiện khi Mẫu câu HOẶC Công cụ văn bản bật (user 10/2026). Công cụ = Plus mở khoá
+    /// VÀ công tắc (KeyboardSettings.textToolsActive) — khoá Plus ⇒ như tắt.
+    func testLeftZoneMatrixWithTextToolsAndPlusGate() {
+        for templates in [false, true] {
+            for toolsSwitch in [false, true] {
+                for unlocked in [false, true] {
+                    for (pad, split) in [(false, false), (true, false), (false, true)] {
+                        var s = KeyboardSettings()
+                        s.textToolsEnabled = toolsSwitch
+                        let tools = s.textToolsActive(unlocked: unlocked)
+                        let z = KeyboardView.leftZone(templatesEnabled: templates, toolsEnabled: tools,
+                                                      pad: pad, split: split)
+                        let want: KeyboardView.LeftZone = templates ? .templates
+                            : (toolsSwitch && unlocked) ? .tools
+                            : (pad || split) ? .none : .oneHand
+                        XCTAssertEqual(z, want, "templates=\(templates) tools=\(toolsSwitch) unlocked=\(unlocked) pad=\(pad) split=\(split)")
+                    }
+                }
+            }
+        }
+    }
+
+    /// Mẫu câu tắt + Công cụ bật: chạm ☰ mở THẲNG danh sách công cụ (không mẫu câu, không
+    /// "‹ Mẫu câu"); chạm lần nữa đóng; giữ lâu vẫn bật/tắt một tay.
+    @MainActor func testToolsOnlyLeftZoneOpensTextTools() {
+        withKeyboard(["templatesEnabled": false]) { kb in
+            kb.textToolsEnabled = true
+            kb.layoutIfNeeded()
+            XCTAssertEqual(kb.debugLeftZone, .tools)
+            XCTAssertTrue(kb.debugBurgerVisible)
+            XCTAssertEqual(kb.debugLeftZoneSymbol, L("Công cụ văn bản"))
+            kb.debugTapLeftZone()
+            kb.layoutIfNeeded()
+            XCTAssertTrue(kb.debugInTemplates, "chạm ☰ ⇒ mở lưới công cụ")
+            XCTAssertFalse(kb.debugOneHandActive)
+            let extras = kb.debugTemplateExtras
+            XCTAssertEqual(Array(extras.prefix(TextTool.allCases.count)), TextTool.allCases.map(\.label),
+                           "danh sách công cụ hiện ngay: \(extras)")
+            XCTAssertFalse(extras.contains(L("\u{2039} Mẫu câu")), "không có nút quay về mẫu câu")
+            XCTAssertFalse(extras.contains(L("⚒️ Công cụ")))
+            XCTAssertFalse(kb.debugTemplatesLoaded, "không đọc danh sách mẫu câu")
+            var applied: [TextTool] = []
+            kb.onTextTool = { applied.append($0) }
+            XCTAssertTrue(kb.debugSelectTemplateChip(0))
+            XCTAssertEqual(applied, [TextTool.allCases[0]], "chạm công cụ ⇒ áp")
+            XCTAssertFalse(kb.debugInTemplates, "áp xong về bàn phím chữ")
+            kb.debugTapLeftZone()
+            XCTAssertTrue(kb.debugInTemplates)
+            kb.debugTapLeftZone()
+            XCTAssertFalse(kb.debugInTemplates, "chạm lần nữa ⇒ đóng")
+            if !isPad {
+                kb.debugHoldBurger()
+                XCTAssertTrue(kb.debugOneHandActive, "giữ lâu ☰ vẫn bật một tay")
+                kb.debugHoldBurger()
+            }
+            // Công cụ tắt lúc đang mở ⇒ về bàn phím chữ, ô mép trái thành một tay / ẩn.
+            kb.debugTapLeftZone()
+            XCTAssertTrue(kb.debugInTemplates)
+            kb.textToolsEnabled = false
+            XCTAssertFalse(kb.debugInTemplates)
+            XCTAssertEqual(kb.debugLeftZone, isPad ? .none : .oneHand)
+        }
+    }
+
     @MainActor func testTemplatesOffLeftZoneTogglesOneHand() throws {
         try XCTSkipIf(isPad, "iPad không có chế độ một tay")
         withKeyboard(["templatesEnabled": false]) { kb in
