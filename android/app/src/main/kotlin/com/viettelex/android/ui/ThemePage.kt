@@ -472,9 +472,14 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
             // Hoạ tiết (Tim đen / Hoa xanh) cùng hình học bàn phím thật, thu theo bề ngang 390 dp.
             val d = p.decoration
             if (d != null && wallpaper == null) {
+                // Khe giữa các hàng của bản thu nhỏ (cùng lưới phím bên dưới), phóng về khe thật ~11 dp.
                 val unit = size.width / 390f
+                val pad = if (large) 6.dp.toPx() else 3.dp.toPx()
+                val gap = if (large) 5.dp.toPx() else 2.dp.toPx()
+                val kh = (size.height - bottomPadDp.dp.toPx() - pad * 2 - gap * 3) / 4
+                val gaps = (1..3).map { i -> com.viettelex.keyboard.ThemeDecoration.Gap(((pad + i * kh + (i - 0.5f) * gap) / unit).toDouble(), 11.0) }
                 val path = android.graphics.Path()
-                com.viettelex.android.ime.decorPath(path, d.motif, 390f, size.height / unit, unit)
+                com.viettelex.android.ime.decorPath(path, d.motif, com.viettelex.keyboard.ThemeDecoration.placements(390.0, gaps), unit)
                 drawPath(path.asComposePath(), Color(d.color))
             }
         }

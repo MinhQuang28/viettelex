@@ -19,11 +19,24 @@ class ThemeDecorDrawable(private val bg: Int, private val decoration: ThemeDecor
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = decoration.color; style = Paint.Style.FILL }
     private val bgPaint = Paint().apply { color = bg; style = Paint.Style.FILL }
     private val path = Path()
+    /** Khe giữa các hàng phím, dp theo toạ độ view gốc (ImeRootView đặt sau mỗi lần dựng phím). */
+    private var gaps: List<ThemeDecoration.Gap> = emptyList()
+
+    /** Đổi khe ⇒ dựng lại path (không đổi ⇒ không làm gì — không chạy mỗi lần gõ). */
+    fun setRowGaps(g: List<ThemeDecoration.Gap>) {
+        if (g == gaps) return
+        gaps = g
+        rebuild(); invalidateSelf()
+    }
 
     override fun onBoundsChange(bounds: Rect) {
         super.onBoundsChange(bounds)
-        decorPath(path, decoration.motif, bounds.width() / density, bounds.height() / density, density,
-            bounds.left.toFloat(), bounds.top.toFloat())
+        rebuild()
+    }
+
+    private fun rebuild() {
+        decorPath(path, decoration.motif, ThemeDecoration.placements(bounds.width() / density.toDouble(), gaps),
+            density, bounds.left.toFloat(), 0f)
     }
 
     override fun draw(canvas: Canvas) {
@@ -37,18 +50,14 @@ class ThemeDecorDrawable(private val bg: Int, private val decoration: ThemeDecor
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
-/**
- * Dựng path hoạ tiết vào [path] cho vùng [wUnits]×[hUnits] (dp), [unitPx] px mỗi dp, gốc (left, top).
- * Dùng chung nền IME + bản xem trước trong app.
- */
-fun decorPath(path: Path, motif: String, wUnits: Float, hUnits: Float, unitPx: Float, left: Float = 0f, top: Float = 0f) {
+/** Dựng path hoạ tiết vào [path] từ [placements] (dp), [unitPx] px mỗi dp, gốc (left, top). Nền IME + xem trước. */
+fun decorPath(path: Path, motif: String, placements: List<ThemeDecoration.Placement>, unitPx: Float,
+              left: Float = 0f, top: Float = 0f) {
     path.rewind()
     val d = unitPx.toDouble()
-    val pts = ThemeDecoration.placements(wUnits.toDouble(), hUnits.toDouble())
-    val s = ThemeDecoration.MOTIF_SIZE * d
-    var i = 0
-    while (i < pts.size) {
-        val ox = left + pts[i] * d; val oy = top + pts[i + 1] * d
+    for (p in placements) {
+        val s = p.size * d
+        val ox = left + p.x * d; val oy = top + p.y * d
         fun x(u: Double) = (ox + u * s).toFloat()
         fun y(u: Double) = (oy + u * s).toFloat()
         if (motif == ThemeDecoration.HEARTS) {
@@ -58,6 +67,5 @@ fun decorPath(path: Path, motif: String, wUnits: Float, hUnits: Float, unitPx: F
         } else for (c in ThemeDecoration.FLOWER_CIRCLES) {
             path.addCircle(x(c[0]), y(c[1]), (c[2] * s).toFloat(), Path.Direction.CW)
         }
-        i += 2
     }
 }

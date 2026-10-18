@@ -1014,6 +1014,8 @@ final class ThemeSetTests: XCTestCase {
         PlusGate.setPurchased(false)
         PlusGate.debugOverride = false
         XCTAssertNil(ThemePicker.select(.blackHeart, in: s))                   // khoá ⇒ không đổi
+        XCTAssertEqual(ThemePicker.tap(.blackHeart, in: s), .openPlus)         // khoá ⇒ mở màn Plus
+        XCTAssertEqual(ThemePicker.tap(.oled, in: s), .select(s))
         XCTAssertEqual(ThemePicker.select(.contrast, in: s)?.theme, .contrast) // miễn phí luôn chọn được
         PlusGate.setPurchased(true)
         XCTAssertEqual(ThemePicker.select(.blackHeart, in: s)?.theme, .blackHeart)
@@ -1045,31 +1047,66 @@ final class ThemeSetTests: XCTestCase {
         }
     }
 
-    /// Chi phí: số motif có trần, tất định, nằm trong vùng (lề tránh góc bo nền).
-    func testDecorationGeometryBoundedAndInside() {
+    /// Hoạ tiết CHỈ ở khe giữa các hàng phím (bug ảnh 18/10: tim đè chữ "Anh" + ☰ ở thanh gợi ý):
+    /// gộp phím cùng hàng, bỏ phía trên hàng đầu, cỡ vừa khe, số motif có trần, tất định.
+    func testDecorationOnlyInRowGaps() {
         typealias D = KeyboardDecoration
-        for (w, h) in [(402.0, 300.0), (320.0, 260.0), (1366.0, 420.0), (834.0, 380.0), (20.0, 20.0)] {
-            let pts = D.placements(width: w, height: h)
-            XCTAssertLessThanOrEqual(pts.count, D.maxMotifs, "\(w)x\(h)")
-            if w > 100 { XCTAssertGreaterThan(pts.count, 8, "\(w)x\(h) phải có hoạ tiết") }
-            for p in pts {
-                XCTAssertGreaterThanOrEqual(p.x - D.motifSize / 2, D.inset - 1e-9)
-                XCTAssertLessThanOrEqual(p.x, w - D.inset + 1e-9)
-                XCTAssertGreaterThanOrEqual(p.y - D.motifSize / 2, D.inset - 1e-9)
-                XCTAssertLessThanOrEqual(p.y, h - D.inset + 1e-9)
-            }
-            XCTAssertEqual(pts.map(\.x), D.placements(width: w, height: h).map(\.x))
-            for motif in [D.Motif.hearts, .flowers] {
-                let box = D(motif: motif, color: .white).path(in: CGSize(width: w, height: h)).boundingBoxOfPath
-                if pts.isEmpty { XCTAssertTrue(box.isNull || box.isEmpty); continue }
-                XCTAssertTrue(CGRect(x: 0, y: 0, width: w, height: h).contains(box), "\(motif) \(w)x\(h)")
-            }
+        // 4 hàng phím iPhone (đỉnh 46, cao 42, khe 11) + phím lệch nhẹ trong hàng (vẫn cùng hàng).
+        var spans: [(top: Double, bottom: Double)] = []
+        for r in 0..<4 { let t = 46 + Double(r) * 53; spans += [(t, t + 42), (t + 0.5, t + 41.5)] }
+        let gaps = D.rowGaps(spans)
+        XCTAssertEqual(gaps, [D.Gap(center: 93.5, height: 11), D.Gap(center: 146.5, height: 11), D.Gap(center: 199.5, height: 11)])
+        XCTAssertEqual(D.rowGaps([(0, 40)]), [])                       // một hàng: không khe
+        XCTAssertEqual(D.rowGaps([(0, 40), (38, 80)]), [])             // chồng nhau: cùng hàng
+        let pts = D.placements(width: 402, gaps: gaps)
+        XCTAssertEqual(pts.count, 18)                                   // mốc chung Android
+        for p in pts {
+            XCTAssertGreaterThan(p.y - p.size / 2, 46 + 42 - 1e-9, "không lên thanh gợi ý / hàng đầu")
+            let g = gaps.first { abs($0.center - p.y) < 1e-9 }!
+            XCTAssertLessThanOrEqual(p.size, g.height - 2 * D.clearance + 1e-9, "motif nằm trọn trong khe")
+            XCTAssertGreaterThanOrEqual(p.x - p.size / 2, D.inset - 1e-9)
+            XCTAssertLessThanOrEqual(p.x + p.size / 2, 402 - D.inset + 1e-9)
         }
-        // Mốc chung với Android (ThemeDecorationTests): iPhone 402×300 → 36 motif.
-        XCTAssertEqual(D.placements(width: 402, height: 300).count, 36)
+        // Khe hẹp (ngang máy / iPad ~5pt) ⇒ không vẽ thay vì đè phím.
+        XCTAssertTrue(D.placements(width: 800, gaps: [D.Gap(center: 50, height: 6)]).isEmpty)
+        // Rộng: trần số motif.
+        XCTAssertLessThanOrEqual(D.placements(width: 5000, gaps: Array(repeating: D.Gap(center: 50, height: 11), count: 8)).count, D.maxMotifs)
+        for motif in [D.Motif.hearts, .flowers] {
+            let box = D(motif: motif, color: .white).path(pts).boundingBoxOfPath
+            XCTAssertGreaterThanOrEqual(box.minY, 88 - 1e-6); XCTAssertLessThanOrEqual(box.maxY, 205 + 1e-6)
+        }
         // Hoa: 5 cánh không chồng nhau, không chạm nhuỵ (tô nonzero không thủng lỗ).
         XCTAssertGreaterThan(2 * 0.32 * sin(Double.pi / 5), 2 * 0.18)
         XCTAssertGreaterThan(0.32 - 0.18, 0.12)
+    }
+
+    /// Bàn phím thật (Tim đen, Hoa xanh; sáng/tối): mọi motif dưới thanh gợi ý và không chạm phím nào.
+    @MainActor func testKeyboardViewMotifsStayBetweenKeys() {
+        let d = UserDefaultsProvider.shared
+        let saved = d?.object(forKey: ThemeSettings.themeKey)
+        defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
+        for t in [KeyboardTheme.blackHeart, .greenFloral] {
+            for dark in [false, true] {
+                d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
+                let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }
+                let host = UIView(frame: CGRect(x: 0, y: 0, width: 402, height: 400))
+                host.addSubview(kb)
+                kb.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+                kb.applyAppearance(dark ? .dark : .light, style: dark ? .dark : .light)
+                kb.setSuggestionsEnabled(true)
+                kb.setNeedsLayout(); kb.layoutIfNeeded()
+                // Dựng lại hàng phím SAU lượt layout (bug ảnh: hoạ tiết mất vì khe đo lúc hàng chưa có phím)
+                // — không gọi setNeedsLayout tay: rebuild phải tự xin đo lại.
+                kb.configureInputKind(.normal)
+                kb.layoutIfNeeded()
+                let (motifs, keys) = kb.debugDecorationBoxes
+                XCTAssertGreaterThan(motifs.count, 6, "\(t) \(dark)")
+                for m in motifs {
+                    XCTAssertGreaterThanOrEqual(m.minY, kb.debugRowsMinY, "\(t): motif lên thanh gợi ý")
+                    for k in keys { XCTAssertFalse(m.intersects(k), "\(t): motif chạm phím \(k)") }
+                }
+            }
+        }
     }
 
     // MARK: đi cùng độ trong suốt / ảnh nền / Nền theo hệ thống / Tuỳ chỉnh nâng cao (tối)

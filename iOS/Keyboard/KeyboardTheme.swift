@@ -370,43 +370,63 @@ enum KeyboardTheme: String, CaseIterable {
 }
 
 /// Hoạ tiết nền theme (Tim đen: tim; Hoa xanh: hoa) — MỘT path vẽ một lần vào lớp nền
-/// (CAShapeLayer iOS / Drawable Android), dựng lại chỉ khi đổi cỡ bàn phím. 0 chi phí mỗi phím,
-/// không ảnh. Hình học thuần (test được); Android giữ y hệt (ThemeDecoration trong KeyboardTheme.kt).
+/// (CAShapeLayer iOS / Drawable Android), dựng lại chỉ khi cỡ / hàng phím đổi. 0 chi phí mỗi phím,
+/// không ảnh. Motif CHỈ nằm trong khe GIỮA các hàng phím (không ở thanh gợi ý, không dưới nhãn phím
+/// kể cả khi phím trong suốt). Hình học thuần (test được); Android giữ y hệt (ThemeDecoration).
 struct KeyboardDecoration: Equatable {
     enum Motif: String { case hearts, flowers }
     var motif: Motif
     var color: RGBA
 
-    /// Lưới so le (pt / dp): bước ngang / dọc, cỡ motif, lề trong (tránh góc bo của nền).
-    static let stepX = 64.0, stepY = 52.0, motifSize = 8.0, inset = 14.0
-    /// Trần số motif — bàn phím rộng (iPad) giãn lưới thay vì vẽ thêm.
+    /// Bước ngang (pt / dp), cỡ motif tối đa, lề hai bên, cỡ nhỏ nhất còn vẽ.
+    static let stepX = 64.0, motifSize = 8.0, inset = 14.0, minMotifSize = 5.0
+    /// Cách mép phím tối thiểu (motif không chạm phím).
+    static let clearance = 1.0
+    /// Trần số motif — bàn phím rộng (iPad) giãn bước thay vì vẽ thêm.
     static let maxMotifs = 120
 
-    /// Tâm motif phủ vùng w×h (tất định: cùng cỡ ⇒ cùng hình).
-    static func placements(width w: Double, height h: Double) -> [(x: Double, y: Double)] {
-        guard w > 2 * inset, h > 2 * inset else { return [] }
-        func grid(_ k: Double) -> [(x: Double, y: Double)] {
-            var out: [(x: Double, y: Double)] = []
-            var row = 0
-            var y = inset + motifSize / 2
-            while y <= h - inset {
-                var x = inset + motifSize / 2 + (row % 2 == 1 ? stepX * k / 2 : 0)
-                while x <= w - inset { out.append((x, y)); x += stepX * k }
-                y += stepY * k; row += 1
+    struct Gap: Equatable { var center: Double; var height: Double }
+    struct Placement: Equatable { var x: Double; var y: Double; var size: Double }
+
+    /// Khe giữa các HÀNG phím từ khung phím (top, bottom): gộp phím cùng hàng (chồng dọc), khe =
+    /// từ đáy hàng trên tới đỉnh hàng dưới. Không tính phía trên hàng đầu (thanh gợi ý).
+    static func rowGaps(_ spans: [(top: Double, bottom: Double)]) -> [Gap] {
+        var rows: [(top: Double, bottom: Double)] = []
+        for s in spans.sorted(by: { $0.top < $1.top }) where s.bottom > s.top {
+            if let last = rows.last, s.top < last.bottom { rows[rows.count - 1].bottom = max(last.bottom, s.bottom) }
+            else { rows.append(s) }
+        }
+        guard rows.count > 1 else { return [] }
+        return (1..<rows.count).compactMap { i in
+            let h = rows[i].top - rows[i - 1].bottom
+            return h > 0 ? Gap(center: rows[i - 1].bottom + h / 2, height: h) : nil
+        }
+    }
+
+    /// Motif dọc từng khe (so le giữa các khe), cỡ vừa khe (chừa `clearance` mỗi bên); khe quá hẹp bỏ.
+    static func placements(width w: Double, gaps: [Gap]) -> [Placement] {
+        guard w > 2 * inset else { return [] }
+        func layout(_ step: Double) -> [Placement] {
+            var out: [Placement] = []
+            for (i, g) in gaps.enumerated() {
+                let size = min(motifSize, g.height - 2 * clearance)
+                guard size >= minMotifSize else { continue }
+                var x = inset + size / 2 + (i % 2 == 1 ? step / 2 : 0)
+                while x + size / 2 <= w - inset { out.append(Placement(x: x, y: g.center, size: size)); x += step }
             }
             return out
         }
-        var k = 1.0
-        var pts = grid(k)
-        while pts.count > maxMotifs { k *= 1.15; pts = grid(k) }
+        var step = stepX
+        var pts = layout(step)
+        while pts.count > maxMotifs { step *= 1.15; pts = layout(step) }
         return pts
     }
 
-    /// Path mọi motif trong vùng `size` (gốc trên-trái, y xuống).
-    func path(in size: CGSize) -> CGPath {
+    /// Path mọi motif (gốc trên-trái, y xuống).
+    func path(_ placements: [Placement]) -> CGPath {
         let path = CGMutablePath()
-        let s = CGFloat(Self.motifSize)
-        for c in Self.placements(width: Double(size.width), height: Double(size.height)) {
+        for c in placements {
+            let s = CGFloat(c.size)
             let o = CGPoint(x: c.x, y: c.y)
             func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: o.x + x * s, y: o.y + y * s) }
             switch motif {
@@ -448,6 +468,12 @@ enum ThemePicker {
         var n = s
         n.theme = t
         return n
+    }
+
+    enum Tap: Equatable { case select(ThemeSettings), openPlus }
+    /// Chạm thẻ: chọn ngay; theme Plus bị khoá ⇒ mở màn VietTelex Plus (như Android).
+    static func tap(_ t: KeyboardTheme, in s: ThemeSettings) -> Tap {
+        select(t, in: s).map(Tap.select) ?? .openPlus
     }
 }
 

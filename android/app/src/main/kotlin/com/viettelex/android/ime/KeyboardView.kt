@@ -750,8 +750,14 @@ class KeyboardView(
         searchBar.layout(width.toFloat(), KeyLayout.searchHeaderPx(keyAreaPx))
         if (plane == Plane.EMOJI_SEARCH) refreshSearch()
         publishSwipeLayout()
+        onKeysLaidOut?.invoke()
         invalidate()
     }
+
+    /** Gọi sau mỗi lần dựng phím (hoạ tiết nền theme đặt motif vào khe giữa các hàng). null = không làm gì. */
+    var onKeysLaidOut: (() -> Unit)? = null
+    /** Khung dọc [top, bottom] (px, toạ độ view này) của mọi phím đang hiện. */
+    fun keySpans(): List<DoubleArray> = keys.map { doubleArrayOf(it.top.toDouble(), it.bottom.toDouble()) }
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         setMeasuredDimension(MeasureSpec.getSize(widthMeasureSpec), Math.round(keyAreaPx))

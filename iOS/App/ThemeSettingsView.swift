@@ -545,9 +545,17 @@ struct ThemePreview: View {
 
     /// Hoạ tiết nền theo đúng hình học bàn phím thật (KeyboardDecoration), thu theo bề ngang
     /// bàn phím iPhone 390pt để bản thu nhỏ trông như bàn phím thật.
+    /// Hoạ tiết ở khe giữa các hàng phím của bản thu nhỏ (cùng lưới `keys(in:)`), cỡ như bàn phím
+    /// thật thu theo bề ngang 390pt — chỉ để nhận diện theme.
     private func decoration(_ d: KeyboardDecoration, in size: CGSize) -> some View {
+        let gap: CGFloat = large ? 5 : 2, pad: CGFloat = large ? 6 : 3
+        let keyH = (size.height - pad * 2 - gap * 3) / 4
         let k = max(size.width, 1) / 390
-        let path = d.path(in: CGSize(width: 390, height: size.height / k))
+        // Khe thật của bàn phím ~11pt: phóng khe thu nhỏ về cỡ đó để motif đủ thấy.
+        let gaps = (1...3).map { i in
+            KeyboardDecoration.Gap(center: Double((pad + CGFloat(i) * keyH + (CGFloat(i) - 0.5) * gap) / k), height: 11)
+        }
+        let path = d.path(KeyboardDecoration.placements(width: 390, gaps: gaps))
         return Path(path).applying(CGAffineTransform(scaleX: k, y: k)).fill(Color(d.color.ui))
     }
 
@@ -596,11 +604,13 @@ struct ThemePreview: View {
 
 /// "Chọn giao diện": lưới 2 cột thẻ xem trước (vẽ bằng token theme, không ảnh), chia "Miễn phí" /
 /// "Plus". Chạm là chọn ngay và ở lại trang (thẻ đang chọn có viền + dấu ✓). Theme Plus bị khoá:
-/// mờ + nhãn Plus, chạm không chọn (cổng PlusGate như cũ), lối mua Plus ở đầu trang.
+/// mờ + nhãn Plus, chạm mở màn VietTelex Plus (như Android); lối mua Plus cũng ở đầu trang.
 struct ThemePickerView: View {
     @Binding var settings: ThemeSettings
     let onChange: () -> Void
     @Environment(\.colorScheme) private var scheme
+    /// Chạm thẻ Plus bị khoá ⇒ mở màn VietTelex Plus (cùng màn PlusEntryRow mở).
+    @State private var showPlus = false
 
     private let columns = [GridItem(.flexible(), spacing: 14), GridItem(.flexible(), spacing: 14)]
 
@@ -624,15 +634,17 @@ struct ThemePickerView: View {
         }
         .navigationTitle(L("Chọn giao diện"))
         .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showPlus) { PlusView(model: PlusShared.model) }
     }
 
     private func card(_ t: KeyboardTheme) -> some View {
         let selected = settings.theme == t
         let locked = !ThemeGate.allows(t)
         return Button {
-            guard let next = ThemePicker.select(t, in: settings) else { return }
-            settings = next
-            onChange()
+            switch ThemePicker.tap(t, in: settings) {
+            case .select(let next): settings = next; onChange()
+            case .openPlus: showPlus = true
+            }
         } label: {
             VStack(spacing: 6) {
                 ThemePreview(palette: t.palette(systemDark: scheme == .dark),

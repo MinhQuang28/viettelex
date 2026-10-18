@@ -224,7 +224,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// Hoạ tiết nền (Tim đen / Hoa xanh): MỘT CAShapeLayer trong themeBackdrop, path dựng lại chỉ
     /// khi đổi cỡ — rasterize một lần, không vẽ gì mỗi phím / mỗi lần gõ.
     private let decorLayer = CAShapeLayer()
-    private var decorPathSize: CGSize = .zero
+    private var decorGaps: [KeyboardDecoration.Gap]?
+    private var decorWidth: CGFloat = 0
     private var wallpaperActive = false
     private var wallpaperLoadedFor: CGSize = .zero
 
@@ -1803,7 +1804,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if decorLayer.superlayer == nil { themeBackdrop.layer.addSublayer(decorLayer) }
         decorLayer.isHidden = false
         decorLayer.fillColor = d.color.ui.cgColor
-        decorPathSize = .zero                     // motif có thể đã đổi → dựng lại path
+        decorGaps = nil                           // motif có thể đã đổi → dựng lại path
         CATransaction.commit()
         layoutDecoration()
     }
@@ -1811,11 +1812,26 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private func layoutDecoration() {
         guard let d = palette.decoration, decorLayer.superlayer != nil, !decorLayer.isHidden else { return }
         let size = themeBackdrop.bounds.size
-        guard size.width > 0, size.height > 0, size != decorPathSize else { return }
-        decorPathSize = size
+        guard size.width > 0, size.height > 0 else { return }
+        // Khe giữa các hàng phím (toạ độ view) — chỉ khi layout (không mỗi lần gõ), chỉ theme có hoạ tiết.
+        rowsContainer.layoutIfNeeded()            // khung phím của lượt layout này (hàng xếp lồng nhau)
+        var spans: [(top: Double, bottom: Double)] = []
+        for row in rowsContainer.arrangedSubviews where !row.isHidden {
+            row.layoutIfNeeded()
+            func walk(_ v: UIView) {
+                if v is KeyButton, !v.isHidden, v.bounds.height > 0 {
+                    let f = v.convert(v.bounds, to: self)
+                    spans.append((Double(f.minY), Double(f.maxY)))
+                } else { v.subviews.forEach(walk) }
+            }
+            walk(row)
+        }
+        let gaps = KeyboardDecoration.rowGaps(spans)
+        guard gaps != decorGaps || size.width != decorWidth else { return }
+        decorGaps = gaps; decorWidth = size.width
         CATransaction.begin(); CATransaction.setDisableActions(true)
         decorLayer.frame = CGRect(origin: .zero, size: size)
-        decorLayer.path = d.path(in: size)
+        decorLayer.path = d.path(KeyboardDecoration.placements(width: Double(size.width), gaps: gaps))
         CATransaction.commit()
     }
     #if DEBUG
@@ -1829,6 +1845,18 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     var debugDecorationVisible: Bool {
         decorLayer.superlayer != nil && !decorLayer.isHidden && !themeBackdrop.isHidden && decorLayer.path != nil
     }
+    /// Test: khung (toạ độ view) của từng motif đang vẽ + khung mọi phím đang hiện.
+    var debugDecorationBoxes: (motifs: [CGRect], keys: [CGRect]) {
+        let motifs = KeyboardDecoration.placements(width: Double(decorWidth), gaps: decorGaps ?? [])
+            .map { CGRect(x: $0.x - $0.size / 2, y: $0.y - $0.size / 2, width: $0.size, height: $0.size) }
+        var keys: [CGRect] = []
+        func walk(_ v: UIView) {
+            if v is KeyButton, !v.isHidden { keys.append(v.convert(v.bounds, to: self)) } else { v.subviews.forEach(walk) }
+        }
+        walk(rowsContainer)
+        return (decorLayer.isHidden ? [] : motifs, keys)
+    }
+    var debugRowsMinY: CGFloat { rowsContainer.frame.minY }
     #endif
 
     /// Giải ảnh nền ở đúng cỡ view, ngoài main thread (ImageIO thumbnail).
@@ -2099,6 +2127,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private func rebuild() {
         guard !rebuildDeferred else { return }   // batchConfigure rebuild 1 lần cuối
         letterGeometryCache = nil
+        // Hoạ tiết nền (chỉ theme có hoạ tiết): hàng phím mới ⇒ lượt layout kế đo lại khe giữa hàng
+        // (khe không đổi thì không dựng lại path).
+        if palette.decoration != nil { setNeedsLayout() }
         activeAlts = currentAlts()
         updateSuggestionChrome()
         applyOneHand()                           // plane mới có thể thu hẹp / đầy bề ngang

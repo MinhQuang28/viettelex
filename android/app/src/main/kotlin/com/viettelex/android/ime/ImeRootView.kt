@@ -57,8 +57,17 @@ class ImeRootView(
         else android.graphics.drawable.ColorDrawable(theme.bg)
     }
 
+    /** Đặt motif hoạ tiết vào khe giữa các hàng phím (chỉ theme có hoạ tiết; gọi khi layout / dựng phím). */
+    private fun updateDecorGaps() {
+        val dd = bgDrawable as? ThemeDecorDrawable ?: return
+        val off = keyboard.top.toDouble(); val dens = theme.density.toDouble()
+        val spans = keyboard.keySpans().map { doubleArrayOf((it[0] + off) / dens, (it[1] + off) / dens) }
+        dd.setRowGaps(com.viettelex.keyboard.ThemeDecoration.rowGaps(spans))
+    }
+
     init {
         background = bgDrawable
+        if (bgDrawable is ThemeDecorDrawable) keyboard.onKeysLaidOut = { updateDecorGaps() }
         if (wallpaperFile != null) setWillNotDraw(false)
         isMotionEventSplittingEnabled = true
         addView(keyboard)
@@ -288,6 +297,7 @@ class ImeRootView(
                 android.graphics.Path.Direction.CW)
         }
         keyboard.layout(px, py + s, px + pw, py + s + keyH)
+        updateDecorGaps()
         strip.layout(px, py, px + pw, py + strip.measuredHeight)
         trail.layout(px, py + s, px + pw, py + s + keyH)
         overlay?.layout(px, py + s, px + pw, py + s + keyH)
@@ -345,6 +355,7 @@ class ImeRootView(
         val s = stripPx()
         val keyH = keyboard.measuredHeight
         keyboard.layout(0, s, w, s + keyH)
+        updateDecorGaps()
         strip.layout(0, 0, w, strip.measuredHeight)
         trail.layout(0, s, w, s + keyH)
         overlay?.layout(0, s, w, s + keyH)

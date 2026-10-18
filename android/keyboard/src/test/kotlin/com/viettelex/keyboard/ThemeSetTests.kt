@@ -131,20 +131,24 @@ class ThemeSetTests {
         assertEquals(10, ThemeSettings(theme = KeyboardTheme.PINK, keyStyle = KeyStyle(corner = 10)).effectiveKeyStyle.corner)
     }
 
-    @Test fun decorationGeometryBoundedAndMatchesIOS() {
+    /** Hoạ tiết CHỈ ở khe giữa các hàng phím (bug ảnh 18/10: tim đè chữ gợi ý + ☰) — y hệt iOS. */
+    @Test fun decorationOnlyInRowGapsMatchesIOS() {
         val d = ThemeDecoration
-        for ((w, h) in listOf(402.0 to 300.0, 320.0 to 260.0, 1366.0 to 420.0, 20.0 to 20.0)) {
-            val pts = d.placements(w, h)
-            assertTrue(pts.size / 2 <= d.MAX_MOTIFS)
-            var i = 0
-            while (i < pts.size) {
-                assertTrue(pts[i] - d.MOTIF_SIZE / 2 >= d.INSET - 1e-9 && pts[i] <= w - d.INSET + 1e-9)
-                assertTrue(pts[i + 1] - d.MOTIF_SIZE / 2 >= d.INSET - 1e-9 && pts[i + 1] <= h - d.INSET + 1e-9)
-                i += 2
-            }
+        val spans = (0 until 4).flatMap { r -> val t = 46.0 + r * 53; listOf(doubleArrayOf(t, t + 42), doubleArrayOf(t + 0.5, t + 41.5)) }
+        val gaps = d.rowGaps(spans)
+        assertEquals(listOf(ThemeDecoration.Gap(93.5, 11.0), ThemeDecoration.Gap(146.5, 11.0), ThemeDecoration.Gap(199.5, 11.0)), gaps)
+        assertTrue(d.rowGaps(listOf(doubleArrayOf(0.0, 40.0))).isEmpty())
+        assertTrue(d.rowGaps(listOf(doubleArrayOf(0.0, 40.0), doubleArrayOf(38.0, 80.0))).isEmpty())
+        val pts = d.placements(402.0, gaps)
+        assertEquals(18, pts.size)                      // mốc chung iOS (testDecorationOnlyInRowGaps)
+        for (p in pts) {
+            assertTrue("không lên thanh gợi ý / hàng đầu", p.y - p.size / 2 > 88.0 - 1e-9)
+            val g = gaps.first { Math.abs(it.center - p.y) < 1e-9 }
+            assertTrue("motif nằm trọn trong khe", p.size <= g.height - 2 * d.CLEARANCE + 1e-9)
+            assertTrue(p.x - p.size / 2 >= d.INSET - 1e-9 && p.x + p.size / 2 <= 402 - d.INSET + 1e-9)
         }
-        // Mốc chung với iOS (ThemeSetTests.testDecorationGeometryBoundedAndInside): 402×300 → 36 motif.
-        assertEquals(36, d.placements(402.0, 300.0).size / 2)
+        assertTrue(d.placements(800.0, listOf(ThemeDecoration.Gap(50.0, 6.0))).isEmpty())
+        assertTrue(d.placements(5000.0, List(8) { ThemeDecoration.Gap(50.0, 11.0) }).size <= d.MAX_MOTIFS)
         assertEquals(KeyboardTheme.BLACK_HEART.palette(false)!!.decoration!!.motif, ThemeDecoration.HEARTS)
         assertEquals(KeyboardTheme.GREEN_FLORAL.palette(true)!!.decoration!!.motif, ThemeDecoration.FLOWERS)
         for (t in KeyboardTheme.entries) if (t != KeyboardTheme.BLACK_HEART && t != KeyboardTheme.GREEN_FLORAL)

@@ -283,37 +283,59 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
 
 /**
  * Hoạ tiết nền theme (Tim đen: tim; Hoa xanh: hoa) — MỘT Path vẽ trong Drawable nền IME (display
- * list ghi một lần, chỉ dựng lại khi đổi cỡ). 0 chi phí mỗi phím, không ảnh. Hình học y hệt iOS
+ * list ghi một lần, dựng lại khi cỡ / hàng phím đổi). 0 chi phí mỗi phím, không ảnh. Motif CHỈ nằm
+ * trong khe GIỮA các hàng phím (không ở thanh gợi ý, không dưới nhãn phím). Hình học y hệt iOS
  * (KeyboardDecoration trong iOS/Keyboard/KeyboardTheme.swift), đơn vị dp.
  */
 data class ThemeDecoration(val motif: String, val color: Int) {
+    data class Gap(val center: Double, val height: Double)
+    data class Placement(val x: Double, val y: Double, val size: Double)
+
     companion object {
         const val HEARTS = "hearts"
         const val FLOWERS = "flowers"
         const val STEP_X = 64.0
-        const val STEP_Y = 52.0
         const val MOTIF_SIZE = 8.0
         const val INSET = 14.0
+        const val MIN_MOTIF_SIZE = 5.0
+        /** Cách mép phím tối thiểu (motif không chạm phím). */
+        const val CLEARANCE = 1.0
         const val MAX_MOTIFS = 120
 
-        /** Tâm motif (dp) phủ vùng w×h dp — lưới so le, tất định. Mảng [x0, y0, x1, y1, …]. */
-        fun placements(w: Double, h: Double): DoubleArray {
-            if (w <= 2 * INSET || h <= 2 * INSET) return DoubleArray(0)
-            fun grid(k: Double): List<Double> {
-                val out = ArrayList<Double>()
-                var row = 0
-                var y = INSET + MOTIF_SIZE / 2
-                while (y <= h - INSET) {
-                    var x = INSET + MOTIF_SIZE / 2 + if (row % 2 == 1) STEP_X * k / 2 else 0.0
-                    while (x <= w - INSET) { out.add(x); out.add(y); x += STEP_X * k }
-                    y += STEP_Y * k; row++
+        /**
+         * Khe giữa các HÀNG phím từ khung phím [top, bottom]: gộp phím cùng hàng (chồng dọc), khe = từ
+         * đáy hàng trên tới đỉnh hàng dưới. Không tính phía trên hàng đầu (thanh gợi ý).
+         */
+        fun rowGaps(spans: List<DoubleArray>): List<Gap> {
+            val rows = ArrayList<DoubleArray>()
+            for (sp in spans.sortedBy { it[0] }) {
+                if (sp[1] <= sp[0]) continue
+                val last = rows.lastOrNull()
+                if (last != null && sp[0] < last[1]) last[1] = maxOf(last[1], sp[1]) else rows.add(doubleArrayOf(sp[0], sp[1]))
+            }
+            return (1 until rows.size).mapNotNull { i ->
+                val h = rows[i][0] - rows[i - 1][1]
+                if (h > 0) Gap(rows[i - 1][1] + h / 2, h) else null
+            }
+        }
+
+        /** Motif dọc từng khe (so le giữa các khe), cỡ vừa khe (chừa [CLEARANCE] mỗi bên); khe quá hẹp bỏ. */
+        fun placements(w: Double, gaps: List<Gap>): List<Placement> {
+            if (w <= 2 * INSET) return emptyList()
+            fun layout(step: Double): List<Placement> {
+                val out = ArrayList<Placement>()
+                gaps.forEachIndexed { i, g ->
+                    val size = minOf(MOTIF_SIZE, g.height - 2 * CLEARANCE)
+                    if (size < MIN_MOTIF_SIZE) return@forEachIndexed
+                    var x = INSET + size / 2 + if (i % 2 == 1) step / 2 else 0.0
+                    while (x + size / 2 <= w - INSET) { out.add(Placement(x, g.center, size)); x += step }
                 }
                 return out
             }
-            var k = 1.0
-            var pts = grid(k)
-            while (pts.size / 2 > MAX_MOTIFS) { k *= 1.15; pts = grid(k) }
-            return pts.toDoubleArray()
+            var step = STEP_X
+            var pts = layout(step)
+            while (pts.size > MAX_MOTIFS) { step *= 1.15; pts = layout(step) }
+            return pts
         }
 
         /**
