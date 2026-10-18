@@ -237,7 +237,7 @@ Công tắc `mathResults` (mặc định BẬT, trang Gợi ý & từ điển, c
 `KeyboardTests/Fixtures/math-results.txt`. Chip ở **slot đầu**, mọi chip khác dời phải;
 chạm = chèn kết quả sau `=` (tính lại từ context lúc chạm — khác thì bỏ).
 
-- **Khi nào**: CHỈ ngay sau phím `=` (phím khác ⇒ không đọc context, 0 chi phí; công tắc
+- **Khi nào**: ngay sau phím `=` (chip ngầm: xem dưới; phím khác ⇒ không đọc context; công tắc
   tắt ⇒ 0 việc). Không ở ô mật khẩu / URL / email / username / OTP; ô số vẫn có (Android:
   ô số không có thanh gợi ý nên không hiện).
 - **Phép tính**: `+ - − * × / ÷ : ^ ( ) %`, trừ một ngôi, có/không khoảng trắng; `x`/`X`
@@ -254,6 +254,18 @@ chạm = chèn kết quả sau `=` (tính lại từ context lúc chạm — kh�
   dấu thập phân = dấu đã suy (chỉ có nhóm → dấu kia; không có dấu nào → `,`); phân nhóm
   nghìn chỉ khi biểu thức có. Chia 0 / |kết quả| ≥ 10^15 / vô hạn /
   NaN / khác 0 mà tròn thành 0 → không chip.
+- **Chip ngầm (không cần `=`)** — field report 18/10/2026 ("dấu bằng để rất sâu", `=` chỉ
+  ở bàn #+= iPhone): `MathResults.implicitChip` (Swift ≡ Kotlin, dòng `implicit|` của
+  fixture) khi văn bản trước con trỏ KẾT THÚC bằng phép tính thật. Chip hiện `= 36`, chạm
+  chèn ` = 36`. Controller/session gọi `chipAtCaret` (thường ?? ngầm) sau phím ra chữ số /
+  `)` / `%` hoặc ⌫ (công tắc bật, ô cho phép); phím khác / công tắc tắt ⇒ không đọc context.
+  Chỉ xét ≤128 ký tự cuối. Luật (`looksLikeExpression`): phải có phép tính hai ngôi; `x`
+  không là nhân (`1920x1080`, `3x4`); không số mở đầu bằng 0 (`090…`), không `:` viết liền
+  giữa hai số (`10:30`, `16:9`), không ngày `d/m` (≤2 chữ số, 1…31, có số ≤12), không chuỗi
+  ≥3 số nguyên nối liền bằng cùng `/` hoặc `-` (`12/10/2026`, `2026-10-18`), không `a-b`
+  viết liền với a < b (`5-10`) hay cả hai ≥4 chữ số (`1900-1234`); dính liền sau chữ /
+  `#@$_=\&~` → không.
+- **Phím `=` ở bàn 123** (iPhone + Android): giữ `/` → hàng biến thể `/ = \` (KeyVariants).
 
 ### 9. `ClipDetect` — chip tách số từ clipboard (Clipboard nâng cao, Plus)
 

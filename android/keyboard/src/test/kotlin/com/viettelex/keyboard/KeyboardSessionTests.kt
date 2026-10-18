@@ -430,7 +430,7 @@ class KeyboardSessionTests {
         assertNull(s.suggestionsNow(p)!!.math)
     }
 
-    /** Chỉ ngay sau "=": phím khác ⇒ mất chip; gõ phép tính chưa có "=" không đọc context vì nó. */
+    /** Phím khác sau "=" ⇒ mất chip; phím chữ không đọc context vì chip phép tính. */
     @Test fun testMathChipOnlyRightAfterEquals() {
         val s = session(traits = FieldTraits()); val p = MockProxy()
         s.typeMixed(p, "(1+2)*3=")
@@ -439,10 +439,43 @@ class KeyboardSessionTests {
         assertNull(s.suggestionsNow(p)!!.math)
         val on = session(traits = FieldTraits()); val pOn = MockProxy()
         val off = session(KeyboardSettings(mathResults = false), FieldTraits()); val pOff = MockProxy()
-        on.typeMixed(pOn, "12*3"); off.typeMixed(pOff, "12*3")
+        on.typeMixed(pOn, "xin chao"); off.typeMixed(pOff, "xin chao")
         pOn.contextReads = 0; pOff.contextReads = 0
         on.suggestionsNow(pOn); off.suggestionsNow(pOff)
         assertEquals(pOff.contextReads, pOn.contextReads)
+    }
+
+    /**
+     * Field report 18/10/2026 ("dấu bằng để rất sâu"): gõ "12*3" (không "=") ⇒ chip "= 36" ở slot
+     * đầu; chạm ⇒ "12*3 = 36". Ngày "12/10" không; công tắc tắt ⇒ không, và không đọc thêm context.
+     */
+    @Test fun testImplicitMathChip() {
+        val s = session(traits = FieldTraits()); val p = MockProxy()
+        s.typeMixed(p, "12*3")
+        assertEquals("= 36", s.suggestionsNow(p)!!.math)
+        s.acceptSuggestion(SuggestionSet.MATH_TOKEN, p)
+        assertEquals("12*3 = 36", p.text)
+        assertNull(s.suggestionsNow(p)!!.math)
+        val d = session(traits = FieldTraits()); val pd = MockProxy()
+        d.typeMixed(pd, "12/10")
+        assertNull(d.suggestionsNow(pd)!!.math)
+        // ⌫ về một phép tính ⇒ chip hiện lại.
+        val b = session(traits = FieldTraits()); val pb = MockProxy()
+        b.typeMixed(pb, "12*35")
+        assertEquals("= 420", b.suggestionsNow(pb)!!.math)
+        b.handle(Key.Backspace, pb)
+        assertEquals("= 36", b.suggestionsNow(pb)!!.math)
+        // Công tắc tắt: không chip, số lượt đọc context y như chưa có tính năng (chỉ chip số đọc).
+        val off = session(KeyboardSettings(mathResults = false), FieldTraits()); val pOff = MockProxy()
+        val noNum = session(KeyboardSettings(mathResults = false, numberChips = false), FieldTraits()); val pN = MockProxy()
+        off.typeMixed(pOff, "12*3"); noNum.typeMixed(pN, "12*3")
+        assertNull(off.suggestionsNow(pOff)?.math)
+        pN.contextReads = 0
+        noNum.suggestionsNow(pN)
+        val on = session(KeyboardSettings(numberChips = false), FieldTraits()); val pOn = MockProxy()
+        on.typeMixed(pOn, "12*3"); pOn.contextReads = 0
+        on.suggestionsNow(pOn)
+        assertTrue("bật ⇒ có đọc context cho chip ngầm", pOn.contextReads > pN.contextReads)
     }
 
     @Test fun testMathChipSwitchAndFieldGate() {

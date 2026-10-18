@@ -8,7 +8,8 @@ import java.math.RoundingMode
  * bằng biểu thức + "=" ⇒ chip kết quả ở slot đầu, chạm để chèn sau "=". Port 1:1
  * iOS MathResults.swift, cùng kết quả trên fixture chung iOS/KeyboardTests/Fixtures/math-results.txt.
  * Quy tắc (phép tính, dấu phân cách, làm tròn, khi nào không có chip): xem đầu file Swift.
- * Session chỉ gọi [chip] NGAY SAU phím "=" — phím khác không tốn gì.
+ * Session chỉ gọi [chipAtCaret] NGAY SAU phím "=" (chip thường) hoặc phím ra chữ số / ")" / "%" / ⌫
+ * (chip ngầm [implicitChip] — "= 36", không cần gõ "="; luật ở đầu file Swift) — phím khác không tốn gì.
  */
 object MathResults {
     const val MAX_LENGTH = 64
@@ -255,5 +256,95 @@ object MathResults {
             return NumberChip(r, "", r)
         }
         return null
+    }
+
+    // MARK: chip ngầm (không cần "=") — port 1:1 MathResults.swift
+
+    /** Chip thường ("…=") hoặc chip ngầm — session dùng một cửa này cho cả hiện lẫn chạm. */
+    fun chipAtCaret(before: String): NumberChip? = chip(before) ?: implicitChip(before)
+
+    private const val IMPLICIT_CHARS = "0123456789.,+-−*×/÷:^()% "
+    /** Ký tự đứng liền trước làm biểu thức thành mã/tên ("#12-3", "=36+1"). */
+    private const val GLUE_PUNCT = "#@\$_=\\&~"
+
+    /** Chip "= 36" cho chữ trước con trỏ kết thúc bằng phép tính thật (chưa có "="); chèn " = 36". */
+    fun implicitChip(before: String): NumberChip? {
+        val end = before.lastOrNull() ?: return null
+        if (!(isDigit(end) || end == ')' || end == '%')) return null
+        // Chỉ xét đuôi ngắn — chi phí cố định mỗi phím dù context dài.
+        val tail = before.takeLast(MAX_LENGTH * 2)
+        val scanned = tail.takeLastWhile { it in IMPLICIT_CHARS }
+        val prev = tail.dropLast(scanned.length).lastOrNull()
+        val glued = (prev == null && tail.length < before.length) ||
+            (prev != null && (prev.isLetter() || prev.isDigit() || prev in GLUE_PUNCT))
+        val candidates = if (glued) arrayListOf() else arrayListOf(scanned)
+        for ((k, ch) in scanned.withIndex()) if (ch == ' ') candidates += scanned.substring(k + 1)
+        for (cand in candidates) {
+            val e = cand.trim(' ')
+            if (e.length > MAX_LENGTH) continue
+            val f = e.firstOrNull() ?: continue
+            if (!(isDigit(f) || f == '(')) continue
+            if (!looksLikeExpression(e)) return null
+            val outcome = analyze(e)
+            if (outcome == Outcome.Conflict) return null
+            val r = (outcome as? Outcome.Ok)?.calc?.let(::format) ?: continue
+            return NumberChip("= $r", "", " = $r")
+        }
+        return null
+    }
+
+    private enum class Kind { NUM, OP, OPEN, CLOSE, PCT }
+    private class Item(val kind: Kind, val text: String, val spaced: Boolean)
+
+    /** Luật "phép tính thật" của chip ngầm (đầu file Swift) — chỉ hình dạng, không tính giá trị. */
+    fun looksLikeExpression(e: String): Boolean {
+        val items = ArrayList<Item>()
+        var i = 0; var sawSpace = false
+        while (i < e.length) {
+            val c = e[i]
+            if (c == ' ') { sawSpace = true; i++; continue }
+            if (isDigit(c)) {
+                var j = i
+                while (j < e.length && (isDigit(e[j]) || e[j] == '.' || e[j] == ',')) j++
+                items += Item(Kind.NUM, e.substring(i, j), sawSpace); i = j
+            } else {
+                val k = when (c) {
+                    '(' -> Kind.OPEN
+                    ')' -> Kind.CLOSE
+                    '%' -> Kind.PCT
+                    '+', '-', '−', '*', '×', '/', '÷', ':', '^' -> Kind.OP
+                    else -> return false
+                }
+                items += Item(k, c.toString(), sawSpace); i++
+            }
+            sawSpace = false
+        }
+        // Có phép tính hai ngôi: toán tử sau số / ")" / "%".
+        val binary = (1 until items.size).any {
+            items[it].kind == Kind.OP && items[it - 1].kind.let { p -> p != Kind.OP && p != Kind.OPEN }
+        }
+        if (!binary) return false
+        for ((k, it) in items.withIndex()) {
+            // Số mở đầu bằng 0 rồi chữ số: điện thoại / mã ("090", "028", "007").
+            if (it.kind == Kind.NUM && it.text.length >= 2 && it.text[0] == '0' && isDigit(it.text[1])) return false
+            // ":" viết liền giữa hai số: giờ / tỉ lệ / tỉ số.
+            if (it.text == ":" && k > 0 && k + 1 < items.size && items[k - 1].kind == Kind.NUM &&
+                items[k + 1].kind == Kind.NUM && !it.spaced && !items[k + 1].spaced) return false
+        }
+        // Chuỗi số nguyên viết liền nối bằng cùng một "/" hoặc "-": ngày / điện thoại / khoảng.
+        if (' ' !in e && items.size >= 3 && items.size % 2 == 1) {
+            val nums = (items.indices step 2).map { items[it] }
+            val ops = (1 until items.size step 2).map { items[it].text }.toSet()
+            val op = ops.singleOrNull()
+            if (nums.all { it.kind == Kind.NUM && it.text.all(::isDigit) } && (op == "/" || op == "-" || op == "−")) {
+                if (nums.size >= 3) return false
+                val a = nums[0].text.toIntOrNull() ?: 0; val b = nums[1].text.toIntOrNull() ?: 0
+                if (op == "/" && nums[0].text.length <= 2 && nums[1].text.length <= 2 &&
+                    a in 1..31 && b in 1..31 && minOf(a, b) <= 12) return false
+                // khoảng "5-10" (a < b) / tổng đài, năm "1900-1234", "2024-2023" (cả hai ≥4 chữ số)
+                if (op != "/" && (a < b || (nums[0].text.length >= 4 && nums[1].text.length >= 4))) return false
+            }
+        }
+        return true
     }
 }

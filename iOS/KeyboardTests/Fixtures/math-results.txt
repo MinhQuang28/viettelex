@@ -150,3 +150,68 @@ chip|26,160 * 2,500 =|65,400,000
 chip|1,5 * 2 + 2.5=|-
 chip|năm 2.5 1,5*2=|3
 chip|1,500 + 2.500=|-
+# Chip NGẦM (không cần gõ "=" — field report 18/10/2026 "dấu bằng để rất sâu"):
+#   implicit|<văn bản trước con trỏ>|<chữ trên chip "= r", hoặc -> — chạm chèn " " + chữ trên chip.
+# Phép tính thật kết thúc ở con trỏ:
+implicit|12*3|= 36
+implicit|12 * 3|= 36
+implicit|1,5+2,5|= 4
+implicit|1.5+2.5|= 4
+implicit|100/4|= 25
+implicit|32/5|= 6,4
+implicit|tổng 12*3|= 36
+implicit|năm 2024 12*3|= 36
+implicit|(1+2)*3|= 9
+implicit|(1+2)|= 3
+implicit|200+10%|= 220
+implicit|2^10|= 1024
+implicit|100-20|= 80
+implicit|7-3|= 4
+implicit|100 - 150|= -50
+implicit|10 : 4|= 2,5
+implicit|15×4|= 60
+implicit|0,5*4|= 2
+implicit|1250000/4|= 312500
+implicit|1.000.000/4|= 250.000
+# Không phải phép tính: số trơn, chưa xong, có "=" (đường thường), khoảng trắng cuối
+implicit|12|-
+implicit|-5|-
+implicit|50%|-
+implicit|12+|-
+implicit|12*3=|-
+implicit|12*3␣|-
+implicit|1/0|-
+# ngày / phân số kiểu ngày
+implicit|12/10|-
+implicit|1/2|-
+implicit|31/12|-
+implicit|12/10/2026|-
+implicit|18-10-2026|-
+implicit|2026-10-18|-
+# giờ / tỉ lệ
+implicit|10:30|-
+implicit|10:30:15|-
+implicit|16:9|-
+# điện thoại / mã
+implicit|0901 234 567|-
+implicit|090-123-4567|-
+implicit|+84 901 234 567|-
+implicit|(028) 3823 4567|-
+implicit|1800-599-920|-
+# khoảng
+implicit|5-10|-
+implicit|1990-2000|-
+implicit|1900-1234|-
+implicit|2025-2024|-
+implicit|1000-250|= 750
+# phiên bản / kích thước / dính chữ
+implicit|1.2.3|-
+implicit|1.2.3+1|-
+implicit|v1.2+3|-
+implicit|abc12*3|-
+implicit|1920x1080|-
+implicit|3x4|-
+implicit|#12-3|-
+implicit|12*3=36+1|-
+# dấu phân cách mâu thuẫn (như đường "=")
+implicit|1,5+2.5|-

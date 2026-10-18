@@ -444,7 +444,7 @@ struct GoiYPage: View {
                     settingToggle(L("Gợi ý cả khi ứng dụng tắt gợi ý"), L("Ô mà ứng dụng tắt gợi ý (vd ô chat, thanh địa chỉ) vẫn gợi ý từ — không tự sửa, không học từ gõ ở đó. Mật khẩu, ẩn danh, ô số không bị ảnh hưởng."), isOn: $suggestInNoSuggestFields)
                     settingToggle(L("Gợi ý emoji"), L("Emoji hợp với từ đang gõ (yêu → ❤️)."), isOn: $emojiSuggest)
                     settingToggle(L("Chip số"), L("Đọc số thành chữ, định dạng tiền (1tr2 → 1.200.000 ₫)."), isOn: $numberChips)
-                    settingToggle(L("Hiện kết quả phép tính"), L("Gõ phép tính rồi dấu = (12*3=) → kết quả hiện ở đầu thanh gợi ý, chạm để chèn."), isOn: $mathResults)
+                    settingToggle(L("Hiện kết quả phép tính"), L("Gõ phép tính (12*3, không cần dấu =) → kết quả “= 36” hiện ở đầu thanh gợi ý, chạm để chèn. Dấu = ở bàn 123: giữ phím /."), isOn: $mathResults)
                     settingToggle(L("Nút Dán"), L("Vừa copy xong thì hiện nút Dán (cần Toàn quyền)."), isOn: $pasteButton)
                     if PlusGate.isUnlocked(.sentenceDiacritics) {
                         settingToggle(L("Chip “Thêm dấu”"), L("Gõ không dấu cả câu (hom nay troi dep), gõ dấu cách → chip “Thêm dấu” hiện ở đầu thanh gợi ý, chạm để thành “hôm nay trời đẹp”; chạm “Hoàn tác” để trả lại. Tắt mặc định cho nhẹ máy."), isOn: $addTonesChip)

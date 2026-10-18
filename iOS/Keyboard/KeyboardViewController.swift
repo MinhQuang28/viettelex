@@ -1029,11 +1029,16 @@ final class KeyboardViewController: UIInputViewController {
         } else {
             lastKeyWasEmailTrigger = false
         }
-        // Kết quả phép tính: chỉ ngay sau "=" (ô mật khẩu/URL/email: không).
-        if case .text("=") = key, mathResultsSetting, fieldTraits?.allowsMathResults != false {
-            mathArmed = true
-        } else {
-            mathArmed = false
+        // Kết quả phép tính (ô mật khẩu/URL/email: không): ngay sau "=", hoặc chip ngầm khi
+        // phím vừa ra chữ số / ")" / "%" hay ⌫ (biểu thức có thể kết thúc ở con trỏ). Phím
+        // khác / công tắc tắt ⇒ không đọc context.
+        mathArmed = false
+        if mathResultsSetting, fieldTraits?.allowsMathResults != false {
+            switch key {
+            case .text(let s), .replaceLastLetter(let s): mathArmed = s.last.map { $0.isASCII && ($0.isNumber || "=)%".contains($0)) } == true
+            case .backspace: mathArmed = true
+            default: break
+            }
         }
         // updateAutoShift đọc documentContextBeforeInput (XPC) → cùng khối
         // async với suggestions, coalesce theo generation: gõ nhanh chỉ tính
@@ -1204,8 +1209,8 @@ final class KeyboardViewController: UIInputViewController {
     private var numberSpaces = 99
     /// Chip số đang hiện (đuôi cần thay + chữ chèn) — payload KeyboardView.numberToken.
     private var numberChip: NumberChip?
-    /// Phím vừa gõ là "=" (công tắc bật, ô cho phép) — chỉ khi đó mới đọc context tìm
-    /// kết quả phép tính (MathResults); phím khác ⇒ 0 việc.
+    /// Phím vừa gõ là "=" / chữ số / ")" / "%" / ⌫ (công tắc bật, ô cho phép) — chỉ khi đó
+    /// mới đọc context tìm kết quả phép tính (MathResults); phím khác ⇒ 0 việc.
     private var mathArmed = false
     /// Chip kết quả phép tính đang hiện — payload KeyboardView.mathToken.
     private var mathChip: NumberChip?
@@ -1697,12 +1702,13 @@ final class KeyboardViewController: UIInputViewController {
         return numberChip?.display
     }
 
-    /// Chip kết quả phép tính (MathResults) — chỉ đọc context khi phím vừa gõ là "=".
+    /// Chip kết quả phép tính (MathResults) — chỉ đọc context khi phím vừa gõ là "=" (chip
+    /// thường) hoặc chữ số / ")" / "%" / ⌫ (chip ngầm "= 36", không cần gõ "=").
     /// Đọc lại mỗi lượt (không cache) ⇒ con trỏ dời đi chỗ khác thì chip tự mất.
     private func refreshMathChip() -> String? {
         mathChip = nil
         guard mathArmed, let before = textDocumentProxy.documentContextBeforeInput else { return nil }
-        mathChip = MathResults.chip(before: before)
+        mathChip = MathResults.chipAtCaret(before: before)
         return mathChip?.display
     }
 
@@ -2098,7 +2104,7 @@ extension KeyboardViewController {
         guard let c = mathChip else { return }
         mathChip = nil; mathArmed = false
         let before = textDocumentProxy.documentContextBeforeInput ?? ""
-        guard MathResults.chip(before: before) == c else {
+        guard MathResults.chipAtCaret(before: before) == c else {
             TouchLog.write("failsafe: math chip context mismatch → skip")
             return
         }

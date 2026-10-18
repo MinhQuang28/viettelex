@@ -31,7 +31,7 @@ final class KeyVariantsTests: XCTestCase {
         XCTAssertEqual(t["."], [".", "…"])
         XCTAssertEqual(t["?"], ["?", "¿"])
         XCTAssertEqual(t["!"], ["!", "¡"])
-        XCTAssertEqual(t["/"], ["/", "\\"])
+        XCTAssertEqual(t["/"], ["/", "=", "\\"])
         XCTAssertEqual(t["&"], ["&", "§"])
         XCTAssertEqual(t["%"], ["%", "‰"])
         XCTAssertEqual(t["$"]?.prefix(2), ["$", "₫"], "₫ ngay sau $ cho người dùng Việt")
@@ -94,6 +94,30 @@ final class KeyVariantsTests: XCTestCase {
         out = []
         kb.debugDomainHold("$", dx: d.mirrored ? -d.itemWidth : d.itemWidth)
         XCTAssertEqual(out, ["T₫"], "₫ ngay cạnh $")
+        withExtendedLifetime(host) {}
+    }
+
+    /// Field report 18/10/2026 ("dấu bằng để rất sâu"): bàn 123 iPhone không có phím "=" —
+    /// giữ "/" rồi trượt một ô ra "=".
+    @MainActor func testEqualsReachableFromNumbersPlane() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad)
+        XCTAssertFalse(KeyLayout.phoneNumberRows.joined().contains("="), "bàn 123 (không hàng số) chưa có phím =")
+        let reachable = KeyLayout.phoneNumberRows.joined().contains {
+            KeyVariants.variants(for: $0, symbolPlane: true).contains("=")
+        }
+        XCTAssertTrue(reachable, "= phải là biến thể giữ phím của một phím bàn 123")
+        var out: [String] = []
+        let (kb, host) = makeKeyboard { out.append($0) }
+        kb.debugSetPlane(numbers: true)
+        kb.layoutIfNeeded()
+        XCTAssertTrue(kb.debugDomainHold("/", fire: false))
+        XCTAssertEqual(out, ["T/"], "chạm thường vẫn ra /")
+        out = []
+        kb.debugDomainHold("/")
+        let l = try XCTUnwrap(kb.debugLastDomainLayout)
+        out = []
+        kb.debugDomainHold("/", dx: l.mirrored ? -l.itemWidth : l.itemWidth)
+        XCTAssertEqual(out, ["T="])
         withExtendedLifetime(host) {}
     }
 

@@ -36,7 +36,7 @@ class KeyVariantsTests {
         assertEquals(listOf(".", "…"), t["."])
         assertEquals(listOf("?", "¿"), t["?"])
         assertEquals(listOf("!", "¡"), t["!"])
-        assertEquals(listOf("/", "\\"), t["/"])
+        assertEquals(listOf("/", "=", "\\"), t["/"])
         assertEquals(listOf("&", "§"), t["&"])
         assertEquals(listOf("%", "‰"), t["%"])
         // Android: ₫ là phím gốc (#113), giữ ⇒ "$" chọn sẵn, rồi ₫ € £ ¥ ₩ ₹ ¢.

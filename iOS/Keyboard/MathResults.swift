@@ -27,6 +27,20 @@
 //   Việt). Chia nhóm nghìn (bằng dấu kia) chỉ khi biểu thức có số dùng nhóm nghìn.
 // • Không chip: chia cho 0, tràn (|kết quả| ≥ 10^15, vô hạn, NaN), kết quả khác 0 mà làm
 //   tròn thành 0, biểu thức dài quá 64 ký tự, biểu thức dính liền sau chữ cái ("abc12*3=").
+//
+// Chip NGẦM (không cần gõ "=" — field report: "=" nằm sâu ở bàn #+= iPhone): `implicitChip`
+// khi văn bản trước con trỏ KẾT THÚC bằng một phép tính thật (chữ số / ")" / "%" ngay ở con
+// trỏ). Chip hiện "= 36", chạm chèn " = 36". Chặt hơn đường "=" vì user chưa hề hỏi:
+// • Phải có ít nhất một phép tính hai ngôi giữa hai số ("50%", "-5" trơn: không).
+// • "x"/"X" KHÔNG là nhân (kích thước "1920x1080", ảnh "3x4") — dùng * hoặc ×.
+// • Không: số mở đầu bằng 0 ("090-123-4567", "028"), ":" viết liền giữa hai số (giờ "10:30",
+//   tỉ lệ "16:9"; chia viết cách "10 : 2" vẫn được), ngày "d/m" (hai số nguyên ≤2 chữ số,
+//   1…31, có số ≤12: "12/10", "1/2"), chuỗi ≥3 số nguyên nối liền bằng cùng "/" hoặc "-"
+//   ("12/10/2026", "2026-10-18", "1800-599-920"), "a-b" viết liền với a < b (khoảng "5-10",
+//   "1990-2000") hoặc cả hai ≥4 chữ số (tổng đài "1900-1234"), chuỗi phiên bản ("1.2.3" —
+//   dấu phân cách sai ⇒ đã không hợp lệ).
+// • Dính liền sau chữ / "#@$_=\&~" ⇒ không ("v2+3", "#12-3", "=36+1").
+// Controller chỉ gọi sau phím ra chữ số / ")" / "%" hoặc ⌫ (công tắc bật) — phím khác 0 việc.
 import Foundation
 
 enum MathResults {
@@ -268,5 +282,102 @@ enum MathResults {
             return NumberChip(display: r, replace: "", insert: r)
         }
         return nil
+    }
+
+    // MARK: - Chip ngầm (không cần "=")
+
+    /// Chip thường ("…=") hoặc chip ngầm — controller dùng một cửa này cho cả hiện lẫn chạm.
+    static func chipAtCaret(before: String) -> NumberChip? {
+        chip(before: before) ?? implicitChip(before: before)
+    }
+
+    private static let implicitChars: Set<Character> = Set("0123456789.,+-\u{2212}*×/÷:^()% ")
+    /// Ký tự đứng liền trước làm biểu thức thành mã/tên ("#12-3", "=36+1").
+    private static let gluePunct: Set<Character> = Set("#@$_=\\&~")
+
+    /// Chip "= 36" cho văn bản trước con trỏ kết thúc bằng phép tính thật (chưa có "=").
+    /// Chèn " = 36" (replace rỗng). Đuôi dài nhất trước rồi các đuôi sau khoảng trắng.
+    static func implicitChip(before: String) -> NumberChip? {
+        guard let end = before.last, isDigit(end) || end == ")" || end == "%" else { return nil }
+        // Chỉ xét đuôi ngắn — chi phí cố định mỗi phím dù context dài.
+        let tail = before.suffix(maxLength * 2)
+        let run = tail.reversed().prefix { implicitChars.contains($0) }
+        let scanned = String(run.reversed())
+        let prev = tail.dropLast(run.count).last
+        let glued = prev == nil && tail.count < before.count
+            || prev.map { $0.isLetter || $0.isNumber || gluePunct.contains($0) } == true
+        var candidates = glued ? [] : [scanned]
+        for (k, ch) in scanned.enumerated() where ch == " " {
+            candidates.append(String(scanned.dropFirst(k + 1)))
+        }
+        for cand in candidates {
+            let e = cand.trimmingCharacters(in: .whitespaces)
+            guard e.count <= maxLength, let f = e.first, isDigit(f) || f == "(" else { continue }
+            guard looksLikeExpression(e) else { return nil }
+            let outcome = analyze(e)
+            if case .conflict = outcome { return nil }
+            guard case .ok(let c) = outcome, let r = format(c) else { continue }
+            return NumberChip(display: "= " + r, replace: "", insert: " = " + r)
+        }
+        return nil
+    }
+
+    /// Luật "phép tính thật" của chip ngầm (đầu file) — chỉ hình dạng, không tính giá trị.
+    /// false = chắc không phải phép tính (ngày, giờ, điện thoại, khoảng…) hoặc không có
+    /// phép tính hai ngôi.
+    static func looksLikeExpression(_ e: String) -> Bool {
+        enum Kind { case num, op, open, close, pct }
+        var items: [(kind: Kind, text: String, spaced: Bool)] = []
+        let cs = Array(e)
+        var i = 0, sawSpace = false
+        while i < cs.count {
+            let c = cs[i]
+            if c == " " { sawSpace = true; i += 1; continue }
+            if isDigit(c) {
+                var j = i
+                while j < cs.count, isDigit(cs[j]) || cs[j] == "." || cs[j] == "," { j += 1 }
+                items.append((.num, String(cs[i..<j]), sawSpace)); i = j
+            } else {
+                let k: Kind
+                switch c {
+                case "(": k = .open
+                case ")": k = .close
+                case "%": k = .pct
+                case "+", "-", "\u{2212}", "*", "×", "/", "÷", ":", "^": k = .op
+                default: return false
+                }
+                items.append((k, String(c), sawSpace)); i += 1
+            }
+            sawSpace = false
+        }
+        // Có phép tính hai ngôi: toán tử sau số / ")" / "%".
+        let binary = items.indices.contains { k in
+            k > 0 && items[k].kind == .op && items[k - 1].kind != .op && items[k - 1].kind != .open
+        }
+        guard binary else { return false }
+        for (k, it) in items.enumerated() {
+            // Số mở đầu bằng 0 rồi chữ số: điện thoại / mã ("090", "028", "007").
+            if it.kind == .num, it.text.count >= 2, it.text.first == "0",
+               isDigit(it.text[it.text.index(after: it.text.startIndex)]) { return false }
+            // ":" viết liền giữa hai số: giờ / tỉ lệ / tỉ số.
+            if it.text == ":", k > 0, k + 1 < items.count, items[k - 1].kind == .num,
+               items[k + 1].kind == .num, !it.spaced, !items[k + 1].spaced { return false }
+        }
+        // Chuỗi số nguyên viết liền nối bằng cùng một "/" hoặc "-": ngày / điện thoại / khoảng.
+        let plain = { (s: String) in s.allSatisfy(isDigit) }
+        if !e.contains(" "), items.count >= 3, items.count % 2 == 1 {
+            let nums = stride(from: 0, to: items.count, by: 2).map { items[$0] }
+            let ops = Set(stride(from: 1, to: items.count, by: 2).map { items[$0].text })
+            if nums.allSatisfy({ $0.kind == .num && plain($0.text) }), ops.count == 1,
+               let op = ops.first, op == "/" || op == "-" || op == "\u{2212}" {
+                if nums.count >= 3 { return false }
+                let a = Int(nums[0].text) ?? 0, b = Int(nums[1].text) ?? 0
+                if op == "/", nums[0].text.count <= 2, nums[1].text.count <= 2,
+                   (1...31).contains(a), (1...31).contains(b), min(a, b) <= 12 { return false }
+                // khoảng "5-10" (a < b) / tổng đài, năm "1900-1234", "2024-2023" (cả hai ≥4 chữ số)
+                if op != "/", a < b || nums[0].text.count >= 4 && nums[1].text.count >= 4 { return false }
+            }
+        }
+        return true
     }
 }

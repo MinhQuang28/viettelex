@@ -295,8 +295,23 @@ class KeyLayoutTest {
         assertEquals(listOf(".", "…"), v(".")); assertEquals(listOf("0", "°"), v("0"))
         assertEquals(listOf("%", "‰"), v("%")); assertEquals(listOf("*", "×"), v("*"))
         assertEquals(listOf("=", "≠", "≈"), v("=")); assertEquals(listOf("+", "±"), v("+"))
-        assertEquals(listOf("/", "\\"), v("/")); assertEquals(listOf("&", "§"), v("&"))
+        assertEquals(listOf("/", "=", "\\"), v("/")); assertEquals(listOf("&", "§"), v("&"))
         assertEquals(emptyList<String>(), v(","))
+    }
+
+    /**
+     * Field report 18/10/2026 ("dấu bằng để rất sâu" — "Hiện kết quả phép tính" bất tiện): bàn ?123
+     * không có phím "=" (nó ở bàn =\<) ⇒ giữ "/" rồi trượt một ô ra "=", cả khi bật hàng số.
+     */
+    @Test fun equalsReachableFromNumbersPlane() {
+        for (numberRow in listOf(false, true)) {
+            val keys = typed(KeyLayout.build(LayoutConfig(Plane.NUMBERS, W, H, d, numberRow = numberRow)))
+            assertTrue("plane ?123 chưa có phím = (numberRow=$numberRow)", "=" !in keys)
+            assertTrue("/" in keys)
+            val holders = keys.filter { "=" in com.viettelex.keyboard.KeyVariants.variants(it, symbolPlane = true) }
+            assertEquals(listOf("/"), holders)
+            assertEquals("=", com.viettelex.keyboard.KeyVariants.variants("/", symbolPlane = true)[1])
+        }
     }
 
     @Test fun templatesBottomRowOnly() {

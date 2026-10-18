@@ -27,11 +27,44 @@ final class MathResultsTests: XCTestCase {
                 } else {
                     XCTAssertEqual(chip, NumberChip(display: c[2], replace: "", insert: c[2]), "chip «\(c[1])»")
                 }
+            case "implicit":
+                let chip = MathResults.implicitChip(before: c[1])
+                if c[2] == "-" {
+                    XCTAssertNil(chip, "chip ngầm «\(c[1])» phải nil")
+                } else {
+                    XCTAssertEqual(chip, NumberChip(display: c[2], replace: "", insert: " " + c[2]), "chip ngầm «\(c[1])»")
+                }
             default:
                 XCTFail("dòng fixture lạ: \(c)")
             }
         }
         XCTAssertGreaterThan(n, 80)
+    }
+
+    /// Cửa chung: "…=" ⇒ chip thường (chèn sau "="); kết thúc bằng phép tính ⇒ chip ngầm.
+    func testChipAtCaret() {
+        XCTAssertEqual(MathResults.chipAtCaret(before: "12*3="), NumberChip(display: "36", replace: "", insert: "36"))
+        XCTAssertEqual(MathResults.chipAtCaret(before: "12*3"), NumberChip(display: "= 36", replace: "", insert: " = 36"))
+        XCTAssertNil(MathResults.chipAtCaret(before: "12/10"))
+    }
+
+    /// Luật hình dạng tách riêng (field report "dấu bằng để rất sâu" — chip ngầm chỉ cho
+    /// phép tính thật, không cho ngày / giờ / điện thoại / phiên bản).
+    func testLooksLikeExpression() {
+        for e in ["12*3", "1,5+2,5", "100/4", "12 / 10", "10 : 30", "(1+2)", "7-3", "32/5"] {
+            XCTAssertTrue(MathResults.looksLikeExpression(e), e)
+        }
+        for e in ["12", "50%", "-5", "12/10", "1/2", "12/10/2026", "2026-10-18", "10:30", "16:9",
+                  "090-123-4567", "5-10", "1990-2000", "1800-599-920", "1.2.3", "3x4"] {
+            XCTAssertFalse(MathResults.looksLikeExpression(e), e)
+        }
+    }
+
+    /// Chip ngầm chỉ xét đuôi ngắn: context dài không đổi kết quả.
+    func testImplicitLongContext() {
+        let long = String(repeating: "chữ ", count: 500)
+        XCTAssertEqual(MathResults.implicitChip(before: long + "12*3")?.display, "= 36")
+        XCTAssertNil(MathResults.implicitChip(before: String(repeating: "1+", count: 200) + "1"))
     }
 
     /// Chip số không còn nhận "…=" (tránh 2 chip cùng một kết quả).
@@ -88,6 +121,28 @@ final class MathResultsTests: XCTestCase {
         KeyboardBenchTests.spin(0.1)
         XCTAssertEqual(rig.proxy.text, "12*3=36")
         XCTAssertFalse(kb.debugSlotPayloads().contains(KeyboardView.mathToken))
+    }
+
+    /// Field report 18/10/2026 ("dấu bằng để rất sâu"): gõ "12*3" (không "=") → chip "= 36"
+    /// ở slot đầu; chạm → "12*3 = 36". Công tắc tắt ⇒ không chip.
+    @MainActor func testImplicitInsertFlow() {
+        let saved = UserDefaultsProvider.shared
+        defer { UserDefaultsProvider.shared = saved }
+        let rig = run(true, "12*3")
+        let kb = rig.vc.debugKeyboard
+        XCTAssertEqual(kb.debugSlotPayloads().first ?? nil, KeyboardView.mathToken)
+        XCTAssertEqual(kb.debugSlotTitles().first ?? nil, "= 36")
+        rig.vc.debugAcceptSuggestion(KeyboardView.mathToken)
+        KeyboardBenchTests.spin(0.1)
+        XCTAssertEqual(rig.proxy.text, "12*3 = 36")
+        XCTAssertFalse(kb.debugSlotPayloads().contains(KeyboardView.mathToken))
+        rig.close()
+        let off = run(false, "12*3")
+        XCTAssertFalse(off.vc.debugKeyboard.debugSlotPayloads().contains(KeyboardView.mathToken))
+        off.close()
+        let date = run(true, "12/10")
+        XCTAssertFalse(date.vc.debugKeyboard.debugSlotPayloads().contains(KeyboardView.mathToken))
+        date.close()
     }
 
     /// Công tắc tắt ⇒ không chip; phím khác sau "=" ⇒ chip mất (chỉ ngay sau "=").
