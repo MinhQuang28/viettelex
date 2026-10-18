@@ -232,8 +232,12 @@ object SwipeSuggest {
 
     fun context(model: UserLangModel?, prev1: String?, prev2: String?,
                 english: SwipeEnglishPrior? = null,
-                lm: SyllableLM? = SyllableLM.shared, properNouns: Boolean = true): Context {
-        val next = if (model != null && prev1 != null) model.nextWords(prev1, prev2, 24).map { it.lowercase() }.toSet() else emptySet()
+                lm: SyllableLM? = SyllableLM.shared, properNouns: Boolean = true,
+                filterSensitive: Boolean = SwipeVocab.filterSensitive): Context {
+        // Lọc bật ⇒ cặp nhạy cảm (SensitiveWords.pairs: seed "sờ chim") không thưởng ngữ cảnh. = iOS contextSet.
+        val next = if (model != null && prev1 != null)
+            SensitiveWords.dropPairs(model.nextWords(prev1, prev2, 24), prev1, filterSensitive).map { it.lowercase() }.toSet()
+        else emptySet()
         val count: (String) -> Int = if (model == null) { _ -> 0 } else { w -> model.count(w) }
         val learned: ((String) -> String?)? = model?.let { m -> { k: String -> m.learnedCase(k) } }
         return Context(next, next.mapTo(HashSet()) { fold(it) }, count, prev1, english, prev2, lm,

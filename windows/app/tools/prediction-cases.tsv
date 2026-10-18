@@ -118,6 +118,37 @@ motherf	motherf	motherf	1	0
 Fuc	Fuc	Fuc	1	0
 holy 			1	1
 holy 			1	0
+# SensitivePairs (seed-curated [sensitive-bigram]): two ordinary words, gated by the filter
+sờ 			0	0
+thằng 			0	1
+thằng 			0	0
+đồ 			0	1
+đồ 			0	0
+chơi 			0	1
+chơi 			0	0
+sờ ch	ch	ch	0	1
+sờ ch	ch	ch	0	0
+damn 			1	1
+damn 			1	0
+piss of	of	of	1	1
+piss of	of	of	1	0
+# Fiat (18/10/2026): tiền pháp → định
+tiền 			0	1
+tiền pháp 			0	1
+# Slang / news vocabulary (18/10/2026, visible) and the gated sexual / insult pairs of batches 2–3
+giang 			0	1
+rửa ti	ti	ti	0	1
+sugar 			1	1
+karaoke 			0	1
+lạng 			0	1
+vãi 			0	0
+đếch 			0	1
+kích 			0	1
+kích 			0	0
+con 			0	1
+óc 			0	1
+óc 			0	0
+chơi ca	ca	ca	0	1
 đị	đị	ddij	0	0
 con 			0	0
 # Completion with the seed next words of the previous word as context (+4)
@@ -163,3 +194,4 @@ heeey 			0	1	heeey you*4
 cảm 			0	1	ăn cơm*3
 mình 			0	1	mình đi*2|mình ăn*3|mình ngủ*2
 tôi hi	hi	hi	0	1	tôi hiền*5
+Phil 			0	1

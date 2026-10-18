@@ -37,7 +37,7 @@ class SwipeVocabTests {
         assertEquals(SensitiveWords.set, sens.map { it.word }.toSet())
         // sàn chỉ cho từ vnlexicon không có; từ có sẵn (đĩ, cứt…) giữ tần suất vnlexicon
         val off = SwipeVocab.build(false).words.values.flatten().associate { it.word to it.score.toInt() }
-        assertEquals(setOf("đĩ", "cứt", "dâm", "điếm"), SensitiveWords.set.filter { it !in off }.toSet())
+        assertEquals(setOf("đĩ", "cứt", "dâm", "điếm", "lìn"), SensitiveWords.set.filter { it !in off }.toSet())
         assertTrue(off.filterKeys { it in SensitiveWords.set }.values.all { it >= SwipeVocab.SENSITIVE_FLOOR })
         assertTrue(SwipeVocab.build(true).words.values.flatten().none { it.word in SensitiveWords.set })
     }

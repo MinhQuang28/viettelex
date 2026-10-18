@@ -63,6 +63,9 @@ object DisplayCase {
         "long" to setOf("an"),
         "tây" to setOf("ninh"),
         "new" to setOf("york"),
+        "gen" to setOf("z"),
+        "chụp" to setOf("x"),   // chụp X quang
+        "phil" to setOf("trinh"),   // Phil Trinh (tác giả)   // Gen Z — "gen" một mình là gen di truyền
         "san" to setOf("francisco"),
         "hong" to setOf("kong"),
         // họ → đệm (chuỗi tên người)
@@ -95,10 +98,16 @@ object DisplayCase {
         "vinfast" to "VinFast", "vietjet" to "Vietjet", "fpt" to "FPT",
         "arsenal" to "Arsenal", "liverpool" to "Liverpool", "chelsea" to "Chelsea",
         "manchester" to "Manchester", "bitcoin" to "Bitcoin", "ethereum" to "Ethereum",
+        "usdt" to "USDT", "usd" to "USD", "vnđ" to "VNĐ", "vnd" to "VND",
         "binance" to "Binance", "netflix" to "Netflix", "spotify" to "Spotify",
         "github" to "GitHub", "claude" to "Claude", "chatgpt" to "ChatGPT",
         "tesla" to "Tesla", "openai" to "OpenAI", "anthropic" to "Anthropic",
         "yahoo" to "Yahoo", "hotmail" to "Hotmail",
+        // công nghệ / AI / tài chính (18/10/2026)
+        "gemini" to "Gemini", "grok" to "Grok", "ubuntu" to "Ubuntu", "copilot" to "Copilot", "docker" to "Docker",
+        "kubernetes" to "Kubernetes", "javascript" to "JavaScript", "typescript" to "TypeScript", "llm" to "LLM", "nft" to "NFT",
+        "etf" to "ETF", "ipo" to "IPO", "defi" to "DeFi",
+        "cloudflare" to "Cloudflare", "golang" to "Golang", "vpn" to "VPN", "kotlin" to "Kotlin", "panadol" to "Panadol", "viettelex" to "VietTelex", "phil" to "Phil", "covid" to "Covid",
         // OS / phần mềm
         "windows" to "Windows", "macos" to "macOS", "ios" to "iOS",
         "android" to "Android", "linux" to "Linux", "chrome" to "Chrome",

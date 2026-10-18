@@ -333,13 +333,140 @@ final class SensitiveWordsTests: XCTestCase {
             let on = SensitiveWords.filter(m.nextWords(after: prev, limit: 24), enabled: true)
             XCTAssertTrue(on.allSatisfy { !SensitiveWords.set.contains($0.lowercased()) }, "\(prev): \(on)")
         }
-        XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "bú", limit: 6), enabled: true), [])
+        XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "bú", limit: 6), after: "bú", enabled: true), ["đá"],
+                       "bú cu: SensitivePairs; bú đá (tiếng lóng ma tuý) hiện")
         XCTAssertEqual(m.nextWords(after: "bú", limit: 6).first, "lồn")
         XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "đầu", limit: 3), enabled: true), ["tiên", "tư"])
         XCTAssertEqual(m.nextWords(after: "sờ", limit: 1), ["vào"], "chim/cu không đứng đầu sau sờ")
         XCTAssertEqual(m.nextWords(after: "nâng", limit: 1), ["cao"], "bi không đứng đầu sau nâng")
         XCTAssertEqual(m.nextWords(after: "thank", limit: 1), ["you"])
         XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "holy", limit: 3), enabled: true), [])
+    }
+
+    /// SensitivePairs (seed-curated [sensitive-bigram]): cặp chửi/tục ghép từ hai TỪ THƯỜNG. Bật lọc ⇒ với
+    /// MỌI cặp (prev, word): từ kế tiếp sau prev (nextWords cá nhân/seed + SuggestRank.nextFill) không có
+    /// word, cặp không thưởng ngữ cảnh vuốt (SwipeTyping.contextSet), không thưởng Thêm dấu; tắt lọc ⇒ có.
+    func testSensitivePairsGated() {
+        let m = UserLangModel(appGroup: nil)
+        m.isKnownWord = { VNSuggest.contains($0) }
+        m.seedIfEmpty(unigrams: SeedData.unigrams, bigrams: SeedData.bigrams)
+        let pairs = SensitiveWords.pairs.flatMap { p, ws in ws.map { (p, $0) } }
+        XCTAssertGreaterThanOrEqual(pairs.count, 30)
+        let seedPairs = Set(SeedData.bigrams.map { "\($0.0) \($0.1)" })
+        for (prev, w) in pairs {
+            XCTAssertTrue(seedPairs.contains("\(prev) \(w)"), "cặp nhạy cảm phải có trong seed: \(prev) \(w)")
+            XCTAssertFalse(SensitiveWords.set.contains(w))
+            let raw = m.nextWords(after: prev, limit: 24)
+            XCTAssertTrue(raw.contains(w), "tắt lọc: \(prev) → \(w) phải hiện (\(raw))")
+            let on = SensitiveWords.filter(raw, after: prev, enabled: true)
+            XCTAssertFalse(on.contains(w), "\(prev): \(on)")
+            let next = SuggestRank.nextFill(prev, prev2: nil, personal: on, triCount: { _ in 0 },
+                                            filter: { SensitiveWords.filter($0, after: prev, enabled: true) }, need: 5)
+            XCTAssertFalse(next.contains(w), "nextFill \(prev): \(next)")
+            XCTAssertFalse(SwipeTyping.contextSet(raw, prev: prev, filter: true).contains(w), "vuốt \(prev) → \(w)")
+            XCTAssertTrue(SwipeTyping.contextSet(raw, prev: prev, filter: false).contains(w))
+        }
+        XCTAssertEqual(SensitiveWords.filter(m.nextWords(after: "sờ", limit: 6), after: "sờ", enabled: true), ["vào"])
+        XCTAssertEqual(m.nextWords(after: "sờ", limit: 3), ["vào", "chim", "cu"])
+        XCTAssertFalse(SensitiveWords.filter(m.nextWords(after: "nâng", limit: 6), after: "nâng", enabled: true).contains("bi"))
+        XCTAssertFalse(SensitiveWords.filter(m.nextWords(after: "thằng", limit: 24), after: "Thằng", enabled: true).contains("chó"))
+        XCTAssertEqual(m.nextWords(after: "đậu", limit: 1), ["má"])
+        XCTAssertEqual(m.nextWords(after: "phang", limit: 1), ["nhau"])
+        // giữ hiện cho mọi người: từ vựng trung tính
+        for (a, b) in [("lăng", "nhăng"), ("lăng", "loàn"), ("hãm", "hiếp"), ("lừa", "đảo"), ("khốn", "nạn")] {
+            XCTAssertFalse(SensitiveWords.isPair(a, b))
+            XCTAssertTrue(SensitiveWords.filter(m.nextWords(after: a, limit: 24), after: a, enabled: true).contains(b), "\(a) \(b)")
+        }
+        // Thêm dấu: cặp nhạy cảm không thưởng khi lọc bật (closure như KeyboardViewController.addTonesPlan)
+        let pair: (Bool) -> (String, String) -> Int = { fs in { fs && SensitiveWords.isPair($0, $1) ? 0 : m.bigramCount($0, $1) } }
+        XCTAssertGreaterThan(pair(false)("sờ", "chim"), 0)
+        XCTAssertEqual(pair(true)("sờ", "chim"), 0)
+    }
+
+    /// Lô 2–3 (Phil 18/10/2026): tiếng lóng / từ báo chí (ma tuý, cờ bạc, mại dâm, tội phạm) và cảm thán nói
+    /// tránh hiện cho mọi người; cặp nói thẳng tình dục / chửi ghép từ thường (kích dục, chơi cave, óc lợn,
+    /// con chó…) chỉ khi tắt lọc; cc / đb / lìn lọc theo từ.
+    func testSlangAndInsultBatches() {
+        let m = UserLangModel(appGroup: nil)
+        m.isKnownWord = { VNSuggest.contains($0) }
+        m.seedIfEmpty(unigrams: SeedData.unigrams, bigrams: SeedData.bigrams)
+        func on(_ p: String) -> [String] { SensitiveWords.filter(m.nextWords(after: p, limit: 24), after: p, enabled: true) }
+        XCTAssertEqual(on("lạng").first, "lách")
+        XCTAssertEqual(on("sugar"), ["baby", "daddy"])
+        XCTAssertEqual(on("karaoke").first, "tay")
+        XCTAssertEqual(on("đếch").first, "biết")
+        XCTAssertTrue(on("rửa").contains("tiền"))
+        XCTAssertTrue(on("chơi").contains("coin"))
+        for w in ["nồi", "đạn", "linh"] { XCTAssertTrue(on("vãi").contains(w), w) }
+        for (p, w) in [("kích", "dục"), ("massage", "kích"), ("chơi", "cave"), ("chơi", "gái"), ("óc", "lợn"),
+                       ("não", "phẳng"), ("láo", "chó"), ("con", "chó"), ("quay", "tay"), ("phim", "heo"),
+                       ("clip", "nóng"), ("lộ", "clip"), ("như", "lợn"), ("như", "heo"), ("như", "bò"), ("như", "cột"),
+                       ("cái", "mâm"), ("lùn", "tịt"), ("cò", "hương"), ("chúa", "phòng")] {
+            XCTAssertTrue(SensitiveWords.isPair(p, w))
+            XCTAssertFalse(on(p).contains(w), "\(p) \(w)")
+            XCTAssertTrue(m.nextWords(after: p, limit: 24).contains(w), "tắt lọc: \(p) \(w)")
+        }
+        for w in ["cc", "đb", "lìn"] { XCTAssertTrue(SensitiveWords.set.contains(w)); XCTAssertNotNil(SeedData.unigrams[w]) }
+        // lô 4–5 hiện: tiếng lóng đời thường; cặp NEO giữ cách đọc thường đứng đầu sau từ rất thường
+        for (p, w) in [("cà", "khịa"), ("trẻ", "trâu"), ("sống", "ảo"), ("gen", "z"), ("báo", "thủ"), ("ô", "dề"), ("xu", "cà"),
+                       ("phong", "bì"), ("check", "var"), ("anti", "fan"), ("xin", "link"), ("phòng", "trọ"), ("que", "tăm"),
+                       ("mong", "manh"), ("gầy", "như")] {
+            XCTAssertTrue(on(p).contains(w), "\(p) \(w)")
+        }
+        for (p, w) in [("nước", "ngoài"), ("bóng", "đá"), ("cá", "nhân"), ("hàng", "hóa"), ("lên", "tới"), ("xin", "lỗi"),
+                       ("khẩu", "trang"), ("đào", "tạo")] {
+            XCTAssertEqual(on(p).first, w, p)
+        }
+        XCTAssertEqual(DisplayCase.resolve("z", after: "gen"), "Z")
+        XCTAssertEqual(DisplayCase.resolve("canada", after: "ma"), "Canada")
+        XCTAssertEqual(DisplayCase.resolve("gen"), "gen", "gen di truyền")
+        XCTAssertEqual(on("gét").first, "gô")
+        XCTAssertTrue(VNSuggest.contains("khum") && VNSuggest.contains("dề") && VNSuggest.contains("na"), "teencode trong vnlexicon (gõ + vuốt)")
+        XCTAssertFalse(SensitiveWords.isPair("phòng", "trọ") || SensitiveWords.isPair("cột", "nhà") || SensitiveWords.isPair("nhà", "cháy"))
+        XCTAssertFalse(SensitiveWords.set.contains("lol"), "LOL tiếng Anh")
+        XCTAssertFalse(SensitiveWords.set.contains("đếch") || SensitiveWords.set.contains("méo"))
+    }
+
+    /// Tiền pháp định + mã tiền tệ (18/10/2026): "tiền pháp" → định; hiển thị USD/VNĐ/VND/USDT, Bitcoin;
+    /// crypto/fiat giữ thường.
+    func testFiatAndCurrencyCase() {
+        let m = UserLangModel(appGroup: nil)
+        m.isKnownWord = { VNSuggest.contains($0) }
+        m.seedIfEmpty(unigrams: SeedData.unigrams, bigrams: SeedData.bigrams)
+        XCTAssertEqual(m.nextWords(after: "pháp", prev2: "tiền", limit: 1), ["định"])
+        XCTAssertTrue(m.nextWords(after: "tiền", limit: 3).contains("pháp"))
+        for (w, d) in [("usd", "USD"), ("usdt", "USDT"), ("vnđ", "VNĐ"), ("vnd", "VND"), ("bitcoin", "Bitcoin"),
+                       ("crypto", "crypto"), ("fiat", "fiat")] {
+            XCTAssertEqual(DisplayCase.resolve(w), d)
+            XCTAssertNotNil(SeedData.unigrams[w], w)
+        }
+        // công nghệ / AI / tài chính: enlexicon (gen-enlexicon SUPPLEMENT) + DisplayCase
+        for (w, d) in [("gemini", "Gemini"), ("grok", "Grok"), ("ubuntu", "Ubuntu"), ("copilot", "Copilot"),
+                       ("docker", "Docker"), ("kubernetes", "Kubernetes"), ("javascript", "JavaScript"),
+                       ("typescript", "TypeScript"), ("llm", "LLM"), ("nft", "NFT"), ("etf", "ETF"), ("ipo", "IPO"),
+                       ("defi", "DeFi"), ("chatgpt", "ChatGPT"), ("github", "GitHub"), ("cursor", "cursor"),
+                       ("stablecoin", "stablecoin"), ("cloudflare", "Cloudflare"), ("golang", "Golang"), ("vpn", "VPN"),
+                       ("kotlin", "Kotlin"), ("panadol", "Panadol"), ("viettelex", "VietTelex"), ("telex", "telex"),
+                       ("keto", "keto"), ("rust", "rust")] {
+            XCTAssertEqual(DisplayCase.resolve(w), d)
+            XCTAssertTrue(SwipeEnglish.contains(w), "enlexicon: \(w)")
+        }
+        func on(_ p: String) -> [String] { SensitiveWords.filter(m.nextWords(after: p, limit: 24), after: p, enabled: true) }
+        for (p, w) in [("bắt", "đáy"), ("đu", "đỉnh"), ("khối", "ngoại"), ("ví", "lạnh"), ("call", "margin"), ("vàng", "nhẫn")] {
+            XCTAssertTrue(on(p).contains(w), "\(p) \(w)")
+        }
+        XCTAssertEqual(on("ví").first, "dụ", "NEO: ví dụ vẫn đứng đầu")
+        // y tế
+        for (p, w) in [("chụp", "x"), ("x", "quang"), ("tập", "gym"), ("hậu", "covid"), ("test", "nhanh"), ("sinh", "thường")] {
+            XCTAssertTrue(on(p).contains(w), "\(p) \(w)")
+        }
+        XCTAssertEqual(DisplayCase.resolve("x", after: "chụp"), "X")
+        XCTAssertEqual(DisplayCase.resolve("covid"), "Covid")
+        // tác giả: Phil Trinh (không dấu sau Phil)
+        XCTAssertEqual(on("phil").first, "trinh")
+        XCTAssertEqual(DisplayCase.resolve("phil"), "Phil")
+        XCTAssertEqual(DisplayCase.resolve("trinh", after: "Phil"), "Trinh")
+        XCTAssertEqual(DisplayCase.resolve("trinh"), "trinh")
     }
 }
 

@@ -18,7 +18,7 @@ final class SwipeVocabTests: XCTestCase {
         // sàn chỉ cho từ vnlexicon không có; từ có sẵn (đĩ, cứt…) giữ tần suất vnlexicon
         var off: [String: Int] = [:]
         for w in SwipeVocab.build(filter: false).words.values.joined() { off[w.word] = Int(w.score) }
-        XCTAssertEqual(Set(SensitiveWords.set.filter { off[$0] == nil }), Set(["đĩ", "cứt", "dâm", "điếm"]))
+        XCTAssertEqual(Set(SensitiveWords.set.filter { off[$0] == nil }), Set(["đĩ", "cứt", "dâm", "điếm", "lìn"]))
         XCTAssertTrue(off.filter { SensitiveWords.set.contains($0.key) }.values.allSatisfy { $0 >= SwipeVocab.sensitiveFloor })
     }
 

@@ -11,6 +11,7 @@ Nguồn (xem docs/DATA-SOURCES.md — giấy phép + ghi công):
   3. Từ mượn/tên app hay chen trong câu Việt (wifi, login, zalo, shopee…): bảng
      neutralLoanwords + words của TelexCore/EnglishContextWords.swift (dữ liệu của
      repo), luôn có mặt; tần suất lấy từ Wikipedia (không có thì mức thấp mặc định).
+  4. SUPPLEMENT bên dưới (từ công nghệ / AI / tài chính): như (3), nằm ngoài TARGET.
 Cả hai được ghim theo commit (URL bên dưới) để tái tạo y hệt.
 
 Lọc: chỉ chữ thường a–z, ≥ 2 chữ; bỏ từ nhạy cảm/tục (SensitiveWords.swift của repo
@@ -60,6 +61,18 @@ damn goddamn crap wanker twat bollocks prick pricks jerkoff blowjob handjob
 masturbate masturbation erection ejaculation incest pedophile paedophile
 """.split())
 
+# Bổ sung từ mượn công nghệ / AI / tài chính (Phil 18/10/2026) — như từ mượn của repo: luôn có mặt, tần suất
+# Wikipedia (không có ⇒ mức thấp mặc định). KHÔNG tính vào TARGET ⇒ bảng chỉ THÊM, không đẩy từ khác ra.
+SUPPLEMENT = set("""
+chatgpt anthropic openai grok ubuntu deadlock bool boolean llm copilot cursor kubernetes docker javascript
+typescript github
+crypto blockchain stablecoin defi nft staking etf ipo fintech usdt forex bullish bearish altcoin airdrop
+mainnet testnet vc
+cloudflare golang vpn agentic debug kotlin npm repo
+keto detox paracetamol panadol aspirin whey
+viettelex telex phil
+""".split())
+
 ROMAN = set("ii iii iv vi vii viii ix xi xii xiii xiv xv xvi xvii xviii xix xx xxi".split())
 
 
@@ -76,7 +89,9 @@ def download(raw):
 def sensitive_from_repo():
     """Dùng lại SensitiveWords.swift (bộ lọc thanh gợi ý) — lấy các từ ASCII."""
     src = open(os.path.join(ROOT, "iOS/Keyboard/SensitiveWords.swift"), encoding="utf-8").read()
-    return {w for w in re.findall(r'"([^"]+)"', src) if w.isascii() and w.isalpha()}
+    # chỉ khối `set` (file còn bảng cặp `pairs` — "damn it", "piss off": it/off KHÔNG phải từ tục)
+    body = re.search(r"static let set: Set<String> = \[(.*?)\]", src, re.S).group(1)
+    return {w for w in re.findall(r'"([^"]+)"', body) if w.isascii() and w.isalpha()}
 
 
 def vn_folded_forms():
@@ -132,6 +147,9 @@ def main():
     n_books = len(rate)
 
     repo = {w for w in repo_english_words() if ok.match(w) and w not in block and w not in rate}
+    supp = {w for w in SUPPLEMENT if ok.match(w) and w not in block and w not in rate and w not in repo}
+    cap = TARGET + len(supp)   # phần bổ sung nằm NGOÀI TARGET
+    repo |= supp
     repo_counts = {}
     wiki = []
     total = 0
@@ -146,7 +164,7 @@ def main():
             wiki.append((parts[0], c))
     added = 0
     for w, c in wiki:
-        if len(rate) + len(repo) >= TARGET:
+        if len(rate) + len(repo) >= cap:
             break
         if (w in rate or w in repo or len(w) < 3 or not ok.match(w) or w in block or w in vn
                 or w in ROMAN):

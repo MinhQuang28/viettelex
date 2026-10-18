@@ -30,7 +30,7 @@ người 			0	1		khác|ta|đàn
 bây 			0	1		giờ
 làm 			0	1		gì|việc|sao
 nhà 			0	1		em|anh|mình
-học 			0	1		sinh|tiếng
+học 			0	1		sinh|tiếng|giỏi
 tôi đư	đư	dduw	0	1		đưa|được|đứng
 Đư	Đư	Dduw	0	1		Được|Đừng|Đưa
 xin ch	ch	ch	0	1		chào|cho|chúa
@@ -102,20 +102,48 @@ thank 			1	1		you
 Tên 			0	1		
 zzqx tên 			0	1		
 bàn 			0	1		phím
-vãi 			0	1		cả|đái
+vãi 			0	1		cả|linh|nồi
 vãi 			0	0		lồn|cả|cứt
 ngon 			0	1		
 ngon 			0	0		vl
-bú 			0	1		
-bú 			0	0		lồn|cặc|buồi
+bú 			0	1		đá
+bú 			0	0		lồn|cặc|đá
 đầu 			0	1		tiên|tư
-sờ 			0	1		vào|chim|cu
-nâng 			0	1		cao|cấp|bi
+sờ 			0	1		vào
+nâng 			0	1		cao|cấp
 motherf	motherf	motherf	1	1		
 motherf	motherf	motherf	1	0		motherfucker
 Fuc	Fuc	Fuc	1	0		Fuck|Fucking|Fucked
 holy 			1	1		
 holy 			1	0		shit
+sờ 			0	0		vào|chim|cu
+thằng 			0	1		
+thằng 			0	0		mặt|ngu|chó
+đồ 			0	1		ăn
+đồ 			0	0		ăn|ngu|chó
+chơi 			0	1		coin
+chơi 			0	0		coin|gái|cave
+sờ ch	ch	ch	0	1		chỗ|cho|chúng
+sờ ch	ch	ch	0	0		chỗ|cho|chúng
+damn 			1	1		
+damn 			1	0		it
+piss of	of	of	1	1		often|office|offered
+piss of	of	of	1	0		off|often|office
+tiền 			0	1		pháp|mã|sản
+tiền pháp 			0	1		định|luật|của
+giang 			0	1		
+rửa ti	ti	ti	0	1		tiền|tin|tìm
+sugar 			1	1		baby|daddy
+karaoke 			0	1		tay
+lạng 			0	1		lách
+vãi 			0	0		lồn|cả|cứt
+đếch 			0	1		biết
+kích 			0	1		
+kích 			0	0		dục
+con 			0	1		người|gái|trai
+óc 			0	1		
+óc 			0	0		chó|lợn
+chơi ca	ca	ca	0	1		cần|các|cậu
 đị	đị	ddij	0	0		định|địa|địch
 con 			0	0		người|gái|trai
 đi ch	ch	ch	0	1		chơi|chứ|cho
@@ -146,7 +174,7 @@ cảm ơn 			0	1	cảm ơn anh*1	vì|anh|bạn
 cảm 			0	1	cảm động*5	động|ơn|thấy
 gặp 			0	1	gặp xyzk*2	lại|nhau|sau
 gặp 			0	1	gặp xyzk*3	lại|xyzk|nhau
-thằng 			0	1	thằng cặc*4	mặt|ngu|chó
+thằng 			0	1	thằng cặc*4	
 thằng 			0	0	thằng cặc*4	cặc|mặt|ngu
 hello 			1	1	hello world*3	world
 hello 			0	1	hello world*3	world
@@ -158,3 +186,4 @@ heeey 			0	1	heeey you*4
 cảm 			0	1	ăn cơm*3	ơn|thấy|giác
 mình 			0	1	mình đi*2|mình ăn*3|mình ngủ*2	đang|ăn|đi
 tôi hi	hi	hi	0	1	tôi hiền*5	hiểu|hiền|hiện
+Phil 			0	1		Trinh

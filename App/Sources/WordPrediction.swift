@@ -360,13 +360,13 @@ final class PredictionModel {
             let seeds = seedNext(prev)
             let mine = learned.map { $0.nextWords(after: prev, prev2: r.prev2, seeds: seeds, limit: 6) }
                 ?? Array(seeds.prefix(6))
-            var personal = SensitiveWords.filter(mine, enabled: filterOn)
+            var personal = SensitiveWords.filter(mine, after: prev, enabled: filterOn)
             // từ tục tiếng Anh (holy → shit) không có trong enlexicon; lọc bật thì đã bị bỏ ở trên
             if r.english { personal = personal.filter { EnglishLite.contains($0) || SensitiveWords.english.contains($0) } }
             var tri: [String] = [], lead: [String] = []
             if PredictionLogic.wantsNextWord(r), let prev2 = r.prev2, VNSuggest.lexiconId(of: prev) != nil,
                let top = SuggestRank.topNext(prev, prev2: prev2, limit: 6), top.trigram {
-                tri = SensitiveWords.filter(top.words, enabled: filterOn)
+                tri = SensitiveWords.filter(top.words, after: prev, enabled: filterOn)
                 // iOS nextFill: có dòng trigram tĩnh ⇒ bộ ba người dùng đã gõ ≥ learnedTriMin lần
                 // dẫn đầu (≤ 2), rồi trigram tĩnh, rồi personal.
                 if let l = learned {
@@ -393,12 +393,15 @@ final class PredictionModel {
             // count = seed + đếm học (iOS: store mồi seed rồi cộng dồn).
             let ctx: Set<String> = r.prev.map { p in
                 let seeds = seedNext(p)
-                return Set(learned.map { $0.nextWords(after: p, prev2: r.prev2, seeds: seeds, limit: 24, pairMin: 0) } ?? seeds)
+                // lọc bật: cặp nhạy cảm (SensitiveWords.pairs) không thưởng ngữ cảnh
+                return Set(SensitiveWords.dropPairs(
+                    learned.map { $0.nextWords(after: p, prev2: r.prev2, seeds: seeds, limit: 24, pairMin: 0) } ?? seeds,
+                    after: p, enabled: filterOn))
             } ?? []
             let personalCount: (String) -> Int = learned.map { l in { self.count($0) + l.count($0) } } ?? count
             let ranked = SensitiveWords.filter(
                 SuggestRank.rankInline(pool, pmi: pmi, typedLen: typed.count, count: personalCount, ctx: ctx),
-                enabled: filterOn)
+                after: r.prev, enabled: filterOn)
             return PredictionLogic.completions(ranked, typed: typed).map {
                 SuggestionCase.display(DisplayCase.resolve($0, after: r.prev, learned: learned.map { l in { l.learnedCase($0) } }),
                                        shift: .off, typed: typed)
@@ -408,7 +411,7 @@ final class PredictionModel {
         let key = raw.isEmpty ? typed : raw
         let src = key.count >= PredictionLogic.minTyped ? key : typed
         let hits = EnglishLite.completions(src, limit: 24)
-        let en = filterOn ? SensitiveWords.filter(hits.map(\.word), enabled: true)
+        let en = filterOn ? SensitiveWords.filter(hits.map(\.word), after: r.prev, enabled: true)
             : PredictionLogic.withVulgarEnglish(hits, typed: src, rank: count)
         return PredictionLogic.completions(en, typed: typed.count >= src.count ? typed : src)
     }

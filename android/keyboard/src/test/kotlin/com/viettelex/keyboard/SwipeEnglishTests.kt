@@ -61,7 +61,7 @@ class SwipeEnglishTests {
 
     @Test fun lexiconLoadsAndBuckets() {
         val e = SwipeEnglish.lexicon
-        assertTrue("${e.count}", e.count in 10_000..20_000)
+        assertTrue("${e.count}", e.count in 10_000..20_100)   // 20.000 + SUPPLEMENT của gen-enlexicon
         assertTrue(SwipeEnglish.contains("check") && SwipeEnglish.contains("mail") && SwipeEnglish.contains("the"))
         assertTrue(!SwipeEnglish.contains("a") && !SwipeEnglish.contains("fuck"))   // 1 chữ / tục bị lọc
         assertEquals(e.count, e.bucketStart[676])

@@ -1515,7 +1515,7 @@ final class KeyboardViewController: UIInputViewController {
     private func padWords(_ base: [String], need: Int, typed: String = "") -> [String] {
         guard base.count < need else { return Array(base.prefix(need)) }
         let top = bridge.englishMode ? SwipeEnglish.top : langModel.topWords(limit: need + 12)
-        let candidates = SensitiveWords.filter(top, enabled: filterSensitive)
+        let candidates = SensitiveWords.filter(top, after: lastWord, enabled: filterSensitive)
             .map { caseForContext(properCase($0), typed: typed) }
         return SuggestionFill.pad(base, with: candidates, need: need, excluding: typed)
     }
@@ -1629,17 +1629,17 @@ final class KeyboardViewController: UIInputViewController {
             // Tiếng Anh: từ kế tiếp cá nhân chỉ giữ từ tiếng Anh; đệm bằng từ Anh phổ biến
             let personal = lastWord.map { langModel.nextWords(after: $0, prev2: lastWord2, limit: 12) } ?? []
             let en = SensitiveWords.filter(personal.filter { SwipeEnglish.contains($0.lowercased()) },
-                                           enabled: filterSensitive).prefix(slotWant)
+                                           after: lastWord, enabled: filterSensitive).prefix(slotWant)
             set.nextWords = padWords(en.map { caseForContext($0) }, need: slotWant)
         } else if let prev = lastWord {
             // vừa space sau một từ → gợi từ KẾ TIẾP (SuggestRank.nextFill): có trigram tĩnh
             // (prev2, prev) ⇒ bộ ba người dùng đã gõ, rồi trigram, rồi cá nhân/seed; không ⇒
             // cá nhân/seed trước, lấp bằng bigram tĩnh; rồi mới tới topWords
             let p2 = lastWord2, lm = langModel, fs = filterSensitive
-            let personal = SensitiveWords.filter(lm.nextWords(after: prev, prev2: p2, limit: 6), enabled: fs)
+            let personal = SensitiveWords.filter(lm.nextWords(after: prev, prev2: p2, limit: 6), after: prev, enabled: fs)
             let next = SuggestRank.nextFill(prev, prev2: p2, personal: personal,
                                             triCount: { w in p2.map { lm.trigramCount($0, prev, w) } ?? 0 },
-                                            filter: { SensitiveWords.filter($0, enabled: fs) }, need: slotWant)
+                                            filter: { SensitiveWords.filter($0, after: prev, enabled: fs) }, need: slotWant)
             set.nextWords = padWords(next.map { caseForContext(properCase($0, after: prev)) }, need: slotWant)
         } else {
             // field trống chưa gõ gì → từ user hay mở đầu nhất
@@ -1730,12 +1730,16 @@ final class KeyboardViewController: UIInputViewController {
         if !pool.isEmpty {
             // ctx chỉ đổi khi (lastWord, lastWord2) đổi — cache, khỏi gọi
             // nextWords mỗi keystroke trong lúc đang gõ dở một từ.
-            let ctxKey = (lastWord ?? "") + "\u{1}" + (lastWord2 ?? "")
+            let ctxKey = (lastWord ?? "") + "\u{1}" + (lastWord2 ?? "") + (filterSensitive ? "\u{1}" : "")
             if ctxKey != ctxCacheKey {
-                // + cặp chọn tay (CuratedPairs) — chỉ xếp gợi ý đang gõ dở, không thêm từ kế tiếp
+                // + cặp chọn tay (CuratedPairs) — chỉ xếp gợi ý đang gõ dở, không thêm từ kế tiếp.
+                // Lọc bật: cặp nhạy cảm (SensitiveWords.pairs) không thưởng ngữ cảnh.
+                let fs = filterSensitive
                 ctxCache = lastWord.map {
-                    Set(CuratedPairs.withNext(langModel.nextWords(after: $0, prev2: lastWord2, limit: 24),
-                                              after: $0, prev2: lastWord2))
+                    Set(CuratedPairs.withNext(
+                        SensitiveWords.dropPairs(langModel.nextWords(after: $0, prev2: lastWord2, limit: 24),
+                                                 after: $0, enabled: fs),
+                        after: $0, prev2: lastWord2))
                 } ?? []
                 ctxCacheKey = ctxKey
             }
@@ -1744,7 +1748,7 @@ final class KeyboardViewController: UIInputViewController {
             let ranked = SensitiveWords.filter(
                 SuggestRank.rankInline(pool, pmi: pmi, typedLen: composed.count,
                                        count: { lm.count(of: $0) }, ctx: ctxCache),
-                enabled: filterSensitive)
+                after: lastWord, enabled: filterSensitive)
             set.word = ranked.first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
             set.word2 = ranked.dropFirst().first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
             // "Số từ gợi ý" 4–5: ứng viên hạng 3… (ô 1 = nguyên văn, ô 2–3 = word/word2)
@@ -2515,7 +2519,7 @@ extension KeyboardViewController {
                 swipeRevisable = SwipeTyping.Revisable(word: out.word, scored: out.scored, sc: sc)
             }
             if out.english { noteRecentEnglish(out.word) }
-            let alts = SensitiveWords.filter(out.alternatives, enabled: filterSensitive)
+            let alts = SensitiveWords.filter(out.alternatives, after: prev, enabled: filterSensitive)
             swipeSuggest = alts.isEmpty || !bridge.isSwipeWordOpen ? nil
                 : (out.word, alts, out.englishAlternatives)
             KeyboardView.clickLetter()
@@ -2880,7 +2884,10 @@ extension KeyboardViewController {
               let before = textDocumentProxy.documentContextBeforeInput, !before.isEmpty else { return nil }
         if let c = addTonesCache, c.before == before { return c.plan }
         let lm = langModel
-        let personal = AddTones.Personal(count: { lm.count(of: $0) }, pair: { lm.bigramCount($0, $1) })
+        // Lọc bật: cặp nhạy cảm (SensitiveWords.pairs, có trong seed) không thưởng khi chọn dấu.
+        let fs = filterSensitive
+        let personal = AddTones.Personal(count: { lm.count(of: $0) },
+                                         pair: { fs && SensitiveWords.isPair($0, $1) ? 0 : lm.bigramCount($0, $1) })
         var plan = AddTones.plan(before, personal: personal)
         if plan?.original == addTonesDismissed { plan = nil }
         addTonesCache = (before, plan)
