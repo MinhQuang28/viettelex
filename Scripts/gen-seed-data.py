@@ -20,6 +20,8 @@ tôi). Thứ tự ra: khối corpus (trọng số giảm dần, rồi theo từ)
 
 Usage:
   python3 Scripts/gen-seed-data.py --unigrams U.tsv --bigrams B.tsv [--out iOS/Keyboard/SeedData.swift]
+  python3 Scripts/gen-seed-data.py --corpus-from-seed   (chỉ sửa seed-curated.txt / SensitiveWords, không có
+       U.tsv/B.tsv: giữ nguyên khối corpus của SeedData.swift hiện có; dừng nếu từ mới lọc nằm trong khối đó)
   rồi: python3 android/keyboard/scripts/export-ios-data.py . (seed.tsv), Scripts/gen-seed-next.sh,
        python3 windows/app/tools/gen_seed_unigrams.py, windows/app/tools/gen_prediction_golden.sh
 """
@@ -78,8 +80,12 @@ def swift_lines(items, per_line, fmt):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--unigrams", required=True)
-    ap.add_argument("--bigrams", required=True)
+    ap.add_argument("--unigrams")
+    ap.add_argument("--bigrams")
+    ap.add_argument("--corpus-from-seed", action="store_true",
+                    help="lấy khối corpus từ SeedData.swift hiện có (khi chỉ sửa seed-curated.txt và không "
+                         "có U.tsv/B.tsv); chỉ đúng khi từ mới thêm vào SensitiveWords/[exclude] không nằm "
+                         "trong khối corpus")
     ap.add_argument("--curated", default=os.path.join(ROOT, "Scripts/seed-curated.txt"))
     ap.add_argument("--out", default=os.path.join(ROOT, "iOS/Keyboard/SeedData.swift"))
     ap.add_argument("--n-uni", type=int, default=500)
@@ -90,6 +96,29 @@ def main():
 
     sens = sensitive_words()
     pins, groups, excl = read_curated(a.curated)
+    if a.corpus_from_seed:
+        corpus_uni, corpus_bi = corpus_from_seed(a.out)
+        bad = [w for w in corpus_uni if w in sens or w in excl] + \
+              [k for k in corpus_bi if k[0] in sens or k[1] in sens or " ".join(k) in excl]
+        assert not bad, f"từ nhạy cảm/loại nằm trong khối corpus — cần chạy lại từ U.tsv/B.tsv: {bad}"
+    else:
+        assert a.unigrams and a.bigrams, "cần --unigrams/--bigrams (hoặc --corpus-from-seed)"
+        corpus_uni, corpus_bi = corpus_from_tsv(a, sens, pins, excl)
+    write_out(a, pins, groups, corpus_uni, corpus_bi)
+
+
+def corpus_from_seed(path):
+    """Khối corpus (trước dòng chú thích nhóm chọn tay đầu tiên) của SeedData.swift đã sinh."""
+    src = open(path, encoding="utf-8").read()
+    def block(name):
+        body = src.split(f"static var {name}:", 1)[1].split("] }", 1)[0]
+        return body.split("\n        //", 1)[0]
+    uni = {w: int(c) for w, c in re.findall(r'"([^"]+)": (\d+),', block("unigrams"))}
+    bi = {(x, y): int(c) for x, y, c in re.findall(r'\("([^"]+)", "([^"]+)", (\d+)\),', block("bigrams"))}
+    return uni, bi
+
+
+def corpus_from_tsv(a, sens, pins, excl):
     uni_all = {k[0]: c for k, c in read_tsv(a.unigrams, 1)}
     N = sum(uni_all.values())
     uni_sorted = sorted(((w, c) for w, c in uni_all.items() if w not in sens and w not in excl),
@@ -110,7 +139,10 @@ def main():
     bis = bis[:a.n_bi]
     bmax = bis[0][1]
     corpus_bi = {k: weight(c, bmax, a.k) for k, c in bis}
+    return corpus_uni, corpus_bi
 
+
+def write_out(a, pins, groups, corpus_uni, corpus_bi):
     # gộp max với corpus
     for kind, _, items in groups:
         for key, c in items:

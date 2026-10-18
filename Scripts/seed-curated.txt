@@ -57,6 +57,10 @@ love 6
 okie 6
 ship 6
 thank 6
+# bổ sung 18/10/2026: đuôi của cặp tiếng Anh (thank you, love you, see you, damn it…) — UserLangModel chỉ gợi ý từ
+# ngoài vnlexicon khi seed ≥ 3, thiếu "you" thì các cặp đó không bao giờ hiện
+you 8
+it 5
 yes 6
 birthday 5
 call 5
@@ -415,6 +419,49 @@ tha 4
 khốn 5
 nạn 5
 má 8
+# bổ sung 18/10/2026 (tục / tình dục thường gặp + viết tắt ViSoLex) — đều trong SensitiveWords ⇒ chỉ hiện khi TẮT lọc
+cặc 4
+buồi 3
+đéo 5
+nứng 3
+chịch 3
+trym 2
+loz 3
+cmm 3
+cmn 3
+đmm 3
+dmm 3
+đcmm 2
+dcmm 2
+clm 2
+clg 2
+vcc 2
+dume 2
+# bổ sung 18/10/2026 — chửi tiếng Anh thường gặp (đều trong SensitiveWords.english; damn/piss KHÔNG lọc)
+motherfucker 3
+asshole 3
+bullshit 4
+dick 3
+dickhead 2
+pussy 3
+bastard 3
+dumbass 3
+fucking 4
+fucked 3
+fucker 2
+shitty 2
+stfu 3
+damn 4
+piss 3
+# 18/10/2026: từ SensitiveWords trước đây thiếu trong seed (hợp đồng: mọi từ lọc có trong seed)
+cl 4
+dcm 3
+đkm 3
+dkm 3
+điếm 3
+buscu 2
+bitch 4
+wtf 4
 
 [bigram]
 ## — cặp hội thoại của seed cũ (OpenSubtitles2018 + chọn tay 07/2026: anh ơi, ăn chưa, xin chào…; corpus mới đếm thiếu câu gọi/đáp ngắn) —
@@ -932,3 +979,75 @@ ngu si 4
 thối tha 4
 khốn nạn 6
 mất dạy 4
+# bổ sung 18/10/2026 — cặp có từ SensitiveWords: lọc BẬT thì từ tục không bao giờ được gợi ý
+bú lồn 4
+bú cặc 4
+bú buồi 3
+liếm lồn 4
+liếm buồi 3
+móc lồn 3
+nứng lồn 3
+hãm lồn 3
+cái lồn 4
+thằng lồn 3
+như lồn 3
+địt nhau 4
+đụ nhau 3
+đụ mẹ 4
+chịch nhau 4
+sờ trym 2
+đầu buồi 4
+đầu cặc 3
+mặt cặc 3
+vãi cặc 4
+con cặc 3
+như cặc 3
+vãi cứt 4
+đồ đĩ 3
+hiếp dâm 4
+đéo biết 5
+đéo hiểu 4
+đéo cần 4
+đéo có 4
+đéo phải 4
+đéo gì 3
+cái đéo 4
+thế đéo 3
+đm mày 4
+đcm mày 3
+đẹp vl 3
+hay vl 3
+# bổ sung 18/10/2026 — chửi tiếng Anh (fuck/shit lọc; damn it, piss off hiện cho mọi người)
+fuck off 4
+holy shit 4
+oh shit 3
+damn it 4
+piss off 3
+# bổ sung 18/10/2026 — cặp TOÀN từ thường (bộ lọc không chặn được ⇒ hiện cho mọi người): chửi nhẹ / từ
+# báo chí / Phil yêu cầu; trọng số thấp. "sờ vào", "nâng cấp", "nâng cao" để "chim"/"cu"/"bi" không đứng
+# đầu gợi ý sau "sờ"/"nâng". KHÔNG thêm cặp tình dục ghép từ từ thường (móc lốp, bú cu…).
+hãm hiếp 3
+lăng nhăng 4
+lăng loàn 3
+vãi đái 3
+thằng chó 3
+đồ chó 3
+óc chó 4
+chó chết 3
+chó má 3
+như chó 3
+thằng ngu 4
+đồ ngu 4
+thằng khốn 3
+đồ khốn 3
+thằng điên 3
+đồ điên 3
+mẹ mày 3
+con gà 4
+nâng bi 2
+nâng cấp 5
+nâng cao 5
+sờ vào 4
+sờ chim 2
+sờ cu 2
+rờ cu 2

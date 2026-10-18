@@ -226,6 +226,26 @@ enum PredictionLogic {
 
     /// Ứng viên hoàn thành (đã xếp hạng) → tối đa `rankDepth`, chỉ từ DÀI HƠN chữ đã gõ
     /// (hoàn thành thật — biến thể chỉ khác dấu thì người gõ Telex tự gõ tiếp), bỏ trùng.
+    /// Lọc TẮT: trộn từ tục tiếng Anh (`SensitiveWords.english` — enlexicon.bin không có) cùng tiền tố
+    /// vào ứng viên tiếng Anh ở tần suất `SensitiveWords.englishFreq` (hoà ⇒ từ enlexicon trước; giữa
+    /// chúng: `rank` (đếm seed) giảm dần rồi chữ cái), chữ hoa theo chữ đang gõ. Song sinh Windows.
+    static func withVulgarEnglish(_ en: [VNSuggest.Match], typed: String, rank: (String) -> Int) -> [String] {
+        let low = typed.lowercased()
+        let extra = SensitiveWords.english.filter { $0.count > low.count && $0.hasPrefix(low) }
+            .sorted { rank($0) != rank($1) ? rank($0) > rank($1) : $0 < $1 }
+            .map { w -> String in    // = SwipeEnglish.matchCase (không kéo SwipeEnglish vào golden/Linux)
+                guard let f = typed.first, f.isUppercase else { return w }
+                if typed.count > 1, typed.allSatisfy({ $0.isUppercase }) { return w.uppercased() }
+                return w.prefix(1).uppercased() + w.dropFirst()
+            }
+        var out: [String] = [], i = 0
+        for m in en {
+            while i < extra.count, m.freq < SensitiveWords.englishFreq { out.append(extra[i]); i += 1 }
+            out.append(m.word)
+        }
+        return out + extra[i...]
+    }
+
     static func completions(_ ranked: [String], typed: String) -> [String] {
         let n = typed.count
         var seen = Set<String>(), out: [String] = []
@@ -341,7 +361,8 @@ final class PredictionModel {
             let mine = learned.map { $0.nextWords(after: prev, prev2: r.prev2, seeds: seeds, limit: 6) }
                 ?? Array(seeds.prefix(6))
             var personal = SensitiveWords.filter(mine, enabled: filterOn)
-            if r.english { personal = personal.filter { EnglishLite.contains($0) } }
+            // từ tục tiếng Anh (holy → shit) không có trong enlexicon; lọc bật thì đã bị bỏ ở trên
+            if r.english { personal = personal.filter { EnglishLite.contains($0) || SensitiveWords.english.contains($0) } }
             var tri: [String] = [], lead: [String] = []
             if PredictionLogic.wantsNextWord(r), let prev2 = r.prev2, VNSuggest.lexiconId(of: prev) != nil,
                let top = SuggestRank.topNext(prev, prev2: prev2, limit: 6), top.trigram {
@@ -386,7 +407,9 @@ final class PredictionModel {
         // Tiếng Anh: phím thô (a–z) — "this" có thể đang hiện "thí" sau Telex.
         let key = raw.isEmpty ? typed : raw
         let src = key.count >= PredictionLogic.minTyped ? key : typed
-        let en = SensitiveWords.filter(EnglishLite.completions(src, limit: 24).map(\.word), enabled: filterOn)
+        let hits = EnglishLite.completions(src, limit: 24)
+        let en = filterOn ? SensitiveWords.filter(hits.map(\.word), enabled: true)
+            : PredictionLogic.withVulgarEnglish(hits, typed: src, rank: count)
         return PredictionLogic.completions(en, typed: typed.count >= src.count ? typed : src)
     }
 }

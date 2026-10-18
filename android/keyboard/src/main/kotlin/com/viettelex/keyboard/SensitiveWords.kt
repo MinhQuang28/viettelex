@@ -9,6 +9,8 @@ object SensitiveWords {
         "đcm", "đm", "dm", "dcm", "vcl", "vkl", "vl", "cl", "clgt", "cmnr",
         "cứt", "lồn", "cặc", "buồi", "đĩ", "điếm", "đụ", "địt",
         "tml", "sml", "dâm", "đkm", "dkm", "buscu",
-        "fuck", "shit", "bitch", "wtf",
+        "đéo", "nứng", "chịch", "trym", "loz", "cmm", "cmn", "đmm", "dmm", "đcmm", "dcmm", "clm", "clg", "vcc", "dume",
+        "fuck", "shit", "bitch", "wtf", "motherfucker", "asshole", "bullshit", "dick", "dickhead", "pussy",
+        "bastard", "dumbass", "fucking", "fucked", "fucker", "shitty", "stfu",
     )
 }

@@ -833,6 +833,8 @@ u	love	6
 u	okie	6
 u	ship	6
 u	thank	6
+u	you	8
+u	it	5
 u	yes	6
 u	birthday	5
 u	call	5
@@ -1137,6 +1139,46 @@ u	đần	4
 u	độn	3
 u	tha	4
 u	má	8
+u	cặc	4
+u	buồi	3
+u	đéo	5
+u	nứng	3
+u	chịch	3
+u	trym	2
+u	loz	3
+u	cmm	3
+u	cmn	3
+u	đmm	3
+u	dmm	3
+u	đcmm	2
+u	dcmm	2
+u	clm	2
+u	clg	2
+u	vcc	2
+u	dume	2
+u	motherfucker	3
+u	asshole	3
+u	bullshit	4
+u	dick	3
+u	dickhead	2
+u	pussy	3
+u	bastard	3
+u	dumbass	3
+u	fucking	4
+u	fucked	3
+u	fucker	2
+u	shitty	2
+u	stfu	3
+u	damn	4
+u	piss	3
+u	cl	4
+u	dcm	3
+u	đkm	3
+u	dkm	3
+u	điếm	3
+u	buscu	2
+u	bitch	4
+u	wtf	4
 b	có	thể	50
 b	chúng	ta	49
 b	anh	ấy	43
@@ -2070,3 +2112,70 @@ b	đần	độn	4
 b	thối	tha	4
 b	khốn	nạn	6
 b	mất	dạy	4
+b	bú	lồn	4
+b	bú	cặc	4
+b	bú	buồi	3
+b	liếm	lồn	4
+b	liếm	buồi	3
+b	móc	lồn	3
+b	nứng	lồn	3
+b	hãm	lồn	3
+b	cái	lồn	4
+b	thằng	lồn	3
+b	như	lồn	3
+b	địt	nhau	4
+b	đụ	nhau	3
+b	đụ	mẹ	4
+b	chịch	nhau	4
+b	sờ	trym	2
+b	đầu	buồi	4
+b	đầu	cặc	3
+b	mặt	cặc	3
+b	vãi	cặc	4
+b	con	cặc	3
+b	như	cặc	3
+b	vãi	cứt	4
+b	đồ	đĩ	3
+b	hiếp	dâm	4
+b	đéo	biết	5
+b	đéo	hiểu	4
+b	đéo	cần	4
+b	đéo	có	4
+b	đéo	phải	4
+b	đéo	gì	3
+b	cái	đéo	4
+b	thế	đéo	3
+b	đm	mày	4
+b	đcm	mày	3
+b	đẹp	vl	3
+b	hay	vl	3
+b	fuck	off	4
+b	holy	shit	4
+b	oh	shit	3
+b	damn	it	4
+b	piss	off	3
+b	hãm	hiếp	3
+b	lăng	nhăng	4
+b	lăng	loàn	3
+b	vãi	đái	3
+b	thằng	chó	3
+b	đồ	chó	3
+b	óc	chó	4
+b	chó	chết	3
+b	chó	má	3
+b	như	chó	3
+b	thằng	ngu	4
+b	đồ	ngu	4
+b	thằng	khốn	3
+b	đồ	khốn	3
+b	thằng	điên	3
+b	đồ	điên	3
+b	mẹ	mày	3
+b	con	gà	4
+b	nâng	bi	2
+b	nâng	cấp	5
+b	nâng	cao	5
+b	sờ	vào	4
+b	sờ	chim	2
+b	sờ	cu	2
+b	rờ	cu	2

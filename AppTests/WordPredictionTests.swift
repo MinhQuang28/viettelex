@@ -146,6 +146,32 @@ final class WordPredictionTests: XCTestCase {
         XCTAssertTrue(MacSyncStore.settings.contains { $0.canonical == "filterSensitive" }, "đồng bộ như iOS")
     }
 
+    /// Cặp tục bổ sung 18/10/2026: bật lọc ⇒ sau bú/liếm/móc/đầu/thằng… không bao giờ ra từ nhạy cảm;
+    /// tắt lọc ⇒ có. Tiếng Anh tục (enlexicon không có) chỉ gợi ý khi tắt lọc.
+    func testVulgarPairsGatedByFilter() {
+        func c(_ before: String, _ typed: String = "", english: Bool = false, on: Bool) -> [String] {
+            guard let r = L.request(before: before, typed: typed, english: english) else { return [] }
+            return PredictionModel.shared.candidates(r, raw: typed, filterSensitive: on)
+        }
+        for prev in ["bú", "liếm", "móc", "nứng", "đầu", "cái", "thằng", "con", "như", "vãi", "mặt", "sờ", "hãm"] {
+            let got = c(prev + " ", on: true)
+            XCTAssertTrue(got.allSatisfy { !SensitiveWords.set.contains($0.lowercased()) }, "\(prev): \(got)")
+        }
+        XCTAssertEqual(c("bú ", on: true), [])
+        XCTAssertEqual(c("bú ", on: false).first, "lồn")
+        XCTAssertFalse(c("motherf", "motherf", english: true, on: true).contains { $0.lowercased() == "motherfucker" })
+        XCTAssertEqual(c("motherf", "motherf", english: true, on: false).first, "motherfucker")
+        XCTAssertEqual(c("Fuc", "Fuc", english: true, on: false).first, "Fuck")
+        XCTAssertFalse(c("fuc", "fuc", english: true, on: true).contains("fuck"))
+        XCTAssertEqual(c("holy ", english: true, on: false).first, "shit")
+        XCTAssertEqual(c("holy ", english: true, on: true), [])
+        // trộn theo tần suất: từ enlexicon ≥ englishFreq trước, hoà theo rank rồi chữ cái
+        let en = [VNSuggest.Match(word: "full", freq: 200), VNSuggest.Match(word: "fun", freq: 120)]
+        XCTAssertEqual(L.withVulgarEnglish(en, typed: "fu", rank: { _ in 0 }),
+                       ["full", "fuck", "fucked", "fucker", "fucking", "fun"])
+        XCTAssertEqual(L.withVulgarEnglish([], typed: "DI", rank: { _ in 0 }), ["DICK", "DICKHEAD"])
+    }
+
     /// Tiếng Anh giữa câu Việt: chỉ khi phím thô là tiền tố tiếng Anh rõ ràng hơn mọi cách đọc
     /// tiếng Việt (prefersEnglish) — "pers" hiện "pé" → person; KHÔNG BAO GIỜ khi chữ đang gõ là
     /// âm tiết Việt trọn vẹn phổ biến (toi, duoc, cam, thẻ, thin, chan).

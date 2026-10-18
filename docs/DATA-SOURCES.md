@@ -892,6 +892,13 @@ Seed cũ (OpenSubtitles2018) có "cám ơn" 25 — nay chỉ "cảm ơn".
 
     python3 Scripts/gen-seed-data.py --unigrams $W/uni-chatfull.tsv --bigrams $W/bi-chatfull.tsv --n-uni 800 --n-bi 600
 
+Chỉ sửa lớp chọn tay / SensitiveWords (không có U/B.tsv): `python3 Scripts/gen-seed-data.py --corpus-from-seed` giữ
+nguyên khối corpus của SeedData.swift (dừng nếu từ mới lọc nằm trong khối đó). 18/10/2026 (sau giai đoạn 2): thêm
+từ/cặp tục–tình dục–chửi thường gặp (bú lồn, địt nhau, đéo biết, đầu buồi…; viết tắt ViSoLex cmm/đmm/loz…; tiếng Anh
+motherfucker, bullshit, holy shit…) — từ tục đều vào SensitiveWords (ẩn khi bật lọc); cặp toàn từ thường (thằng chó,
+óc chó, lăng nhăng, hãm hiếp, sờ chim…) hiện cho mọi người, trọng số thấp; thêm "you"/"it" để thank you, love you,
+damn it… hiện được. 1.181 unigram / 1.000 bigram; keyprior.bin sinh lại (từ ASCII của seed).
+
 ### Đo trước / sau giai đoạn 2 (tập KIỂM THỬ, JVM; "trước" = main 18/10/2026 sau giai đoạn 1)
 
 | | trước | sau |

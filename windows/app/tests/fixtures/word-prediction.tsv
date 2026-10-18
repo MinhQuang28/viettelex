@@ -98,14 +98,24 @@ buổi 			0	1		sáng|tối|chiều
 ngủ 			0	1		ngon|chưa|dậy
 good 			1	1		morning|night
 anh 			1	1		
-thank 			1	1		
+thank 			1	1		you
 Tên 			0	1		
 zzqx tên 			0	1		
 bàn 			0	1		phím
-vãi 			0	1		cả
-vãi 			0	0		lồn|cả
+vãi 			0	1		cả|đái
+vãi 			0	0		lồn|cả|cứt
 ngon 			0	1		
 ngon 			0	0		vl
+bú 			0	1		
+bú 			0	0		lồn|cặc|buồi
+đầu 			0	1		tiên|tư
+sờ 			0	1		vào|chim|cu
+nâng 			0	1		cao|cấp|bi
+motherf	motherf	motherf	1	1		
+motherf	motherf	motherf	1	0		motherfucker
+Fuc	Fuc	Fuc	1	0		Fuck|Fucking|Fucked
+holy 			1	1		
+holy 			1	0		shit
 đị	đị	ddij	0	0		định|địa|địch
 con 			0	0		người|gái|trai
 đi ch	ch	ch	0	1		chơi|chứ|cho
@@ -136,8 +146,8 @@ cảm ơn 			0	1	cảm ơn anh*1	vì|anh|bạn
 cảm 			0	1	cảm động*5	động|ơn|thấy
 gặp 			0	1	gặp xyzk*2	lại|nhau|sau
 gặp 			0	1	gặp xyzk*3	lại|xyzk|nhau
-thằng 			0	1	thằng cặc*4	mặt
-thằng 			0	0	thằng cặc*4	cặc|mặt
+thằng 			0	1	thằng cặc*4	mặt|ngu|chó
+thằng 			0	0	thằng cặc*4	cặc|mặt|ngu
 hello 			1	1	hello world*3	world
 hello 			0	1	hello world*3	world
 tôi hi	hi	hi	0	1	tôi hiểu*5	hiểu|hiện|hình

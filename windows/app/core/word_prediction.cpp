@@ -305,11 +305,61 @@ bool isSensitive(const std::u32string& w) {
     static const char* const kSet[] = {
         "đcm", "đm", "dm", "dcm", "vcl", "vkl", "vl", "cl", "clgt", "cmnr", "cứt", "lồn", "cặc", "buồi",
         "đĩ", "điếm", "đụ", "địt", "tml", "sml", "dâm", "đkm", "dkm", "buscu", "fuck", "shit", "bitch", "wtf",
+        "đéo", "nứng", "chịch", "trym", "loz", "cmm", "cmn", "đmm", "dmm", "đcmm", "dcmm", "clm", "clg", "vcc",
+        "dume", "motherfucker", "asshole", "bullshit", "dick", "dickhead", "pussy", "bastard", "dumbass", "fucking",
+        "fucked", "fucker", "shitty", "stfu",
     };
     const std::string l = u8(lowerS(w));
     for (const char* x : kSet)
         if (l == x) return true;
     return false;
+}
+
+// SensitiveWords.english (⊂ isSensitive): enlexicon has none of them (gen-enlexicon BLOCK), so the
+// English completions take them from here when the filter is OFF.
+static const char* const kEnglishVulgar[] = {
+    "asshole", "bastard", "bitch", "bullshit", "dick", "dickhead", "dumbass", "fuck", "fucked", "fucker",
+    "fucking", "motherfucker", "pussy", "shit", "shitty", "stfu", "wtf",
+};
+constexpr int kEnglishVulgarFreq = 150;  // SensitiveWords.englishFreq
+
+bool isEnglishVulgar(const std::u32string& w) {
+    const std::string l = u8(lowerS(w));
+    for (const char* x : kEnglishVulgar)
+        if (l == x) return true;
+    return false;
+}
+
+// PredictionLogic.withVulgarEnglish
+std::vector<std::u32string> withVulgarEnglish(const std::vector<std::pair<std::u32string, int>>& en,
+                                              const std::u32string& typed) {
+    const std::string low = u8(lowerS(typed));
+    std::vector<std::string> extra;
+    for (const char* x : kEnglishVulgar) {
+        const std::string e(x);
+        if (e.size() > low.size() && e.compare(0, low.size(), low) == 0) extra.push_back(e);
+    }
+    std::stable_sort(extra.begin(), extra.end(), [](const std::string& a, const std::string& b) {
+        const int ca = seedCount(a), cb = seedCount(b);
+        return ca != cb ? ca > cb : a < b;
+    });
+    const bool firstUpper = !typed.empty() && isUpperChar(typed[0]);
+    bool allUpper = glen(typed) > 1;
+    for (char32_t c : typed) allUpper = allUpper && isUpperChar(c);
+    std::vector<std::u32string> ex;
+    for (const auto& e : extra) {
+        std::u32string w = u32(e);
+        if (firstUpper) w = allUpper ? text::upper(w) : capitalizeFirst(w);
+        ex.push_back(std::move(w));
+    }
+    std::vector<std::u32string> out;
+    size_t i = 0;
+    for (const auto& m : en) {
+        while (i < ex.size() && m.second < kEnglishVulgarFreq) out.push_back(ex[i++]);
+        out.push_back(m.first);
+    }
+    out.insert(out.end(), ex.begin() + static_cast<std::ptrdiff_t>(i), ex.end());
+    return out;
 }
 
 std::vector<std::u32string> seedNext(const std::u32string& prevLower) {
@@ -476,7 +526,7 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
             all.resize(6);
         }
         for (const auto& w : filterSensitive(all, filterOn))
-            if (!r.english || data_.english.contains(u8(w))) personal.push_back(w);
+            if (!r.english || data_.english.contains(u8(w)) || isEnglishVulgar(w)) personal.push_back(w);
         std::vector<std::u32string> cands;
         Top tri;
         if (wantsNextWord(r) && index_.lexiconId(*r.prev) >= 0 && topNext(*r.prev, r.prev2, 6, tri) && tri.trigram) {
@@ -569,7 +619,19 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
     // English: the raw keys (a–z) — "this" may show as "thí" after Telex.
     const std::u32string key = raw.empty() ? typed : raw;
     const std::u32string src = glen(key) >= static_cast<size_t>(kMinTyped) ? key : typed;
-    const std::vector<std::u32string> en = filterSensitive(englishCompletions(src, kPoolLimit), filterOn);
+    std::vector<std::u32string> en = englishCompletions(src, kPoolLimit);
+    if (filterOn) {
+        en = filterSensitive(en, true);
+    } else {  // PredictionLogic.withVulgarEnglish (lexicon frequency of each hit)
+        const addtones::EnglishLexicon& lx = data_.english;
+        std::vector<std::pair<std::u32string, int>> hits;
+        for (const auto& w : en) {
+            const std::string l = u8(lowerS(w));
+            const size_t i = lx.lowerBound(l);
+            hits.emplace_back(w, i < lx.size() && lx.word(i) == l ? lx.freq(i) : 0);
+        }
+        en = withVulgarEnglish(hits, src);
+    }
     return completions(en, glen(typed) >= glen(src) ? typed : src);
 }
 

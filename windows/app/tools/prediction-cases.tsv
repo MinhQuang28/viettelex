@@ -107,6 +107,17 @@ vãi 			0	1
 vãi 			0	0
 ngon 			0	1
 ngon 			0	0
+# Vulgar seed pairs (18/10/2026): gated by the filter; English vulgar words only with it off
+bú 			0	1
+bú 			0	0
+đầu 			0	1
+sờ 			0	1
+nâng 			0	1
+motherf	motherf	motherf	1	1
+motherf	motherf	motherf	1	0
+Fuc	Fuc	Fuc	1	0
+holy 			1	1
+holy 			1	0
 đị	đị	ddij	0	0
 con 			0	0
 # Completion with the seed next words of the previous word as context (+4)
