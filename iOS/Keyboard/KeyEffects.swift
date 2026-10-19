@@ -3,7 +3,7 @@
 // `keyEffect`, cùng id, cùng quỹ đạo).
 //
 // Luật hiệu năng (feature-flags-perf-policy — gõ mượt là số 1):
-//  • TẮT (mặc định) / chưa có Plus / Chế độ nguồn điện thấp / Giảm chuyển động ⇒ KeyboardView không
+//  • TẮT (mặc định) / chưa có Plus / Chế độ nguồn điện thấp ⇒ KeyboardView không
 //    tạo overlay (`keyEffects == nil`) — đường phím chỉ đọc một biến optional.
 //  • BẬT: chữ chèn TRƯỚC (KeyboardView.tapped → onKey), overlay chỉ ghi toạ độ rồi hẹn MỘT lượt
 //    DispatchQueue.main.async — lượt vẽ chạy sau khi xử lý xong sự kiện chạm.
@@ -110,10 +110,12 @@ enum KeyEffectGate {
     static func allows(_ e: KeyEffect) -> Bool { !e.isPlus || allows }
 }
 
-/// Kiểu thực chạy — hàm thuần (test): tắt / hết Plus / tiết kiệm pin / giảm chuyển động ⇒ Không.
+/// Kiểu thực chạy — hàm thuần (test): tắt / hết Plus / tiết kiệm pin ⇒ Không.
 enum KeyEffectPolicy {
-    static func active(setting: KeyEffect, plus: Bool, lowPower: Bool, reduceMotion: Bool) -> KeyEffect {
-        guard setting != .none, plus, !lowPower, !reduceMotion else { return .none }
+    /// Giảm chuyển động KHÔNG tắt hiệu ứng (Phil 19/10/2026: người bật Giảm chuyển động vẫn muốn
+    /// thấy hiệu ứng mình đã chọn) — chỉ hết Plus / nguồn điện thấp.
+    static func active(setting: KeyEffect, plus: Bool, lowPower: Bool) -> KeyEffect {
+        guard setting != .none, plus, !lowPower else { return .none }
         return setting
     }
 
@@ -122,8 +124,7 @@ enum KeyEffectPolicy {
         let s = KeyEffect.load(d)
         guard s != .none else { return .none }
         return active(setting: s, plus: KeyEffectGate.allows(s),
-                      lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
-                      reduceMotion: UIAccessibility.isReduceMotionEnabled)
+                      lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled)
     }
 }
 

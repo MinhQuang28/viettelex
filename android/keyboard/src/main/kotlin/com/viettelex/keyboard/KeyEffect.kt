@@ -9,7 +9,7 @@ import kotlin.math.sin
  * iOS/Keyboard/KeyEffects.swift: cùng khoá [Keys.KEY_EFFECT] (`keyEffect`), cùng id, cùng quỹ đạo.
  * "Không" (mặc định) ⇒ IME không tạo overlay (0 chi phí). Bật: chữ chèn TRƯỚC, overlay
  * (app/.../ime/KeyEffectView) vẽ ở lượt sau; ≤ [KeyEffectPool.CAP] hạt, mảng cấp sẵn — không cấp
- * phát mỗi khung hình. Tự tắt khi Trình tiết kiệm pin / tắt hiệu ứng động ([KeyEffectPolicy]).
+ * phát mỗi khung hình. Tự tắt khi Trình tiết kiệm pin ([KeyEffectPolicy]).
  */
 enum class KeyEffect(val id: String, val viTitle: String) {
     NONE("none", "Không"), // l10n-key
@@ -82,10 +82,12 @@ object KeyEffectGate {
     fun allows(e: KeyEffect): Boolean = !e.isPlus || allows
 }
 
-/** Kiểu thực chạy — tắt / hết Plus / tiết kiệm pin / tắt hiệu ứng động ⇒ [KeyEffect.NONE]. */
+/** Kiểu thực chạy — tắt / hết Plus / tiết kiệm pin ⇒ [KeyEffect.NONE]. */
 object KeyEffectPolicy {
-    fun active(setting: KeyEffect, plus: Boolean, powerSave: Boolean, animationsOff: Boolean): KeyEffect =
-        if (setting == KeyEffect.NONE || !plus || powerSave || animationsOff) KeyEffect.NONE else setting
+    /** Tắt hiệu ứng động của hệ thống KHÔNG tắt hiệu ứng phím (Phil 19/10/2026) — overlay tự đếm giờ
+     *  (SystemClock), không phụ thuộc ValueAnimator. */
+    fun active(setting: KeyEffect, plus: Boolean, powerSave: Boolean): KeyEffect =
+        if (setting == KeyEffect.NONE || !plus || powerSave) KeyEffect.NONE else setting
 }
 
 /** Ô pool xoay vòng: đủ [capacity] hạt thì hạt cũ nhất bị thay (gõ nhanh không dồn hạt). */

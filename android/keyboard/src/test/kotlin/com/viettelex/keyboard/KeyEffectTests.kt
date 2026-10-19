@@ -70,13 +70,12 @@ class KeyEffectTests {
     }
 
     @Test fun autoDisableConditions() {
-        assertEquals(KeyEffect.HEART, KeyEffectPolicy.active(KeyEffect.HEART, plus = true, powerSave = false, animationsOff = false))
-        assertEquals(KeyEffect.NONE, KeyEffectPolicy.active(KeyEffect.HEART, plus = false, powerSave = false, animationsOff = false))
+        assertEquals(KeyEffect.HEART, KeyEffectPolicy.active(KeyEffect.HEART, plus = true, powerSave = false))
+        assertEquals(KeyEffect.NONE, KeyEffectPolicy.active(KeyEffect.HEART, plus = false, powerSave = false))
         assertEquals("Trình tiết kiệm pin ⇒ tắt", KeyEffect.NONE,
-            KeyEffectPolicy.active(KeyEffect.HEART, plus = true, powerSave = true, animationsOff = false))
-        assertEquals("tắt hiệu ứng động ⇒ tắt", KeyEffect.NONE,
-            KeyEffectPolicy.active(KeyEffect.RIPPLE, plus = true, powerSave = false, animationsOff = true))
-        assertEquals(KeyEffect.NONE, KeyEffectPolicy.active(KeyEffect.NONE, plus = true, powerSave = false, animationsOff = false))
+            KeyEffectPolicy.active(KeyEffect.HEART, plus = true, powerSave = true))
+        // Tắt hiệu ứng động của hệ thống không còn tắt hiệu ứng phím (Phil 19/10/2026).
+        assertEquals(KeyEffect.NONE, KeyEffectPolicy.active(KeyEffect.NONE, plus = true, powerSave = false))
     }
 
     @Test fun poolCapsAndRecyclesOldest() {

@@ -100,13 +100,12 @@ final class KeyEffectTests: XCTestCase {
     // MARK: tự tắt
 
     func testAutoDisableConditions() {
-        XCTAssertEqual(KeyEffectPolicy.active(setting: .heart, plus: true, lowPower: false, reduceMotion: false), .heart)
-        XCTAssertEqual(KeyEffectPolicy.active(setting: .heart, plus: false, lowPower: false, reduceMotion: false), .none)
-        XCTAssertEqual(KeyEffectPolicy.active(setting: .heart, plus: true, lowPower: true, reduceMotion: false), .none,
+        XCTAssertEqual(KeyEffectPolicy.active(setting: .heart, plus: true, lowPower: false), .heart)
+        XCTAssertEqual(KeyEffectPolicy.active(setting: .heart, plus: false, lowPower: false), .none)
+        XCTAssertEqual(KeyEffectPolicy.active(setting: .heart, plus: true, lowPower: true), .none,
                        "Chế độ nguồn điện thấp ⇒ tắt")
-        XCTAssertEqual(KeyEffectPolicy.active(setting: .ripple, plus: true, lowPower: false, reduceMotion: true), .none,
-                       "Giảm chuyển động ⇒ tắt")
-        XCTAssertEqual(KeyEffectPolicy.active(setting: .none, plus: true, lowPower: false, reduceMotion: false), .none)
+        // Giảm chuyển động không còn tắt hiệu ứng (Phil 19/10/2026) — chính sách không có tham số đó.
+        XCTAssertEqual(KeyEffectPolicy.active(setting: .none, plus: true, lowPower: false), .none)
     }
 
     // MARK: hạt / quỹ đạo

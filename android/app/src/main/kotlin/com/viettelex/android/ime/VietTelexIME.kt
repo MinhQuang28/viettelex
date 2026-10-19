@@ -342,8 +342,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         val r = root ?: return
         val fx = if (setting == com.viettelex.keyboard.KeyEffect.NONE) setting else com.viettelex.keyboard.KeyEffectPolicy.active(
             setting, com.viettelex.keyboard.KeyEffectGate.allows(setting),
-            powerSave = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true,
-            animationsOff = !android.animation.ValueAnimator.areAnimatorsEnabled())
+            powerSave = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
         if (fx == com.viettelex.keyboard.KeyEffect.NONE) {
             r.effects = null; kb.effects = null
             return

@@ -33,7 +33,7 @@ struct KeyEffectPickerView: View {
             } header: {
                 Text(L("Chạm một ô để chọn và xem thử."))
             } footer: {
-                Text(L("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Chế độ nguồn điện thấp hoặc Giảm chuyển động."))
+                Text(L("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Chế độ nguồn điện thấp."))
             }
         }
         .bottomBarScrollMargin()

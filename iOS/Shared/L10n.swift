@@ -322,7 +322,7 @@ enum L10n {
         "Cánh hoa": "Petals",
         "Pháo hoa": "Fireworks",
         "Chạm một ô để chọn và xem thử.": "Tap a tile to choose and preview it.",
-        "Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Chế độ nguồn điện thấp hoặc Giảm chuyển động.": "Small shapes float out of the key you press, in the theme's accent color. Drawn after the character is typed, so typing never slows down; turns itself off in Low Power Mode or with Reduce Motion.",
+        "Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Chế độ nguồn điện thấp.": "Small shapes float out of the key you press, in the theme's accent color. Drawn after the character is typed, so typing never slows down; turns itself off in Low Power Mode.",
         "Âm của bạn": "Your sound",
         "Kéo thanh trượt hoặc chọn kiểu để nghe thử. Không nghe thấy? Tắt gạt im lặng (bàn phím cũng im khi gạt).": "Drag the slider or pick a style to preview. Can't hear it? Turn off the silent switch (the keyboard is silent then too).",
         "OK": "OK",

@@ -153,8 +153,8 @@ object L10nTable {
         put("Cánh hoa", "Petals")
         put("Pháo hoa", "Fireworks")
         put("Chạm một ô để chọn và xem thử.", "Tap a tile to choose and preview it.")
-        put("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Trình tiết kiệm pin hoặc tắt hiệu ứng động.",
-            "Small shapes float out of the key you press, in the theme's accent color. Drawn after the character is typed, so typing never slows down; turns itself off with Battery Saver or when animations are off.")
+        put("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Trình tiết kiệm pin.",
+            "Small shapes float out of the key you press, in the theme's accent color. Drawn after the character is typed, so typing never slows down; turns itself off with Battery Saver.")
         put("Âm của bạn", "Your sound")
         put("Âm của bạn: %s giây", "Your sound: %s s")
         put("Chưa có âm — chọn một file âm thanh ngắn (mp3, m4a, ogg, wav…).", "No sound yet — pick a short audio file (mp3, m4a, ogg, wav…).")
