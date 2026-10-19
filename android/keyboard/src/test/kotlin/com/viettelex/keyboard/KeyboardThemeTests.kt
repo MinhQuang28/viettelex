@@ -73,7 +73,7 @@ class KeyboardThemeTests {
             for (bg in listOf(p.bg, bottom)) {
                 assertTrue("$t/$d phím", c.contrast(p.ink, c.over(p.keyFill, bg)) >= 4.5)
                 assertTrue("$t/$d phím chức năng", c.contrast(p.ink, c.over(p.specialFill, bg)) >= 4.5)
-                assertTrue("$t/$d thanh gợi ý", c.contrast(p.ink, bg) >= 4.5)
+                assertTrue("$t/$d thanh gợi ý", c.contrast(p.barInk ?: p.ink, bg) >= 4.5)
             }
             assertTrue("$t/$d nhấn", c.contrast(p.actionInk, p.action) >= 3)
         }

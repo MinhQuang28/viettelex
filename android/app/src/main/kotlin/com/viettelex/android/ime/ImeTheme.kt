@@ -13,6 +13,8 @@ import com.viettelex.keyboard.KeyLabelWeight
 import com.viettelex.keyboard.KeyStyle
 import com.viettelex.keyboard.ThemePalette
 import com.viettelex.keyboard.ThemeSettings
+import com.viettelex.keyboard.chipFill
+import com.viettelex.keyboard.chipInk
 import com.viettelex.keyboard.withTransparency
 
 /**
@@ -99,6 +101,10 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val actionInk = palette.actionInk
     /** Chip (thẻ Dán, highlight category emoji, nhấn slot gợi ý). */
     val chip = palette.chip
+    /** Chữ/icon trên chip thanh gợi ý (thẻ Dán, chip số, pill) — luôn đọc được trên [chip]. */
+    val chipInk = palette.chipInk(systemDark)
+    /** Nền chip với độ mờ hoạt ảnh/nhấn [opacity] — nhân alpha gốc của chip (Kính: trắng 30%), không ghi đè. */
+    fun chipFill(opacity: Float = 1f) = palette.chipFill(opacity)
     /** Ô phóng to / popup: kiểu phím của theme ([KeyPopupStyle]) — giải MỘT lần ở đây, không mỗi lần bấm. */
     val popupStyle: com.viettelex.keyboard.KeyPopupStyle = com.viettelex.keyboard.KeyPopupStyle.make(palette, keyStyle, systemDark)
     /** Người dùng chọn Màu nhấn ⇒ ⇧ bật/Caps tô [action] / [actionInk]. */

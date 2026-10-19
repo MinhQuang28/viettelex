@@ -616,13 +616,11 @@ struct ThemeSpec: Equatable {
     }
 }
 
-/// Danh sách trắng id "sound" / "effect" của theme JSON (Android ThemeExtraIds y hệt).
-/// TODO(merge): lấy từ KeySoundStyle.presets / KeyEffect.allCases khi agent âm thanh / hiệu ứng đã vào main
-/// (phao, piano, jingle, blossom, snow… đang được thêm). Id hợp lệ mà máy chưa có ⇒ chọn theme bỏ qua (ThemeExtras).
+/// Danh sách trắng id "sound" / "effect" của theme JSON = đúng danh sách kiểu âm dựng sẵn / hiệu ứng của app
+/// (KeySoundStyle.presetIDs, KeyEffect) — Android ThemeExtraIds y hệt (fixture chung chốt).
 enum ThemeExtraIds {
-    static let sounds: Set<String> = ["subtle", "wood", "mechanical", "typewriter", "bubble", "phao", "piano", "jingle"]
-    static let effects: Set<String> = ["none", "heart", "bubble", "ripple", "petal", "firework",
-                                       "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow"]
+    static let sounds: Set<String> = Set(KeySoundStyle.presetIDs)
+    static let effects: Set<String> = Set(KeyEffect.allCases.map(\.rawValue))
 }
 
 // MARK: - Đọc / kiểm

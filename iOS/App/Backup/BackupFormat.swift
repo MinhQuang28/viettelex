@@ -57,7 +57,7 @@ enum BackupSettings {
         Spec(key: "keySound", kind: .bool(false)),
         Spec(key: "keySoundVolume", kind: .int(50, 0...100)),
         // Kiểu âm phím; "custom" đi theo nhưng FILE âm không — máy mới thiếu file ⇒ bàn phím dùng mặc định.
-        Spec(key: "keySoundStyle", kind: .string("subtle", ["subtle", "wood", "mechanical", "typewriter", "bubble", "custom"])),
+        Spec(key: "keySoundStyle", kind: .string(KeySoundStyle.defaultStyle.rawValue, KeySoundStyle.allCases.map(\.rawValue))),
         Spec(key: "numberRow", kind: .bool(false)),
         Spec(key: "numberRowFullHeight", kind: .bool(false)),   // chỉ iOS dùng
         Spec(key: "spaceSideKey", kind: .string("comma", ["comma", "period", "both", "off"])),   // "Phím cạnh dấu cách" (SpaceSideKey)

@@ -130,13 +130,14 @@ internal data class FeatureSearchEntry(val viTitle: String, val keywords: String
             FeatureSearchEntry("Phím sẫm khi bấm", "pressed key highlight darken", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Rung phím", "haptic rung vibrate", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Âm thanh phím", "sound click tiếng âm lượng volume kiểu style gỗ cơ máy chữ bong bóng custom", FeaturePage.Phim), // l10n-key
+            FeatureSearchEntry("Âm thanh gõ", "typing sound key sound style kiểu âm hệ thống system click gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc bàn phím cơ mechanical máy chữ typewriter bong bóng bubble", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Telex cho bàn phím cứng", "bluetooth usb dex chromebook hardware", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Theme & ảnh nền", "theme màu chủ đề wallpaper hình nền color tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Độ trong suốt phím", "trong suốt transparent", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Độ trong suốt ký tự", "trong suốt transparent chữ", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Tuỳ chỉnh nâng cao", "màu chữ màu phím màu nhấn accent color colour bo góc tròn vuông corner radius cỡ chữ size phông font độ đậm weight bold đặt lại reset mặc định giao diện theme", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Dán giao diện", "json theme giao diện chép copy paste dán sửa edit nhập import tự tạo custom chia sẻ share", FeaturePage.GiaoDien), // l10n-key
-            FeatureSearchEntry("Hiệu ứng khi bấm phím", "key press effect animation hoạt ảnh trái tim heart bong bóng bubble gợn sóng ripple cánh hoa petal pháo hoa firework plus", FeaturePage.GiaoDien), // l10n-key
+            FeatureSearchEntry("Hiệu ứng khi bấm phím", "key press effect animation hoạt ảnh trái tim heart bong bóng bubble gợn sóng ripple cánh hoa petal pháo hoa firework nháy sáng flash matrix tia sét lightning emoji theo chữ emoji words hoa đào mai tết blossom lửa combo fire mực loang ink sóng nước water wave tuyết rơi snow giáng sinh christmas plus", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Màu nhấn", "accent color colour nhập enter return shift tuỳ chỉnh nâng cao", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Khôi phục giao diện gốc", "reset mặc định default", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Chiều cao hàng phím", "height cao thấp", FeaturePage.GiaoDien), // l10n-key
@@ -631,6 +632,8 @@ private fun KeyLabelSizeRow() = ChoiceRow(Keys.KEY_LABEL_SIZE, Prefs.D.keyLabelS
 
 @Composable
 private fun PhimPage(onBack: () -> Unit) {
+    var pickingSound by remember { mutableStateOf(false) }
+    if (pickingSound) { KeySoundPage(onBack = { pickingSound = false }); return }
     SubPageHeader(FeaturePage.Phim.title, onBack)
     val numberRow by rememberBoolPref(Keys.NUMBER_ROW, Prefs.D.numberRow)
     VTSection(header = tr("Phím")) {
@@ -680,7 +683,7 @@ private fun PhimPage(onBack: () -> Unit) {
         BoolToggle(Keys.HAPTIC_FEEDBACK, Prefs.D.hapticFeedback, tr("Rung phím"), tr("Rung nhẹ mỗi lần chạm phím."))
         HapticStrengthRow()
         RowDivider()
-        KeySoundRows()
+        KeySoundRows(onOpenStyles = { pickingSound = true })
     }
     VTSection(header = tr("Bàn phím cứng")) {
         BoolToggle(Keys.HARDWARE_TELEX, Prefs.D.hardwareTelex, tr("Telex cho bàn phím cứng"),
@@ -728,16 +731,32 @@ private fun HapticStrengthRow() {
     }
 }
 
-/** Âm thanh phím riêng: công tắc + kiểu âm (5 kiểu tổng hợp + âm tự chọn) + âm lượng (nghe thử
- *  khi kéo/chọn) — [com.viettelex.keyboard.KeySoundSynth]. */
+/** Âm thanh phím riêng: công tắc + hàng "Âm thanh gõ" (kiểu đang chọn ›) mở [KeySoundPage] — chỉ
+ *  hiện khi bật. [com.viettelex.keyboard.KeySoundSynth]. */
 @Composable
-private fun KeySoundRows() {
+private fun KeySoundRows(onOpenStyles: () -> Unit) {
     val c = LocalVT.current
-    val ctx = LocalContext.current
     val on by rememberBoolPref(Keys.KEY_SOUND, Prefs.D.keySound)
     BoolToggle(Keys.KEY_SOUND, Prefs.D.keySound, tr("Âm thanh phím"),
         tr("Tiếng phím riêng của VietTelex: chọn kiểu, chỉnh âm lượng. Tắt: dùng âm thanh khi chạm của hệ thống. Im khi máy để Rung hoặc Im lặng."))
     if (!on) return
+    val style by rememberStringPref(Keys.KEY_SOUND_STYLE, Prefs.D.keySoundStyle)
+    RowDivider()
+    VTRow(onClick = onOpenStyles) {
+        Text(tr("Âm thanh gõ"), style = VTType.body, color = c.label, modifier = Modifier.weight(1f))
+        Text("${tr(KeySoundStyle.resolve(style, true).viTitle)} ›", style = VTType.body, color = c.secondary, maxLines = 1)
+    }
+}
+
+/**
+ * "Âm thanh gõ" (Phil 19/10/2026): chọn kiểu âm phím — "Hệ thống" đầu, 11 kiểu tổng hợp + Piano, "Âm của
+ * bạn" cuối. Chạm một kiểu = chọn + nghe thử chữ → xoá → phím chức năng. Âm lượng + nhập âm tự
+ * chọn ở đây (iOS: KeySoundStylePage, cùng bố cục). Mọi kiểu miễn phí.
+ */
+@Composable
+private fun KeySoundPage(onBack: () -> Unit) {
+    val c = LocalVT.current
+    val ctx = LocalContext.current
     var vol by rememberIntPref(Keys.KEY_SOUND_VOLUME, Prefs.D.keySoundVolume)
     var style by rememberStringPref(Keys.KEY_SOUND_STYLE, Prefs.D.keySoundStyle)
     var customDuration by remember { mutableStateOf(KeySoundImport.storedDuration(ctx)) }
@@ -746,6 +765,7 @@ private fun KeySoundRows() {
     val preview = rememberPreview()
     val throttle = remember { PreviewThrottle() }
     val audible = { maxOf(vol, 20) }
+    val current = KeySoundStyle.resolve(style, true)
 
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
         val before = styleBeforeImport
@@ -759,7 +779,7 @@ private fun KeySoundRows() {
             customDuration = o.duration
             style = KeySoundStyle.CUSTOM.id
             notice = if (o.truncated) tr("Âm dài hơn 0,3 giây nên đã được cắt ngắn.") else null
-            preview.playSound(style, audible())
+            preview.playStyle(style, audible())
         } catch (e: KeySoundImport.ImportException) {
             notice = when (e.failure) {
                 KeySoundImport.Failure.SILENT -> tr("File không có tiếng (toàn im lặng).")
@@ -776,48 +796,55 @@ private fun KeySoundRows() {
             return
         }
         style = id
-        preview.playSound(id, audible())
+        preview.playStyle(id, audible())
     }
 
-    RowDivider()
-    VTRow { Text(tr("Kiểu âm"), style = VTType.body, color = c.label) }
-    for (st in KeySoundStyle.entries) {
-        val selected = style == st.id
-        VTRow(onClick = { pick(st.id) }) {
-            Text(tr(st.viTitle), style = VTType.body, color = c.label, modifier = Modifier.weight(1f).padding(start = 12.dp))
-            if (selected) GlyphIcon(Glyph.Check, c.accent, 18.dp)
-        }
-    }
-    if (style == KeySoundStyle.CUSTOM.id || customDuration != null) {
-        Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            val d = customDuration
-            Text(if (d != null) tr("Âm của bạn: %s giây", String.format(Locale.ROOT, "%.2f", d))
-                 else tr("Chưa có âm — chọn một file âm thanh ngắn (mp3, m4a, ogg, wav…)."),
-                style = VTType.footnote, color = if (d != null) c.label else c.secondary)
-            Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                Text(if (d == null) tr("Chọn file âm thanh…") else tr("Chọn âm khác…"), style = VTType.body, color = c.accent,
-                    modifier = Modifier.clickable { styleBeforeImport = style; importer.launch(arrayOf("audio/*")) })
-                if (d != null) Text(tr("Xoá"), style = VTType.body, color = c.red,
-                    modifier = Modifier.clickable {
-                        KeySoundImport.remove(ctx); customDuration = null
-                        if (style == KeySoundStyle.CUSTOM.id) style = KeySoundStyle.DEFAULT.id
-                    })
+    SubPageHeader(tr("Âm thanh gõ"), onBack)
+    VTSection(header = tr("Chạm một kiểu để chọn và nghe thử."),
+        footer = tr("Hệ thống: âm thanh khi chạm của Android — theo Cài đặt → Âm thanh → Âm thanh khi chạm, âm lượng theo hệ thống. Các kiểu khác là tiếng riêng của VietTelex.")) {
+        KeySoundStyle.MENU_ORDER.forEachIndexed { i, st ->
+            if (i > 0) RowDivider()
+            VTRow(onClick = { pick(st.id) }) {
+                Text(tr(st.viTitle), style = VTType.body, color = c.label, modifier = Modifier.weight(1f))
+                if (current == st) GlyphIcon(Glyph.Check, c.accent, 18.dp)
             }
-            Text(tr("Âm được cắt lặng đầu, giữ tối đa 0,3 giây và chỉnh độ to an toàn. File chỉ nằm trên máy này (không có trong sao lưu)."),
-                style = VTType.footnote, color = c.secondary)
         }
     }
-    notice?.let { VTRow { Text(it, style = VTType.footnote, color = c.secondary) } }
-    RowDivider()
-    fun fire(final: Boolean) {
-        if (throttle.shouldFire(vol, SystemClock.uptimeMillis(), final)) preview.playSound(style, vol)
+    if (current == KeySoundStyle.CUSTOM || customDuration != null) {
+        VTSection {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                val d = customDuration
+                Text(if (d != null) tr("Âm của bạn: %s giây", String.format(Locale.ROOT, "%.2f", d))
+                     else tr("Chưa có âm — chọn một file âm thanh ngắn (mp3, m4a, ogg, wav…)."),
+                    style = VTType.footnote, color = if (d != null) c.label else c.secondary)
+                Row(horizontalArrangement = Arrangement.spacedBy(20.dp)) {
+                    Text(if (d == null) tr("Chọn file âm thanh…") else tr("Chọn âm khác…"), style = VTType.body, color = c.accent,
+                        modifier = Modifier.clickable { styleBeforeImport = style; importer.launch(arrayOf("audio/*")) })
+                    if (d != null) Text(tr("Xoá"), style = VTType.body, color = c.red,
+                        modifier = Modifier.clickable {
+                            KeySoundImport.remove(ctx); customDuration = null
+                            if (style == KeySoundStyle.CUSTOM.id) style = KeySoundStyle.DEFAULT.id
+                        })
+                }
+                Text(tr("Âm được cắt lặng đầu, giữ tối đa 0,3 giây và chỉnh độ to an toàn. File chỉ nằm trên máy này (không có trong sao lưu)."),
+                    style = VTType.footnote, color = c.secondary)
+            }
+            notice?.let { VTRow { Text(it, style = VTType.footnote, color = c.secondary) } }
+        }
     }
-    Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-        Text(tr("Âm lượng: %s%%", vol), style = VTType.body, color = c.label)
-        Slider(value = vol.toFloat(), valueRange = 0f..100f, steps = 19,
-            onValueChange = { v -> val n = Math.round(v / 5) * 5; if (n != vol) { vol = n; fire(false) } },
-            onValueChangeFinished = { fire(true) })
-        Text(tr("Kéo thanh trượt hoặc chọn kiểu để nghe thử. Không nghe thấy? Tắt chế độ Rung/Im lặng (bàn phím cũng im khi đó)."),
-            style = VTType.footnote, color = c.secondary)
+    if (current.usesPool) {
+        fun fire(final: Boolean) {
+            if (throttle.shouldFire(vol, SystemClock.uptimeMillis(), final)) preview.playSound(style, vol)
+        }
+        VTSection {
+            Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
+                Text(tr("Âm lượng: %s%%", vol), style = VTType.body, color = c.label)
+                Slider(value = vol.toFloat(), valueRange = 0f..100f, steps = 19,
+                    onValueChange = { v -> val n = Math.round(v / 5) * 5; if (n != vol) { vol = n; fire(false) } },
+                    onValueChangeFinished = { fire(true) })
+                Text(tr("Kéo thanh trượt hoặc chọn kiểu để nghe thử. Không nghe thấy? Tắt chế độ Rung/Im lặng (bàn phím cũng im khi đó)."),
+                    style = VTType.footnote, color = c.secondary)
+            }
+        }
     }
 }

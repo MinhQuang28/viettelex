@@ -8,18 +8,46 @@ import kotlin.math.roundToInt
 import kotlin.math.sin
 import kotlin.math.sqrt
 
-/** Kiểu âm phím (setting [Keys.KEY_SOUND_STYLE]); [id] = giá trị lưu/sao lưu (giống iOS). */
+/**
+ * Kiểu âm phím (setting [Keys.KEY_SOUND_STYLE]); [id] = giá trị lưu/sao lưu (giống iOS).
+ * THỨ TỰ entry = ordinal = seed nhiễu ([KeySoundSynth.seed]) ⇒ CHỈ THÊM CUỐI (giữ mẫu cũ + checksum
+ * chung với iOS). Thứ tự hiển thị: [MENU_ORDER].
+ */
 enum class KeySoundStyle(val id: String, val viTitle: String) {
     SUBTLE("subtle", "Nhẹ nhàng"), // l10n-key
     WOOD("wood", "Gõ gỗ"), // l10n-key
     MECHANICAL("mechanical", "Bàn phím cơ"), // l10n-key
     TYPEWRITER("typewriter", "Máy chữ"), // l10n-key
     BUBBLE("bubble", "Bong bóng"), // l10n-key
-    CUSTOM("custom", "Âm của bạn"); // l10n-key
+    CUSTOM("custom", "Âm của bạn"), // l10n-key
+    /** Âm thanh khi chạm của hệ thống (playSoundEffect) — không SoundPool, miễn phí. iOS: "iOS". */
+    SYSTEM("system", "Hệ thống"), // l10n-key
+    ROCK("rock", "Đá"), // l10n-key
+    POP("pop", "Pop"), // l10n-key
+    WATER("water", "Nước"), // l10n-key
+    VINTAGE("vintage", "Cổ điển"), // l10n-key
+    PHAO("phao", "Pháo"), // l10n-key
+    JINGLE("jingle", "Chuông"), // l10n-key
+    /** Mỗi phím một nốt ([PianoMap]/[PianoSynth]) — không dùng đường 3 tiếng. */
+    PIANO("piano", "Piano"); // l10n-key
+
+    /** true ⇒ phát qua SoundPool riêng; [SYSTEM] ⇒ playSoundEffect, không dựng gì. */
+    val usesPool: Boolean get() = this != SYSTEM
 
     companion object {
+        /** Bật "Âm thanh phím" lần đầu ⇒ "Nhẹ nhàng" (bật công tắc phải NGHE khác đi; "Hệ thống" = như lúc tắt). */
         val DEFAULT = SUBTLE
-        val PRESETS = listOf(SUBTLE, WOOD, MECHANICAL, TYPEWRITER, BUBBLE)
+        /** Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức [KeySoundSynth.baseRecipe]. */
+        val PRESETS = listOf(SUBTLE, WOOD, MECHANICAL, TYPEWRITER, BUBBLE, ROCK, POP, WATER, VINTAGE, PHAO, JINGLE)
+        /** Mọi kiểu dựng sẵn (3 tiếng + Piano mỗi phím một nốt). */
+        val ALL_PRESETS = PRESETS + PIANO
+        /**
+         * DANH SÁCH DUY NHẤT id hợp lệ cho trường "sound" của theme JSON (chọn theme ⇒ đặt
+         * keySoundStyle). Không gồm "system"/"custom". iOS: KeySoundStyle.presetIDs — test chốt trùng.
+         */
+        val PRESET_IDS: List<String> = ALL_PRESETS.map { it.id }
+        /** Thứ tự trong trang "Âm thanh gõ": hệ thống đầu, âm tự chọn cuối (giống iOS menuOrder). */
+        val MENU_ORDER = listOf(SYSTEM) + ALL_PRESETS + CUSTOM
         val IDS: Set<String> = entries.map { it.id }.toSet()
         fun of(id: String?): KeySoundStyle? = entries.firstOrNull { it.id == id }
 
@@ -28,6 +56,9 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
             val s = of(raw) ?: return DEFAULT
             return if (s == CUSTOM && !customAvailable) DEFAULT else s
         }
+
+        /** Kiểu đã lưu có cần SoundPool không. Lạ ⇒ mặc định ⇒ cần; "system" ⇒ không. */
+        fun needsPool(raw: String?): Boolean = resolve(raw, true).usesPool
     }
 }
 
@@ -55,7 +86,7 @@ object KeySoundSynth {
         Noise(amp, delay, hp, lp, tau)
 
     fun baseRecipe(s: KeySoundStyle): Recipe = when (s) {
-        KeySoundStyle.SUBTLE, KeySoundStyle.CUSTOM -> Recipe(
+        KeySoundStyle.SUBTLE, KeySoundStyle.CUSTOM, KeySoundStyle.SYSTEM, KeySoundStyle.PIANO -> Recipe(
             listOf(t(1.0, 500.0, 360.0, tau = 0.007), t(0.24, 1050.0, 900.0, tau = 0.0025)),
             listOf(n(0.30, lp = 1900.0, tau = 0.002)), 0.0016, 0.032, 2600.0, 0.80)
         KeySoundStyle.WOOD -> Recipe(
@@ -73,6 +104,28 @@ object KeySoundSynth {
         KeySoundStyle.BUBBLE -> Recipe(
             listOf(t(1.0, 260.0, 720.0, glide = 0.009, tau = 0.009), t(0.08, 520.0, 1440.0, glide = 0.009, tau = 0.006)),
             emptyList(), 0.003, 0.036, 3000.0, 0.80)
+        // Công thức 4 kiểu thêm 19/10/2026: xem đầu iOS/Shared/KeySoundSynth.swift.
+        KeySoundStyle.ROCK -> Recipe(
+            listOf(t(1.0, 180.0, 150.0, glide = 0.004, tau = 0.005), t(0.40, 180 * 2.35, 150 * 2.35, glide = 0.004, tau = 0.002)),
+            listOf(n(0.60, hp = 150.0, lp = 1600.0, tau = 0.0012)), 0.0005, 0.030, 2200.0, 0.85)
+        KeySoundStyle.POP -> Recipe(
+            listOf(t(1.0, 900.0, 380.0, glide = 0.004, tau = 0.006)),
+            listOf(n(0.15, lp = 2000.0, tau = 0.0008)), 0.0008, 0.030, 3000.0, 0.80)
+        KeySoundStyle.WATER -> Recipe(
+            listOf(t(1.0, 700.0, 1300.0, glide = 0.012, tau = 0.010), t(0.06, 1400.0, 2600.0, glide = 0.012, tau = 0.006)),
+            emptyList(), 0.002, 0.042, 3200.0, 0.80)
+        KeySoundStyle.VINTAGE -> Recipe(
+            listOf(t(0.60, 380.0, 340.0, tau = 0.006), t(0.20, 330.0, 330.0, tau = 0.004, delay = 0.018)),
+            listOf(n(0.80, hp = 300.0, lp = 1500.0, tau = 0.002), n(0.25, hp = 300.0, lp = 1500.0, tau = 0.0015, delay = 0.018)),
+            0.001, 0.040, 1800.0, 0.80)
+        KeySoundStyle.PHAO -> Recipe(
+            listOf(t(0.45, 210.0, 170.0, glide = 0.004, tau = 0.004)),
+            listOf(n(1.0, hp = 300.0, lp = 2000.0, tau = 0.0024), n(0.60, hp = 300.0, lp = 2000.0, tau = 0.0018, delay = 0.013),
+                n(0.40, hp = 300.0, lp = 2000.0, tau = 0.0014, delay = 0.027)),
+            0.0004, 0.046, 2400.0, 0.55)
+        KeySoundStyle.JINGLE -> Recipe(
+            listOf(t(1.0, 880.0, 880.0, tau = 0.012), t(0.55, 886.0, 886.0, tau = 0.014), t(0.22, 880 * 2.76, 880 * 2.76, tau = 0.005)),
+            emptyList(), 0.0008, 0.054, 3600.0, 0.62)
     }
 
     /** Xoá trầm hơn chút; phím chức năng trầm + dài hơn (như iOS). */
@@ -102,6 +155,18 @@ object KeySoundSynth {
         val st = KeySoundStyle.resolve(raw, custom != null)
         return if (st == KeySoundStyle.CUSTOM && custom != null) st to Kind.entries.map { KeySoundCustom.variant(custom, it) }
         else st to Kind.entries.map { samples(st, it) }
+    }
+
+    /** Bản nghe thử khi chọn kiểu: chữ → xoá → phím chức năng, cách nhau [gap] giây lặng (giống iOS). */
+    fun previewSequence(bank: List<FloatArray>, gap: Double = 0.16): FloatArray {
+        val silence = (gap * SAMPLE_RATE).roundToInt()
+        val out = FloatArray(bank.sumOf { it.size } + silence * (bank.size - 1).coerceAtLeast(0))
+        var o = 0
+        bank.forEachIndexed { i, s ->
+            if (i > 0) o += silence
+            s.copyInto(out, o); o += s.size
+        }
+        return out
     }
 
     private fun ramp(t: Double, a: Double): Double = if (a <= 0 || t >= a) 1.0 else 0.5 - 0.5 * cos(PI * t / a)
@@ -234,8 +299,9 @@ object KeySoundSynth {
      * theo "Âm thanh khi chạm" của máy). BẬT ⇒ tiếng riêng, KHÔNG kèm tiếng hệ thống; im khi
      * máy ở chế độ Rung/Im lặng (như Gboard/AOSP LatinIME) hoặc âm lượng 0.
      */
-    fun route(enabled: Boolean, volumePercent: Int, ringerNormal: Boolean): Route = when {
+    fun route(enabled: Boolean, volumePercent: Int, ringerNormal: Boolean, style: String? = null): Route = when {
         !enabled -> Route.SYSTEM
+        !KeySoundStyle.needsPool(style) -> Route.SYSTEM   // kiểu "Hệ thống": như lúc tắt
         !ringerNormal || volumePercent <= 0 -> Route.SILENT
         else -> Route.CUSTOM
     }

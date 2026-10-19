@@ -165,6 +165,7 @@ private:
     void captureReopen(bool restored);
     bool needsStandaloneWRunRestore() const;
     bool shouldRestoreRaw() const;
+    bool composedEndsWithK() const;
     bool composedHasDiacritic() const;
     bool composedIsRecognizedEnglish() const;
     bool isRecognizedEnglish() const;

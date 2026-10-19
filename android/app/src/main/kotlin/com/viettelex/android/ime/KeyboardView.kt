@@ -140,10 +140,18 @@ class KeyboardView(
     var shift = Shift.ON
         private set(v) {
             if (field == v) return
+            val old = field
             field = v
             // Đang vuốt: shift đổi tạm quanh cú vuốt — lượt gợi ý sau vuốt tự vẽ lại bar.
             if (!swiping) listener?.onShiftChanged()
+            if (old == Shift.CAPS) feedback.shiftChanged(pedalShift(v))   // Piano: Caps tắt ⇒ damper
         }
+
+    private fun pedalShift(s: Shift): com.viettelex.keyboard.PianoPedal.Shift = when (s) {
+        Shift.OFF -> com.viettelex.keyboard.PianoPedal.Shift.OFF
+        Shift.ON -> com.viettelex.keyboard.PianoPedal.Shift.ON
+        Shift.CAPS -> com.viettelex.keyboard.PianoPedal.Shift.CAPS
+    }
     private var returnLabel = "return"
     private var inputKind = InputKind.NORMAL
     private var needsGlobe = false
@@ -510,6 +518,8 @@ class KeyboardView(
     private var fxPending = false
     private var fxX = 0f
     private var fxY = 0f
+    private var fxW = 0f
+    private var fxH = 0f
 
     private fun fxMark(k: LaidKey) {
         val fx = effects ?: return
@@ -520,6 +530,8 @@ class KeyboardView(
         // Toạ độ overlay (cùng khung balloon: gốc view cha) = toạ độ phím + vị trí view này.
         fxX = (k.left + k.right) / 2f + left - fx.left
         fxY = (k.top + k.bottom) / 2f + top - fx.top
+        // Chỉ TOẠ ĐỘ + cỡ phím: hiệu ứng (vd mảnh vỡ Tia sét) vẽ trên overlay, không đụng phím thật.
+        fxW = k.right - k.left; fxH = k.bottom - k.top
     }
 
     /** Sau khi phím đã tới IME: chữ / ký tự / dấu cách mới mang hiệu ứng. */
@@ -527,7 +539,7 @@ class KeyboardView(
         if (!fxPending) return
         fxPending = false
         val fx = effects ?: return
-        if (k is Key.Letter || k is Key.Text || k == Key.Space || k == Key.DoubleSpacePeriod) fx.burst(fxX, fxY)
+        if (k is Key.Letter || k is Key.Text || k == Key.Space || k == Key.DoubleSpacePeriod) fx.burst(fxX, fxY, fxW, fxH)
     }
 
     /** Mọi phím đi qua đây: plane tìm emoji giữ phím cho ô tìm, còn lại tới IME. */
@@ -1294,7 +1306,7 @@ class KeyboardView(
         if (effects != null) fxMark(k)
         when (k.kind) {
             KeyKind.LETTER -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 pressDown(pid, k)
                 if (keyPreview) showBalloon(k, if (shift == Shift.OFF) k.label else k.upper)
                 val ch = (if (shift == Shift.OFF) k.label else k.upper)[0]
@@ -1326,19 +1338,19 @@ class KeyboardView(
                 if (!defer && alts.isNotEmpty()) armAlt(pid, k, x, y, shiftWas)
             }
             KeyKind.CHAR -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 pressDown(pid, k)
                 if (keyPreview) showBalloon(k, k.label)
                 commits.arm(k, textFire(k.insert))
                 armPopover(pid, k, x, y)
             }
             KeyKind.PAD -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 press(k)
                 commits.arm(k, textFire(k.insert))
             }
             KeyKind.PUNCT -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 press(k)
                 commits.arm(k, textFire(k.insert))
                 if (isVoiceComma(k)) {
@@ -1370,12 +1382,13 @@ class KeyboardView(
                 }
             }
             KeyKind.SHIFT -> {
-                feedback.click(Feedback.MODIFIER, this)
                 val now = SystemClock.uptimeMillis()
                 shiftBeforeTap = shift
                 shift = if (now - lastShiftTap < SHIFT_DOUBLE_MS) Shift.CAPS
                         else if (shift == Shift.OFF) Shift.ON else Shift.OFF
                 lastShiftTap = now
+                // Sau khi đổi: Piano cần biết Shift một-lần hay Caps (pedal); kiểu khác = tiếng chức năng.
+                feedback.shiftPressed(pedalShift(shift), this)
                 shiftPtr = pid; shiftUsedAsModifier = false
                 k.pressed = true
                 invalidate()   // mọi nhãn chữ đổi hoa/thường

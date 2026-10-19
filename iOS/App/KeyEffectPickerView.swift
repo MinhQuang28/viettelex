@@ -34,6 +34,7 @@ struct KeyEffectPickerView: View {
                 Text(L("Chạm một ô để chọn và xem thử."))
             } footer: {
                 Text(L("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Chế độ nguồn điện thấp."))
+                    + Text(" ") + Text(L("Matrix, Mực loang, Sóng nước chạy dưới phím; Matrix chỉ chạy khi đang gõ. Nháy sáng được giới hạn nhịp và độ sáng cho dịu mắt. Emoji theo chữ hiện khi vừa gõ xong từ như \"haha\", \"cảm ơn\", \"chúc mừng\"."))
             }
         }
         .bottomBarScrollMargin()
@@ -125,11 +126,18 @@ final class KeyEffectPreviewView: UIView {
                                                                     : UIColor(red: 0.82, green: 0.84, blue: 0.87, alpha: 1))
         key.backgroundColor = palette.keyFill.ui
         label.textColor = palette.keyInk.ui
-        overlay = KeyEffectOverlay.install(effect, color: palette.accent.alpha(1).ui, in: self, existing: overlay)
+        // Matrix / Mực loang / Sóng nước: dưới phím mẫu (như bàn phím thật).
+        overlay = KeyEffectOverlay.install(effect, color: palette.accent.alpha(1).ui, keyFill: palette.keyFill.ui,
+                                           dark: palette.isDark, in: self, keys: key, existing: overlay)
         if play != lastPlay {
             lastPlay = play
             layoutIfNeeded()
-            overlay?.emit(at: key.center)
+            if effect == .emojiword { overlay?.queueEmoji("😂") }   // như vừa gõ "haha" + dấu cách
+            if effect == .combo {
+                // Xem thử combo: một tràng phím nhanh ⇒ lên mức lửa cao nhất.
+                for _ in 0..<ComboMeter.thresholds[2] { overlay?.emit(key: key.frame); overlay?.flush() }
+            }
+            overlay?.emit(key: key.frame)
         }
     }
 

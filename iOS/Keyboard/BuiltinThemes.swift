@@ -78,7 +78,7 @@ enum BuiltinThemesData {
       "v": 1, "id": "tetMai", "name": {"vi": "Tết mai vàng", "en": "Golden Apricot Tết"}, "sound": "phao", "effect": "blossom",
       "light": {"bg": "#FFF3D6", "key": "#FFFDF6", "special": "#F3D9A4", "ink": "#7A1414", "accent": "#C62828",
                 "fn": "#F6E2B3", "fnInk": "#B71C1C", "deco": {"motif": "mai", "color": "#CCE5A000"}},
-      "dark": {"bg": "#2B1608", "key": "#47260F", "special": "#5E3418", "ink": "#FFE6A6", "accent": "#D32F2F",
+      "dark": {"bg": "#2B1608", "key": "#47260F", "special": "#5E3418", "ink": "#FFE6A6", "accent": "#C62828",
                "fn": "#3A1E0C", "fnInk": "#FFC94A", "deco": {"motif": "mai", "color": "#66FFC107"}}
     },
     {

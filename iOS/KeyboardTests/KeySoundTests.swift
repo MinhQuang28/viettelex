@@ -5,6 +5,8 @@ import AVFoundation
 final class KeySoundTests: XCTestCase {
     override func tearDown() {
         KeyboardView.customSoundEnabled = false
+        KeyboardView.pianoEnabled = false
+        KeyboardView.pianoPedal = PianoPedal()
         KeyboardView.debugLastClickRoute = nil
         super.tearDown()
     }
@@ -52,11 +54,71 @@ final class KeySoundTests: XCTestCase {
         XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:modifier")
     }
 
-    /// Chỉ bật đường riêng khi có cả setting lẫn Full Access.
+    /// Chỉ bật đường riêng khi có cả setting lẫn Full Access — và kiểu không phải "iOS".
     func testActivationNeedsFullAccess() {
-        XCTAssertFalse(KeyboardViewController.customKeySoundActive(setting: false, fullAccess: true))
-        XCTAssertFalse(KeyboardViewController.customKeySoundActive(setting: true, fullAccess: false))
-        XCTAssertTrue(KeyboardViewController.customKeySoundActive(setting: true, fullAccess: true))
+        XCTAssertFalse(KeyboardViewController.customKeySoundActive(setting: false, style: "subtle", fullAccess: true))
+        XCTAssertFalse(KeyboardViewController.customKeySoundActive(setting: true, style: "subtle", fullAccess: false))
+        XCTAssertTrue(KeyboardViewController.customKeySoundActive(setting: true, style: "subtle", fullAccess: true))
+        XCTAssertTrue(KeyboardViewController.customKeySoundActive(setting: true, style: "rock", fullAccess: true))
+        // "iOS" (19/10/2026): click hệ thống, có hay không Full Access đều KHÔNG dùng đường riêng.
+        XCTAssertFalse(KeyboardViewController.customKeySoundActive(setting: true, style: "system", fullAccess: true))
+        XCTAssertFalse(KeyboardViewController.customKeySoundActive(setting: true, style: "system", fullAccess: false))
+        // Giá trị lạ ⇒ mặc định (tổng hợp) ⇒ vẫn đường riêng.
+        XCTAssertTrue(KeyboardViewController.customKeySoundActive(setting: true, style: "loud", fullAccess: true))
+    }
+
+    /// Trang "Âm thanh gõ": "iOS" đầu, "Âm của bạn" cuối, mỗi kiểu đúng một lần; chỉ "iOS" không cần engine.
+    func testMenuOrderAndSystemStyle() {
+        XCTAssertEqual(KeySoundStyle.menuOrder.first, .system)
+        XCTAssertEqual(KeySoundStyle.menuOrder.last, .custom)
+        XCTAssertEqual(Set(KeySoundStyle.menuOrder), Set(KeySoundStyle.allCases))
+        XCTAssertEqual(KeySoundStyle.menuOrder.count, KeySoundStyle.allCases.count)
+        XCTAssertEqual(KeySoundStyle.defaultStyle, .subtle, "bật công tắc ⇒ Nhẹ nhàng, không phải click hệ thống")
+        for st in KeySoundStyle.allCases { XCTAssertEqual(st.usesEngine, st != .system, "\(st)") }
+        XCTAssertFalse(KeySoundStyle.needsEngine("system"))
+        XCTAssertTrue(KeySoundStyle.needsEngine("water"))
+        XCTAssertTrue(KeySoundStyle.needsEngine(nil))
+        XCTAssertTrue(KeySoundStyle.needsEngine("xyz"))
+        XCTAssertFalse(KeySoundStyle.presets.contains(.system))
+        XCTAssertFalse(KeySoundStyle.presets.contains(.custom))
+        // Chỉ số case = seed nhiễu: các kiểu cũ giữ nguyên vị trí (mẫu + checksum không đổi).
+        XCTAssertEqual(KeySoundStyle.allCases.map(\.rawValue),
+                       ["subtle", "wood", "mechanical", "typewriter", "bubble", "custom", "system", "rock", "pop", "water", "vintage",
+                        "phao", "jingle", "piano"])
+        XCTAssertEqual(L10n.en["iOS"], "System click")
+        for st in KeySoundStyle.allCases { XCTAssertNotNil(L10n.en[st.viTitle], "\(st) thiếu bản EN") }
+        XCTAssertNotNil(L10n.en["Âm thanh gõ"])
+    }
+
+    /// Kiểu "iOS": KeySound không dựng AVAudioEngine dù bị gọi prepare/startNow (0 chi phí như TẮT).
+    func testSystemStyleBuildsNoEngine() {
+        let ks = KeySound.shared
+        ks.debugWant(false); ks.stopNow()
+        XCTAssertFalse(ks.hasEngine)
+        ks.setStyle("system")
+        defer { ks.setStyle(KeySoundStyle.defaultStyle.rawValue); ks.debugWant(false); ks.stopNow() }
+        ks.prepare()
+        ks.debugWant(true)
+        XCTAssertFalse(ks.startNow())
+        XCTAssertFalse(ks.play(.letter))
+        // play() khi engine vắng hẹn khởi động lại nền — chờ cho queue chạy rồi kiểm lại.
+        let deadline = Date().addingTimeInterval(0.3)
+        while Date() < deadline { RunLoop.current.run(until: Date().addingTimeInterval(0.02)) }
+        XCTAssertFalse(ks.hasEngine)
+        XCTAssertFalse(ks.isRunning)
+    }
+
+    /// Nghe thử khi chọn kiểu: chữ + lặng + xoá + lặng + chức năng, đúng thứ tự.
+    func testPreviewSequence() {
+        let bank = KeySoundKind.allCases.map { KeySoundSynth.samples(.rock, $0) }
+        let gap = Int((0.16 * KeySoundSynth.sampleRate).rounded())
+        let seq = KeySoundSynth.previewSequence(bank)
+        XCTAssertEqual(seq.count, bank.map(\.count).reduce(0, +) + 2 * gap)
+        XCTAssertEqual(Array(seq[0..<bank[0].count]), bank[0])
+        let d0 = bank[0].count + gap
+        XCTAssertEqual(Array(seq[d0..<d0 + bank[1].count]), bank[1])
+        XCTAssertTrue(seq[bank[0].count..<d0].allSatisfy { $0 == 0 })
+        XCTAssertEqual(Array(seq.suffix(bank[2].count)), bank[2])
     }
 
     func testSamplesDeterministicNonEmptyDistinct() {
@@ -105,7 +167,206 @@ final class KeySoundTests: XCTestCase {
             XCTAssertEqual(s, want, accuracy: 0.01, "\(st)")
         }
     }
-    static let goldenAbsSum: [(KeySoundStyle, Double)] = [(.subtle, 169.1699), (.wood, 192.4240), (.mechanical, 239.0849), (.typewriter, 139.7659), (.bubble, 233.6785)]
+    static let goldenAbsSum: [(KeySoundStyle, Double)] = [(.subtle, 169.1699), (.wood, 192.4240), (.mechanical, 239.0849), (.typewriter, 139.7659), (.bubble, 233.6785),
+                                                          (.rock, 128.7247), (.pop, 154.4214), (.water, 246.5762), (.vintage, 139.9505),
+                                                          (.phao, 61.5246), (.jingle, 206.7064)]
+
+    /// 4 kiểu thêm 19/10/2026: chốt cả mẫu xoá + phím chức năng (Android: crossPlatformChecksumsNewKinds).
+    func testCrossPlatformChecksumsNewKinds() {
+        let golden: [(KeySoundStyle, Double, Double)] = [(.rock, 125.7988, 176.4305), (.pop, 153.6654, 183.0577),
+                                                         (.water, 236.6294, 280.8465), (.vintage, 167.8816, 218.2744),
+                                                         (.phao, 69.1895, 93.5815), (.jingle, 212.6919, 254.5561)]
+        for (st, del, mod) in golden {
+            XCTAssertEqual(KeySoundSynth.samples(st, .delete).reduce(0.0) { $0 + Double(abs($1)) }, del, accuracy: 0.01, "\(st)")
+            XCTAssertEqual(KeySoundSynth.samples(st, .modifier).reduce(0.0) { $0 + Double(abs($1)) }, mod, accuracy: 0.01, "\(st)")
+        }
+    }
+
+    /// Pháo (Tết) phải NHỎ hơn các kiểu khác: đỉnh + RMS dưới "Gõ gỗ" ở cả 3 loại phím; Chuông không to hơn.
+    func testPhaoQuietJingleModerate() {
+        for k in KeySoundKind.allCases {
+            let wood = KeySoundSynth.samples(.wood, k), phao = KeySoundSynth.samples(.phao, k), bell = KeySoundSynth.samples(.jingle, k)
+            XCTAssertLessThan(KeySoundSynth.rms(phao), KeySoundSynth.rms(wood), "\(k)")
+            XCTAssertLessThan(phao.map(abs).max() ?? 1, wood.map(abs).max() ?? 0, "\(k)")
+            XCTAssertLessThanOrEqual(KeySoundSynth.rms(bell), KeySoundSynth.rms(wood), "\(k)")
+            XCTAssertLessThanOrEqual(bell.map(abs).max() ?? 1, wood.map(abs).max() ?? 0, "\(k)")
+        }
+        // Mỗi loại phím nổ hơi khác (seed riêng) — tất định.
+        XCTAssertNotEqual(KeySoundSynth.samples(.phao, .letter), KeySoundSynth.samples(.phao, .delete))
+    }
+
+    /// Danh sách id DUY NHẤT cho trường "sound" của theme JSON; "theme" (đã bỏ) ⇒ mặc định.
+    func testPresetIDsForThemeJSON() {
+        XCTAssertEqual(KeySoundStyle.presetIDs, ["subtle", "wood", "mechanical", "typewriter", "bubble", "rock", "pop",
+                                                 "water", "vintage", "phao", "jingle", "piano"])
+        for bad in ["system", "custom", "theme"] { XCTAssertFalse(KeySoundStyle.presetIDs.contains(bad), bad) }
+        XCTAssertEqual(KeySoundStyle.resolve("theme", customAvailable: true), .subtle)
+        let d = UserDefaults(suiteName: "vt-keysound-theme")!
+        d.removePersistentDomain(forName: "vt-keysound-theme")
+        let saved = UserDefaultsProvider.shared
+        UserDefaultsProvider.shared = d
+        defer { UserDefaultsProvider.shared = saved; d.removePersistentDomain(forName: "vt-keysound-theme") }
+        d.set("theme", forKey: "keySoundStyle")
+        XCTAssertEqual(KeyboardSettings.load().keySoundStyle, "subtle")
+        d.set("piano", forKey: "keySoundStyle")
+        XCTAssertEqual(KeyboardSettings.load().keySoundStyle, "piano")
+    }
+
+    // MARK: Piano
+
+    /// Ánh xạ phím → nốt (chung Android PianoTests.mapping): ngũ cung C D E G A, trái→phải đi lên,
+    /// hàng dưới thấp nhất, hàng số cao hơn hàng trên một quãng tám.
+    func testPianoMapping() {
+        let rows = PianoMap.rows.enumerated().map { r, row in (0..<row.count).map { PianoMap.midi(row: r, col: $0) } }
+        XCTAssertEqual(rows, [[84, 86, 88, 91, 93, 96, 98, 100, 103, 105],
+                              [72, 74, 76, 79, 81, 84, 86, 88, 91, 93],
+                              [60, 62, 64, 67, 69, 72, 74, 76, 79],
+                              [48, 50, 52, 55, 57, 60, 62]])
+        XCTAssertEqual(PianoMap.midi(forKey: "q"), 72)
+        XCTAssertEqual(PianoMap.midi(forKey: "Q"), 72)
+        XCTAssertEqual(PianoMap.midi(forKey: "m"), 62)
+        XCTAssertEqual(PianoMap.midi(forKey: "0"), 105)
+        XCTAssertEqual(PianoMap.midi(forKey: ","), 69)   // 44 % 10 = 4 ⇒ A4
+        XCTAssertEqual(PianoMap.midi(forKey: "đ"), 67)   // 273 % 10 = 3 ⇒ G4
+        XCTAssertEqual(PianoMap.midi(forKey: nil), 60)
+        XCTAssertEqual(PianoMap.notes.count, 25)
+        for m in PianoMap.notes + PianoMap.spaceChord + PianoMap.returnChord {
+            XCTAssertTrue([0, 2, 4, 7, 9].contains(m % 12), "\(m) ngoài ngũ cung")
+        }
+        for c in "1234567890qwertyuiopasdfghjklzxcvbnm,.?!'đ" {
+            XCTAssertTrue(PianoMap.notes.contains(PianoMap.midi(forKey: String(c))), "\(c)")
+        }
+        XCTAssertEqual(PianoMap.returnChord[1] - PianoMap.returnChord[0], 7)   // chủ + năm
+    }
+
+    /// Tổng hợp tất định + checksum chung Android (PianoTests.synthChecksums).
+    func testPianoSynthParity() {
+        XCTAssertEqual(PianoSynth.note(60), PianoSynth.note(60))
+        func sum(_ a: [Float]) -> Double { a.reduce(0.0) { $0 + Double(abs($1)) } }
+        let golden: [(Int, Double, Double)] = [(48, 850.5462, 1019.8846), (60, 726.9604, 875.0490), (72, 644.0318, 751.4913),
+                                               (93, 523.8961, 599.4355), (105, 481.8828, 593.3767)]
+        for (m, n, sus) in golden {
+            let a = PianoSynth.note(m)
+            XCTAssertEqual(a.count, 17_640)
+            XCTAssertEqual(sum(a), n, accuracy: 0.02, "\(m)")
+            XCTAssertEqual(sum(PianoSynth.note(m, sustain: true)), sus, accuracy: 0.02, "\(m) ngân")
+            XCTAssertEqual(Double(a.map(abs).max() ?? 0), PianoSynth.notePeak, accuracy: 1e-4)
+            XCTAssertEqual(a.first ?? 1, 0, accuracy: 1e-6); XCTAssertEqual(a.last ?? 1, 0, accuracy: 1e-6)
+            // Độ to 50 ms đầu ngang các kiểu khác (Gõ gỗ RMS ≈ 0.18).
+            XCTAssertEqual(KeySoundSynth.rms(Array(a[0..<1102])), 0.175, accuracy: 0.03, "\(m)")
+        }
+        XCTAssertEqual(sum(PianoSynth.space()), 447.8193, accuracy: 0.02)
+        XCTAssertEqual(sum(PianoSynth.returnChord()), 375.5216, accuracy: 0.02)
+        XCTAssertEqual(sum(PianoSynth.delete()), 159.2696, accuracy: 0.02)
+        XCTAssertEqual(sum(PianoSynth.pedal()), 268.6398, accuracy: 0.02)
+        XCTAssertEqual(PianoSynth.note(60, sustain: true).count, 27_563)
+    }
+
+    /// Bộ nốt dựng lúc hiện ≤ 2 MB; bộ ngân (dựng lười khi đạp pedal) báo riêng.
+    func testPianoMemoryBound() {
+        XCTAssertEqual(PianoSynth.normalBankBytes, 1_971_272)
+        XCTAssertLessThanOrEqual(PianoSynth.normalBankBytes, 2 * 1024 * 1024)
+        XCTAssertEqual(PianoSynth.sustainBankBytes, 2_756_300)
+        let real = PianoMap.notes.reduce(0) { $0 + PianoSynth.note($1).count } + PianoSynth.space().count
+            + PianoSynth.returnChord().count + PianoSynth.delete().count + PianoSynth.pedal().count
+        XCTAssertEqual(real * 4, PianoSynth.normalBankBytes)
+    }
+
+    /// Pedal: Shift một-lần ngân ĐÚNG một nốt; Caps ngân tới khi tắt (damper); Shift tự bật không tính.
+    func testPianoPedalStateMachine() {
+        var p = PianoPedal()
+        XCTAssertFalse(p.noteTyped())
+        XCTAssertEqual(p.shiftPressed(.on), .pedalDown)
+        XCTAssertTrue(p.noteTyped())
+        XCTAssertFalse(p.noteTyped(), "một-lần nhả sau một nốt")
+        XCTAssertEqual(p.shiftPressed(.on), .pedalDown)
+        XCTAssertEqual(p.shiftPressed(.caps), .pedalDown)   // chạm đúp ⇒ Caps
+        XCTAssertTrue(p.noteTyped()); XCTAssertTrue(p.noteTyped())
+        XCTAssertEqual(p.shiftPressed(.off), .damper)
+        XCTAssertFalse(p.noteTyped())
+        XCTAssertEqual(p.shiftPressed(.on), .pedalDown)
+        XCTAssertEqual(p.shiftPressed(.off), .none)          // huỷ một-lần: không damper
+        XCTAssertFalse(p.isDown)
+        _ = p.shiftPressed(.caps)
+        XCTAssertEqual(p.shiftChanged(.on), .damper)         // Caps tự tắt (rời plane…)
+        XCTAssertEqual(p.shiftChanged(.off), .none)
+        XCTAssertEqual(p.state, .off)
+    }
+
+    /// Pool giọng: 4 phím cùng lúc ⇒ 4 giọng KHÁC nhau, hạ 1/√4; xoay vòng quay lại giọng 0 sau 8.
+    func testVoicePoolChord() {
+        var pool = VoicePool(size: 8)
+        let v = (0..<4).map { _ in pool.allocate(now: 10) }
+        XCTAssertEqual(Set(v).count, 4)
+        XCTAssertEqual(pool.simultaneous(now: 10), 4)
+        XCTAssertEqual(VoicePool.chordScale(4), 0.5, accuracy: 1e-6)
+        XCTAssertEqual(VoicePool.chordScale(1), 1)
+        XCTAssertEqual(pool.simultaneous(now: 10.5), 0, "hết cửa sổ hợp âm")
+        for _ in 0..<4 { _ = pool.allocate(now: 11) }
+        XCTAssertEqual(pool.allocate(now: 12), 0, "round-robin")
+        // 8 giọng chồng nhau cực đại: tổng đỉnh × chordScale ≤ 1 (không vỡ tiếng ở 100 %).
+        XCTAssertLessThanOrEqual(Double(VoicePool.chordScale(8)) * 8 * PianoSynth.notePeak, 1.0)
+    }
+
+    /// Đường phím: Piano ⇒ nốt theo nhãn + pedal; kiểu khác GIỮ đường 3 tiếng (không đổi).
+    func testPianoRoute() {
+        KeyboardView.customSoundEnabled = true
+        KeyboardView.pianoEnabled = false
+        KeyboardView.clickLetter("a")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:letter")
+        KeyboardView.clickSpace()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:modifier")
+        KeyboardView.clickReturn()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:modifier")
+        KeyboardView.clickShift(.on)
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:modifier")
+        XCTAssertEqual(KeyboardView.pianoPedal.state, .off, "kiểu khác không đụng pedal")
+
+        KeyboardView.pianoEnabled = true
+        KeyboardView.clickLetter("a")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:60")
+        KeyboardView.clickLetter("p")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:93")
+        KeyboardView.clickSpace()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:space")
+        KeyboardView.clickReturn()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:returnKey")
+        KeyboardView.clickDelete()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:delete")
+        KeyboardView.clickShift(.on)
+        KeyboardView.clickLetter("q")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:72:sustain")
+        KeyboardView.clickLetter("q")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:72")
+        // Hệ thống ("iOS") vẫn là click hệ thống.
+        KeyboardView.customSoundEnabled = false
+        KeyboardView.clickLetter("a")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "system")
+    }
+
+    /// Engine thật (bỏ qua nếu máy test không có audio): 4 nốt cùng khung ⇒ 4 giọng khác nhau cùng kêu.
+    func testPianoEngineChord() throws {
+        let ks = KeySound.shared
+        ks.debugWant(false); ks.stopNow()
+        ks.setStyle("piano")
+        ks.debugWant(true)
+        defer { ks.setStyle(KeySoundStyle.defaultStyle.rawValue); ks.debugWant(false); ks.stopNow() }
+        guard ks.startNow() else { throw XCTSkip("không có audio output trên máy test") }
+        XCTAssertEqual(ks.activeStyle, .piano)
+        var voices = Set<Int>()
+        for m in [60, 64, 67, 72] {
+            XCTAssertTrue(ks.playPiano(.note(m), sustain: false))
+            voices.insert(ks.lastPianoVoice)
+        }
+        XCTAssertEqual(voices.count, 4)
+        XCTAssertEqual(ks.pianoSimultaneous, 4)
+        // Rời Piano ⇒ về đường 3 tiếng.
+        ks.setStyle("wood")
+        XCTAssertTrue(ks.startNow())
+        XCTAssertEqual(ks.activeStyle, .wood)
+        XCTAssertTrue(ks.play(.letter))
+        XCTAssertFalse(ks.playPiano(.note(60), sustain: false))
+    }
 
     func testStyleResolveAndBankFallback() {
         XCTAssertEqual(KeySoundStyle.resolve(nil, customAvailable: true), .subtle)
@@ -113,6 +374,8 @@ final class KeySoundTests: XCTestCase {
         XCTAssertEqual(KeySoundStyle.resolve("wood", customAvailable: false), .wood)
         XCTAssertEqual(KeySoundStyle.resolve("custom", customAvailable: false), .subtle)
         XCTAssertEqual(KeySoundStyle.resolve("custom", customAvailable: true), .custom)
+        XCTAssertEqual(KeySoundStyle.resolve("system", customAvailable: false), .system)
+        XCTAssertEqual(KeySoundStyle.resolve("vintage", customAvailable: false), .vintage)
         let miss = KeySoundSynth.bank("custom", custom: nil)
         XCTAssertEqual(miss.style, .subtle)
         XCTAssertEqual(miss.samples[0], KeySoundSynth.samples(.subtle, .letter))
@@ -284,6 +547,8 @@ final class KeySoundTests: XCTestCase {
         defer { UserDefaultsProvider.shared = saved; d.removePersistentDomain(forName: "vt-keysound-style") }
         d.set("mechanical", forKey: "keySoundStyle")
         XCTAssertEqual(KeyboardSettings.load().keySoundStyle, "mechanical")
+        d.set("system", forKey: "keySoundStyle")
+        XCTAssertEqual(KeyboardSettings.load().keySoundStyle, "system")
         d.set("loud", forKey: "keySoundStyle")
         XCTAssertEqual(KeyboardSettings.load().keySoundStyle, "subtle")
     }
@@ -300,8 +565,14 @@ final class KeySoundTests: XCTestCase {
         XCTAssertEqual(back.settings?["keySound"], .bool(true))
         let st = #"{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"android","settings":{"keySoundStyle":"bubble"}}"#
         XCTAssertEqual(try BackupCodec.decode(Data(st.utf8)).settings?["keySoundStyle"], .string("bubble"))
+        for id in ["system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano"] {
+            let j = #"{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"android","settings":{"keySoundStyle":"\#(id)"}}"#
+            XCTAssertEqual(try BackupCodec.decode(Data(j.utf8)).settings?["keySoundStyle"], .string(id), id)
+        }
         let bad = #"{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"android","settings":{"keySoundStyle":"loud"}}"#
         XCTAssertNil(try BackupCodec.decode(Data(bad.utf8)).settings?["keySoundStyle"])
+        let theme = #"{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"android","settings":{"keySoundStyle":"theme"}}"#
+        XCTAssertNil(try BackupCodec.decode(Data(theme.utf8)).settings?["keySoundStyle"], "\"Theo giao diện\" đã bỏ")
     }
 
     /// Đo trên simulator: chi phí gọi play() ở đường nóng + độ trễ output engine báo.

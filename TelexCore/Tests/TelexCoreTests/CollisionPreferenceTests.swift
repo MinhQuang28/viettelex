@@ -28,6 +28,15 @@ final class CollisionPreferenceTests: XCTestCase {
         XCTAssertEqual(sentence("his", vietnamese: false), "hí")
     }
 
+    /// Issue #127 (19/10/2026): đuôi -k (ták, ák, rík, mák) không phải từ Việt phổ thông ⇒
+    /// bật "Ưu tiên tiếng Việt khi trùng" vẫn ra từ tiếng Anh.
+    func testKFinalNeverWinsCollision() {
+        for w in ["task", "ask", "mask", "risk", "disk", "tasks"] {
+            XCTAssertEqual(sentence(w, vietnamese: true), w, w)
+        }
+        XCTAssertEqual(sentence("last", vietnamese: true), "lát")   // đuôi khác vẫn tiếng Việt thắng
+    }
+
     func testEnglishWinsIsTheOldBehavior() {
         XCTAssertEqual(sentence("last", vietnamese: false), "last")
         XCTAssertEqual(sentence("list", vietnamese: false), "list")

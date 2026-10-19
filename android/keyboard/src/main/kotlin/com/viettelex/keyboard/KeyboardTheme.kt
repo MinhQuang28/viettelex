@@ -195,6 +195,24 @@ fun ThemePalette.withTransparency(keyboard: Int, labels: Int, systemDark: Boolea
     return p
 }
 
+/**
+ * Nền chip thanh gợi ý (thẻ Dán "Nội dung vừa copy", chip số clipboard, pill Khôi phục / Hoàn tác) khi vẽ
+ * với độ mờ [opacity] (hoạt ảnh thu gọn, nhấn): NHÂN vào alpha gốc của [ThemePalette.chip], không ghi đè.
+ * Bug 19/10/2026 (Android, theme tối): StripView đặt `paint.alpha = 255` ⇒ chip bán trong (Kính tối =
+ * trắng 30%, chip sau độ trong suốt phím) thành trắng ĐẶC, chữ trắng trên đó biến mất.
+ */
+fun ThemePalette.chipFill(opacity: Float = 1f): Int = ThemeColor.withAlpha(chip, opacity.coerceIn(0f, 1f))
+
+/**
+ * Chữ / icon trên chip thanh gợi ý: [ThemePalette.keyInk] nếu đọc được (≥ 3:1) trên chip đã trộn lên nền
+ * bar; không thì đen/trắng — tuỳ chỉnh màu chữ/phím đổi chữ nhưng không đổi chip.
+ */
+fun ThemePalette.chipInk(systemDark: Boolean): Int {
+    val c = ThemeColor
+    val behind = c.over(if (wallpaper) wallpaperOverlay else bg, KeyboardTransparency.systemBackdrop(systemDark))
+    return KeyboardTransparency.readable(keyInk, c.over(chipFill(), behind))
+}
+
 enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolean) {
     SYSTEM("system", "Hệ thống", false),
     OLED("oled", "Tối OLED", false),
@@ -401,14 +419,12 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
 class MotifSub(val sx: Double, val sy: Double, val segs: List<DoubleArray>)
 
 /**
- * Danh sách trắng id "sound" / "effect" của theme JSON — iOS ThemeExtraIds y hệt.
- * TODO(merge): lấy từ KeySoundStyle.PRESETS / KeyEffect.entries khi agent âm thanh / hiệu ứng đã vào main
- * (phao, piano, jingle, blossom, snow… đang được thêm). Id hợp lệ mà máy chưa có ⇒ chọn theme bỏ qua ([ThemeExtras]).
+ * Danh sách trắng id "sound" / "effect" của theme JSON = đúng danh sách kiểu âm dựng sẵn / hiệu ứng của app
+ * ([KeySoundStyle.PRESET_IDS], [KeyEffect]) — iOS ThemeExtraIds y hệt (fixture chung chốt).
  */
 object ThemeExtraIds {
-    val SOUNDS: Set<String> = setOf("subtle", "wood", "mechanical", "typewriter", "bubble", "phao", "piano", "jingle")
-    val EFFECTS: Set<String> = setOf("none", "heart", "bubble", "ripple", "petal", "firework",
-        "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow")
+    val SOUNDS: Set<String> get() = KeySoundStyle.PRESET_IDS.toSet()
+    val EFFECTS: Set<String> get() = KeyEffect.entries.map { it.id }.toSet()
 }
 
 /**
@@ -429,8 +445,8 @@ object ThemeExtras {
 
     /** Hiệu ứng có trên máy + được phép (Plus) — id chưa có ⇒ bỏ qua. */
     fun effectAllowed(id: String): Boolean = KeyEffect.entries.firstOrNull { it.id == id }?.let(KeyEffectGate::allows) ?: false
-    /** Kiểu âm có sẵn. TODO(merge): cổng Plus theo từng kiểu âm nếu agent âm thanh khoá kiểu nào. */
-    fun soundAllowed(id: String): Boolean = KeySoundStyle.PRESETS.any { it.id == id }
+    /** Kiểu âm dựng sẵn (kiểu âm không thuộc Plus — trang Âm thanh gõ chọn tự do). */
+    fun soundAllowed(id: String): Boolean = id in KeySoundStyle.PRESET_IDS
 
     /** Gọi NGAY sau khi lưu theme vừa chọn — đọc/ghi qua hai hàm (SharedPreferences ở app). */
     fun applyOnSelect(st: KeyStyle, soundOn: Boolean, write: (key: String, value: String) -> Unit): Outcome {

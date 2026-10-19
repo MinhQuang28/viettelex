@@ -388,7 +388,8 @@ class TelexEngine {
             if (toneCancelAt < 0 && tonesFolded) return true
             return composedHasDiacritic()
         }
-        if (rawIsEnglishCollision() && !(collisionPrefersVietnamese && composedIsValidSyllable())) return true
+        // Đuôi -k (ták/ák/rík) không thắng bảng collision (issue #127) — song sinh Swift.
+        if (rawIsEnglishCollision() && !(collisionPrefersVietnamese && composedIsValidSyllable() && !composedEndsWithK())) return true
         if (upperToneKey || rawIsEnglishException() ||
             (!composedIsValidSyllable() && !isTeencodeKeep())
         ) return true
@@ -439,6 +440,8 @@ class TelexEngine {
         val n = lowerAsciiInto(raw, rawCount, EnglishContextWords.maxLength)
         return n > 0 && EnglishContextWords.contractionTails.contains(wordBuf, n)
     }
+
+    private fun composedEndsWithK(): Boolean = pCount > 0 && lBase[pCount - 1] == 'k'.code
 
     private fun composedHasDiacritic(): Boolean {
         if (pTone != T.NONE) return true

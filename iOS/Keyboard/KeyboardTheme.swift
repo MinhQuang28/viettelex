@@ -528,8 +528,8 @@ enum ThemeExtras {
 
     /// Hiệu ứng có trên máy + được phép (Plus) — id chưa có (hiệu ứng mới chưa vào bản này) ⇒ bỏ qua.
     static func effectAllowed(_ id: String) -> Bool { KeyEffect(rawValue: id).map(KeyEffectGate.allows) ?? false }
-    /// Kiểu âm có sẵn trên máy. TODO(merge): cổng Plus theo từng kiểu âm nếu agent âm thanh khoá kiểu nào.
-    static func soundAllowed(_ id: String) -> Bool { KeySoundStyle.presets.contains { $0.rawValue == id } }
+    /// Kiểu âm dựng sẵn (kiểu âm không thuộc Plus — trang Âm thanh gõ chọn tự do).
+    static func soundAllowed(_ id: String) -> Bool { KeySoundStyle.presetIDs.contains(id) }
 
     /// Gọi NGAY sau khi lưu theme vừa chọn. Ghi App Group (cùng khoá trang Âm thanh / Hiệu ứng).
     @discardableResult

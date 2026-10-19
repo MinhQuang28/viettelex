@@ -144,6 +144,11 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
     private var pasteL = 0f; private var pasteR = 0f; private var pasteT = 0f; private var pasteB = 0f
     private var pasteShowSub = true
     private val chipPaint = theme.fill(theme.chip)
+    /**
+     * Độ mờ chip (hoạt ảnh / nhấn, 0…255) NHÂN vào alpha gốc của chip — không `chipPaint.alpha = …`: chip bán
+     * trong (Kính tối = trắng 30%, độ trong suốt phím) sẽ thành trắng đặc, chữ trắng biến mất (bug 19/10/2026).
+     */
+    private fun setChipOpacity(a: Int) { chipPaint.color = theme.chipFill(a / 255f) }
     private val pressPaint = theme.fill(theme.withAlpha(theme.barInk, 0.10f))
     private var pressed = T_NONE
     private var pressedIndex = 0
@@ -446,15 +451,15 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
             c.drawRoundRect(emojiL[i] + inset, barCy - hh, emojiR[i] - inset, barCy + hh, hh, hh, pressPaint)
         }
         if (chipCount > 0) {
-            chipText.color = theme.barInk; chipText.alpha = alpha
+            chipText.color = theme.chipInk; chipText.alpha = alpha
             val ci = theme.dp(3f)
             for (i in 0 until chipCount) {
                 val s = slotText[i] ?: continue
-                chipPaint.alpha = if (pressed == T_SLOT && pressedIndex == i) (alpha * 0.8f).toInt() else alpha
+                setChipOpacity(if (pressed == T_SLOT && pressedIndex == i) (alpha * 0.8f).toInt() else alpha)
                 c.drawRoundRect(slotL[i] + ci, barCy - hh, slotR[i] - ci, barCy + hh, hh, hh, chipPaint)
                 c.drawText(s, (slotL[i] + slotR[i]) / 2, barCy + chipTextOff, chipText)
             }
-            chipPaint.alpha = 255
+            setChipOpacity(255)
             return
         }
         wordPaint.color = theme.barInk; wordPaint.alpha = alpha
@@ -498,24 +503,24 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         val t = TextUtils.ellipsize(text, chipText, maxW, trunc).toString()
         val w = chipText.measureText(t) + 2 * padH
         val l = (width - w) / 2
-        chipPaint.alpha = if (pressed == T_RESTORE || pressed == T_PILL) (alpha * 0.8f).toInt() else alpha
+        setChipOpacity(if (pressed == T_RESTORE || pressed == T_PILL) (alpha * 0.8f).toInt() else alpha)
         c.drawRoundRect(l, cy - h / 2, l + w, cy + h / 2, h / 2, h / 2, chipPaint)
-        chipPaint.alpha = 255
-        chipText.color = theme.barInk; chipText.alpha = alpha
+        setChipOpacity(255)
+        chipText.color = theme.chipInk; chipText.alpha = alpha
         c.drawText(t, width / 2f, cy + chipTextOff, chipText)
     }
 
     private fun drawPaste(c: Canvas, alpha: Int) {
-        chipPaint.alpha = if (pressed == T_PASTE) (alpha * 0.8f).toInt() else alpha
+        setChipOpacity(if (pressed == T_PASTE) (alpha * 0.8f).toInt() else alpha)
         val r = (pasteB - pasteT) / 2
         c.drawRoundRect(pasteL, pasteT, pasteR, pasteB, r, r, chipPaint)
-        chipPaint.alpha = 255
-        iconPaint.color = theme.withAlpha(theme.barInk, alpha / 255f)
+        setChipOpacity(255)
+        iconPaint.color = theme.withAlpha(theme.chipInk, alpha / 255f)
         ImeIcons.draw(c, ImeIcons.CLIPBOARD, pasteIconCx, pasteIconCy, theme.dp(18f), iconPaint)
-        pasteTitle.alpha = alpha
+        pasteTitle.color = theme.chipInk; pasteTitle.alpha = alpha
         c.drawText(pasteTitleText, pasteTextX, pasteTitleBase, pasteTitle)
         if (pasteShowSub) {
-            pasteSub.color = theme.withAlpha(theme.barInk, 0.7f * alpha / 255f)
+            pasteSub.color = theme.withAlpha(theme.chipInk, 0.7f * alpha / 255f)
             c.drawText(pasteSubText, pasteSubX, pasteSubBase, pasteSub)
         }
     }

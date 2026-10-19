@@ -477,7 +477,8 @@ bool TelexEngine::shouldRestoreRaw() const {
         if (toneCancelAt_ < 0 && tonesFolded_) return true;
         return composedHasDiacritic();
     }
-    if (rawIsEnglishCollision() && !(collisionPrefersVietnamese && composedIsValidSyllable())) return true;
+    // Đuôi -k (ták/ák/rík) không thắng bảng collision (issue #127) — song sinh Swift.
+    if (rawIsEnglishCollision() && !(collisionPrefersVietnamese && composedIsValidSyllable() && !composedEndsWithK())) return true;
     if (upperToneKey_ || rawIsEnglishException() || (!composedIsValidSyllable() && !isTeencodeKeep()))
         return true;
     if (contextualEnglish && previousWordEnglish_ &&
@@ -524,6 +525,10 @@ bool TelexEngine::rawIsContractionTail() const {
     char w[kCapacity];
     int n = lowerAsciiInto(raw_, rawCount_, gen::kEnglishContextMaxLength, w);
     return n > 0 && inEnglishList(gen::kContractionTails, w, n);
+}
+
+bool TelexEngine::composedEndsWithK() const {
+    return pCount_ > 0 && letters_[pCount_ - 1].base == 'k';
 }
 
 bool TelexEngine::composedHasDiacritic() const {

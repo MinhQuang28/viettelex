@@ -165,7 +165,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var shift: ShiftState = .on {        // Apple: sentence start = shifted
         // Thanh gợi ý theo Shift như Gboard (SuggestionCase) — báo controller khi đổi.
         // Đang vuốt: shift đổi tạm (trả lại/nhả quanh cú vuốt) — swipeEnded tự vẽ lại bar.
-        didSet { if shift != oldValue, !swipeActive { onShiftChange?() } }
+        didSet {
+            if shift != oldValue, !swipeActive { onShiftChange?() }
+            if oldValue == .caps, shift != .caps { Self.pianoShiftChanged(shift == .on ? .on : .off) }
+        }
     }
     /// Shift/Caps Lock vừa đổi (tay, đầu câu, nhả sau một chữ, rời plane chữ…).
     var onShiftChange: (() -> Void)?
@@ -355,7 +358,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         letterKeys.removeAll(); shiftKeys = []; crossRowConstraints = []
         spaceBar = nil; spaceLogo = nil; spaceCode = nil; indentedRow = nil
         overlayPanel?.removeFromSuperview(); overlayPanel = nil
-        keyEffects = nil; fxPoint = nil
+        keyEffects?.halt(); keyEffects = nil; fxRect = nil
         wallpaperView.image = nil
         wallpaperLoadedFor = .zero
         themeImageView.image = nil; foregroundView.image = nil; themeScreenLoadedFor = nil
@@ -1754,7 +1757,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                                            systemDark: systemDark, wallpaper: wallpaperActive))
         if balloonMade { balloon.invalidateStyle() }
         // Hiệu ứng theo màu nhấn MỚI (đổi sáng/tối giữa chừng).
-        keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui) }
+        keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui,
+                                      keyFill: palette.keyFill.ui, dark: palette.isDark) }
         applyBackdrop()
     }
 
@@ -3080,7 +3084,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// Phím return theo returnKeyType của ô (xám + icon, hoặc xanh + chữ/mũi tên).
     private func returnButton() -> KeyButton {
         let ret = controlButton(title: returnTitle == "return" ? "" : returnTitle,
-                                armed: true) { [weak self] in
+                                armed: true, isReturn: true) { [weak self] in
             self?.tapped(.newline)
         }
         ret.accessibilityLabel = returnTitle == "return" ? L("Xuống dòng") : returnTitle
@@ -3179,7 +3183,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         space.pressedBackground = specialFill      // space sẫm lại khi đè
         space.accessibilityLabel = L("Dấu cách")
         if primary { spaceBar = space; installSpaceMark(on: space) }
-        space.addAction(UIAction { _ in Self.clickModifier() }, for: .touchDown)
+        space.addAction(UIAction { _ in Self.clickSpace() }, for: .touchDown)
         space.addTarget(self, action: #selector(spaceTouchDown(_:event:)), for: .touchDown)
         // Vuốt đổi ngôn ngữ (SpaceFlick): theo dõi ngón — công tắc tắt ⇒ handler thoát ngay.
         space.addTarget(self, action: #selector(spaceDrag(_:event:)),
@@ -3995,6 +3999,12 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// "Âm thanh phím" (setting keySound + Full Access): BẬT ⇒ tiếng riêng qua KeySound,
     /// KHÔNG kèm playInputClick (không kêu đôi). TẮT ⇒ y như cũ (click hệ thống).
     nonisolated(unsafe) static var customSoundEnabled = false
+    /// Kiểu "Piano" (cùng customSoundEnabled): mỗi phím một nốt theo nhãn phím (PianoMap) — controller
+    /// bật khi kiểu = piano. Kiểu khác: đường 3 tiếng như cũ.
+    nonisolated(unsafe) static var pianoEnabled = false
+    /// Pedal ngân của Piano (Shift/Caps người dùng bấm).
+    nonisolated(unsafe) static var pianoPedal = PianoPedal()
+    static var pianoActive: Bool { customSoundEnabled && pianoEnabled }
     #if DEBUG
     /// Test hook: đường âm lần bấm gần nhất — "system" | "custom:<loại>".
     nonisolated(unsafe) static var debugLastClickRoute: String?
@@ -4022,9 +4032,54 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if KeyHaptics.shared.play() { return }
         AudioServicesPlaySystemSound(1519)   // dự phòng: Core Haptics không chạy được
     }
-    static func clickLetter() { feedback(.letter) }
-    static func clickDelete() { feedback(.delete) }
+    /// Phím ký tự; `key` = nhãn phím (Piano chọn nốt theo vị trí). Kiểu khác bỏ qua `key`.
+    static func clickLetter(_ key: String? = nil) {
+        if pianoActive { piano(.note(PianoMap.midi(forKey: key)), typed: true); return }
+        feedback(.letter)
+    }
+    static func clickDelete() {
+        if pianoActive { piano(.delete, typed: false); return }
+        feedback(.delete)
+    }
     static func clickModifier() { feedback(.modifier) }
+    /// Phím cách: Piano ⇒ hợp âm trầm nhẹ; kiểu khác ⇒ tiếng phím chức năng như cũ.
+    static func clickSpace() {
+        if pianoActive { piano(.space, typed: false); return }
+        feedback(.modifier)
+    }
+    /// Enter: Piano ⇒ hợp âm "kết" (chủ + năm); kiểu khác ⇒ tiếng phím chức năng.
+    static func clickReturn() {
+        if pianoActive { piano(.returnKey, typed: false); return }
+        feedback(.modifier)
+    }
+    /// Phím Shift vừa bấm, `result` = trạng thái SAU khi bấm. Piano ⇒ tiếng pedal (xuống) hoặc damper
+    /// (tắt Caps); kiểu khác ⇒ tiếng phím chức năng như cũ.
+    static func clickShift(_ result: PianoPedal.Shift) {
+        guard pianoActive else { feedback(.modifier); return }
+        switch pianoPedal.shiftPressed(result) {
+        case .pedalDown: KeySound.shared.playPiano(.pedal, sustain: false)
+        case .damper: KeySound.shared.damper()
+        case .none: break
+        }
+        #if DEBUG
+        debugLastClickRoute = "piano:pedal:\(pianoPedal.state)"
+        #endif
+        if hapticsEnabled { impact() }
+    }
+    /// Shift đổi không do bấm phím Shift (rời plane…): Caps tắt ⇒ damper.
+    static func pianoShiftChanged(_ now: PianoPedal.Shift) {
+        guard pianoActive, pianoPedal.shiftChanged(now) == .damper else { return }
+        KeySound.shared.damper()
+    }
+    private static func piano(_ ev: PianoEvent, typed: Bool) {
+        let sustain = typed ? pianoPedal.noteTyped() : pianoPedal.isDown
+        KeySound.shared.playPiano(ev, sustain: sustain)
+        #if DEBUG
+        if case .note(let m) = ev { debugLastClickRoute = "piano:\(m)\(sustain ? ":sustain" : "")" }
+        else { debugLastClickRoute = "piano:\(ev)" }
+        #endif
+        if hapticsEnabled { impact() }
+    }
     /// Nấc vuốt ⌫ thêm/bớt một từ: chỉ âm (không rung), theo đường âm đang chọn.
     static func clickWordStep() {
         if customSoundEnabled { KeySound.shared.play(.delete) } else { UIDevice.current.playInputClick() }
@@ -4069,7 +4124,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // ăn"). Rollover vẫn đúng vì mỗi down tự chèn ký tự của nó.
         b.addAction(UIAction { [weak self, weak b] _ in
             guard let self, let b else { return }
-            Self.clickLetter()                       // feedback tức thì
+            Self.clickLetter(s)                      // feedback tức thì (Piano: nốt theo phím)
             self.showBalloon(over: b, text: b.currentTitle ?? title)
             self.fxMark(b)
             self.shiftBeforeLastLetter = self.shift
@@ -4292,7 +4347,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             armPadAlternate(b, alt: hint)
         }
         b.addAction(UIAction { [weak self, weak b] _ in
-            Self.clickLetter()
+            Self.clickLetter(s)
             if let self, let b { self.showBalloon(over: b, text: s); self.fxMark(b) }
         }, for: .touchDown)
         b.addAction(UIAction { [weak self] _ in self?.hideBalloonAfterTap() },
@@ -4378,10 +4433,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// `fire`: lúc nào chạy action (mặc định nhấc tay). `.down` cho phím đổi plane
     /// (123/ABC/#+=) như stock — không còn phụ thuộc touch-up (bị hệ thống huỷ sát vùng
     /// 🌐/mic, hoặc ngón trượt) — nguồn "chuyển lại không ăn, phải ấn lần nữa".
-    private func controlButton(title: String, armed: Bool = false, fire: ControlFire = .up,
+    private func controlButton(title: String, armed: Bool = false, fire: ControlFire = .up, isReturn: Bool = false,
                                action: @escaping () -> Void) -> KeyButton {
         let b = baseButton(title: title, special: true)
-        b.addAction(UIAction { _ in Self.clickModifier() }, for: .touchDown)
+        b.addAction(UIAction { _ in if isReturn { Self.clickReturn() } else { Self.clickModifier() } }, for: .touchDown)
         if armed { armCommit(b, fire: action) }
         else if case .down = fire {
             // Phím đổi plane (123/ABC/#+=) đổi ở touchDown ⇒ phím vừa chạm bị gỡ ngay; phím
@@ -4455,11 +4510,12 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // touch-up thì chữ đã kịp chốt trước khi shift bật.
         b.addAction(UIAction { [weak self] _ in
             guard let self else { return }
-            Self.clickModifier()
             let now = CACurrentMediaTime()
             if now - self.lastShiftTap < 0.3 { self.shift = .caps }
             else { self.shift = (self.shift == .off) ? .on : .off }
             self.lastShiftTap = now
+            // Sau khi đổi trạng thái: Piano cần biết Shift một-lần hay Caps (pedal); kiểu khác = tiếng chức năng.
+            Self.clickShift(self.shift == .caps ? .caps : (self.shift == .on ? .on : .off))
             self.applyShiftAppearance()
         }, for: .touchDown)
         b.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
@@ -5829,26 +5885,29 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
     private func tapped(_ key: Key) {
         // Hiệu ứng khi bấm phím: lấy điểm đã đánh dấu (fxMark), chữ chèn TRƯỚC rồi mới hẹn vẽ.
-        let fx = fxPoint
-        fxPoint = nil
+        let fx = fxRect
+        fxRect = nil
         if handleSearchKey(key) { return }
         onKey(key)
-        if let fx, let o = keyEffects { o.emit(at: fx) }
+        if let fx, let o = keyEffects { o.emit(key: fx) }
     }
 
     // MARK: Hiệu ứng khi bấm phím (KeyEffects.swift) — TẮT ⇒ overlay nil, đường phím chỉ đọc optional.
     private(set) var keyEffects: KeyEffectOverlay?
-    /// Tâm phím vừa chạm (toạ độ self) — chỉ ghi khi hiệu ứng bật; `tapped` tiêu thụ.
-    private var fxPoint: CGPoint?
+    /// Khung phím vừa chạm (toạ độ self) — chỉ ghi khi hiệu ứng bật; `tapped` tiêu thụ. Chỉ là TOẠ ĐỘ:
+    /// hiệu ứng (vd mảnh vỡ của Tia sét) không bao giờ đụng tới view phím thật.
+    private var fxRect: CGRect?
     @inline(__always) private func fxMark(_ v: UIView) {
         guard keyEffects != nil else { return }
-        fxPoint = convert(CGPoint(x: v.bounds.midX, y: v.bounds.midY), from: v)
+        fxRect = convert(v.bounds, from: v)
     }
     /// Đọc cài đặt lúc hiện (applyAppearance): kiểu + cổng Plus + nguồn điện thấp + giảm chuyển động.
     private func configureKeyEffects() {
+        // Matrix / Mực loang / Sóng nước: dải DƯỚI phím (ngay dưới rowsContainer, trên nền / ảnh nền).
         keyEffects = KeyEffectOverlay.install(KeyEffectPolicy.current(UserDefaultsProvider.shared),
-                                              color: palette.accent.alpha(1).ui, in: self, existing: keyEffects)
-        if keyEffects == nil { fxPoint = nil }
+                                              color: palette.accent.alpha(1).ui, keyFill: palette.keyFill.ui,
+                                              dark: palette.isDark, in: self, keys: rowsContainer, existing: keyEffects)
+        if keyEffects == nil { fxRect = nil }
     }
 
     #if DEBUG
@@ -6291,6 +6350,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         letterKeys.first { $0.base == s }.map { ($0.button.titleLabel?.font, $0.button.layer.cornerRadius, $0.button.bounds.size) }
     }
     /// Test hook: frame phím chữ (toạ độ self).
+    /// Thứ tự lớp: nền (màu / ảnh theme / ảnh nền / lớp tối) + hàng phím.
+    var debugBackdropViews: [UIView] { [themeBackdrop, themeImageView, wallpaperView, wallpaperDim] }
+    var debugRowsContainer: UIView { rowsContainer }
     func debugLetterFrame(_ s: String) -> CGRect? {
         letterKeys.first { $0.base == s }.map { convert($0.button.bounds, from: $0.button) }
     }
