@@ -110,8 +110,8 @@ final class KeyFeedbackPreview {
             sessionReady = true
         }
         if key != playerKey || player == nil {
-            if raw == KeySoundStyle.piano.rawValue {   // Piano: giai điệu ngắn / một nốt C4 (22.05 kHz)
-                let s = kind == nil ? PianoSynth.previewMelody() : PianoSynth.note(60)
+            if let inst = KeyInstrument.of(raw) {   // Piano / Đàn tranh: giai điệu ngắn / một nốt C4 (22.05 kHz)
+                let s = kind == nil ? inst.previewMelody() : inst.note(60)
                 player = try? AVAudioPlayer(data: KeySoundSynth.wav(s, sampleRate: Int(PianoSynth.sampleRate)))
             } else {
                 let custom = raw == KeySoundStyle.custom.rawValue ? KeySoundCustom.load(KeySoundCustom.fileURL) : nil

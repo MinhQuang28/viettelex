@@ -248,6 +248,8 @@ enum KeyboardTheme: String, CaseIterable {
     case blackHeart, greenFloral, sage, neon, pink
     // Lễ / mùa (10/2026, hình vẽ vector tự thiết kế): Tết, Tết mai vàng, Giáng sinh, Giáng sinh tuyết, Piano.
     case tet, tetMai, xmas, xmasSnow, piano
+    // Sen Việt (19/10/2026): hồng sen + xanh lá sen, motif hoa sen, âm đàn tranh.
+    case sen
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
     // Hệ thống + Màu nhấn D6336C (KeyStyleStore.migrate). Id lạ / đã bỏ luôn về Hệ thống.
 
@@ -271,6 +273,7 @@ enum KeyboardTheme: String, CaseIterable {
         case .xmas: return L("Giáng sinh")
         case .xmasSnow: return L("Giáng sinh tuyết")
         case .piano: return L("Piano")
+        case .sen: return L("Sen Việt")
         }
     }
 
@@ -295,7 +298,8 @@ enum KeyboardTheme: String, CaseIterable {
         case .system, .oled, .contrast: return false
         case .peach, .mint, .sky, .lavender, .glass,
              .blackHeart, .greenFloral, .sage, .neon, .pink,
-             .tet, .tetMai, .xmas, .xmasSnow, .piano: return true
+             .tet, .tetMai, .xmas, .xmasSnow, .piano,
+             .sen: return true
         }
     }
 
@@ -352,7 +356,11 @@ enum KeyboardTheme: String, CaseIterable {
 struct KeyboardDecoration: Equatable {
     /// Danh sách trắng (theme JSON chỉ nhận các id này — Android ThemeDeco.MOTIFS y hệt). Tim / hoa vẽ riêng;
     /// mai / đào / bông tuyết / sao / nốt nhạc là dữ liệu hình (`shape`) chung Android.
-    enum Motif: String, CaseIterable { case hearts, flowers, mai, dao, snowflake, star, notes }
+    enum Motif: String, CaseIterable {
+        case hearts, flowers, mai, dao, snowflake, star, notes
+        // Sen Việt (19/10/2026).
+        case lotus
+    }
     var motif: Motif
     var color: RGBA
     /// Mật độ % ("Giao diện JSON" deco.density, 50…200): bước ngang = stepX × 100 / density.
@@ -498,6 +506,17 @@ struct KeyboardDecoration: Equatable {
             let stem = Sub(start: (0.01, 0.3), segs: [[0.01, -0.48], [0.07, -0.48], [0.07, 0.3]])
             let flag = Sub(start: (0.07, -0.48), segs: [[0.1, -0.3, 0.38, -0.3, 0.3, -0.02], [0.3, -0.2, 0.18, -0.26, 0.07, -0.28]])
             return [head, stem, flag]
+        case .lotus:
+            // Hoa sen (tự vẽ): 5 cánh nhọn toả từ gốc — cánh giữa cao nhất, hai cặp nghiêng thấp dần (mỗi cánh một
+            // vòng cubic, cùng chiều quay) — ngồi trên đài / mặt nước hình thấu kính.
+            let by = 0.28, up = -Double.pi / 2
+            func petal(_ a: Double, _ r: Double, _ d: Double) -> Sub {
+                Sub(start: (0, by), segs: [[r * cos(a - d), by + r * sin(a - d), r * cos(a + d), by + r * sin(a + d), 0, by]])
+            }
+            return [petal(up, 0.95, 0.3), petal(up - 0.5, 0.8, 0.3), petal(up + 0.5, 0.8, 0.3),
+                    petal(up - 1.1, 0.6, 0.32), petal(up + 1.1, 0.6, 0.32),
+                    Sub(start: (-0.38, by), segs: [[-0.15, by - 0.1, 0.15, by - 0.1, 0.38, by],
+                                                   [0.15, by + 0.16, -0.15, by + 0.16, -0.38, by]])]
         }
     }
 }

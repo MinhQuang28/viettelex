@@ -101,6 +101,13 @@ internal object BuiltinThemesData {
       "light": {"bg": "#000000", "key": "#FAFAF7", "special": "#85827B", "ink": "#111111", "accent": "#A4161A",
                 "fn": "#111111", "fnInk": "#FFFFFF", "border": "#33FFFFFF", "deco": {"motif": "notes", "color": "#66D4AF37"}},
       "dark": "same"
+    },
+    {
+      "v": 1, "id": "sen", "name": {"vi": "Sen Việt", "en": "Vietnamese Lotus"}, "sound": "dantranh", "effect": "petal",
+      "light": {"bg": "#FCE4EC", "key": "#FFFFFF", "special": "#F8BBD0", "ink": "#14421A", "accent": "#EC6A9C",
+                "accentInk": "#33091C", "fn": "#2E7D32", "fnInk": "#FFFFFF", "deco": {"motif": "lotus", "color": "#66EC6A9C"}},
+      "dark": {"bg": "#0D1A11", "key": "#1E3324", "special": "#2E4A35", "ink": "#FCE4EC", "accent": "#EC6A9C",
+               "accentInk": "#33091C", "fn": "#15281B", "fnInk": "#F48FB1", "deco": {"motif": "lotus", "color": "#66F48FB1"}}
     }
   ]
 }
