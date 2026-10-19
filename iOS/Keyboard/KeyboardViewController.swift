@@ -309,7 +309,8 @@ final class KeyboardViewController: UIInputViewController {
             flickEnabled: spaceFlickSetting)
         if language == .en { bridge.setEnglish(true, proxy: Proxy(p: textDocumentProxy)); warmUpEnglish() }
         keyboard.configureSpaceFlick(enabled: spaceFlickSetting, language: language)
-        keyboard.configureKeyAlternates(numbers: settings.longPressNumbers, symbols: settings.longPressSymbols)
+        keyboard.configureKeyAlternates(numbers: settings.longPressNumbers, symbols: settings.longPressSymbols,
+                                        holdShift: settings.holdShiftSymbols)
         warmUpData()
         swipeSuggest = nil
         recentEnglish = []; langRecent = []
@@ -902,7 +903,9 @@ final class KeyboardViewController: UIInputViewController {
             restoreUndo = nil; undoOfferActive = false
         case .text(let s):                            // numbers, symbols
             // Bàn số lớn: số chèn THẲNG (không phải phím dấu VNI của từ đang gõ — từ được chốt).
-            if !keyboard.keypadShown, let d = Self.singleDigit(s), bridge.vniDigit(d, proxy: proxy) {
+            // Giữ ⇧ + phím chữ (ShiftHold): người dùng muốn SỐ ⇒ nguyên văn, không phải phím dấu VNI.
+            if !keyboard.keypadShown, !keyboard.literalTextInFlight,
+               let d = Self.singleDigit(s), bridge.vniDigit(d, proxy: proxy) {
                 // VNI: số trong lúc soạn từ (hàng số / plane 123) mang dấu — phím của từ
             } else {
                 let final = bridge.boundary(s, proxy: proxy)

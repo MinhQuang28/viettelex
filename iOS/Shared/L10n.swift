@@ -253,6 +253,8 @@ enum L10n {
         "Thêm hàng 1 … 0 trên hàng chữ (bàn phím cao thêm gần một hàng).": "Adds a 1 … 0 row above the letters (keyboard gets almost one row taller).",
         "Giữ q … p để gõ 1 … 0 (số nhỏ ở góc phím).": "Hold q … p to type 1 … 0 (small digits in the key corners).",
         "Giữ phím hàng 2, 3 để ra ký tự đặc biệt": "Hold row 2, 3 keys for symbols",
+        "Giữ Shift để gõ số và ký hiệu": "Hold Shift for numbers & symbols",
+        "Giữ ⇧ rồi chạm phím chữ để gõ ký tự nhỏ ở góc phím (q w e → 1 2 3) thay vì chữ hoa. Chạm ⇧ vẫn viết hoa một chữ, chạm đôi để khoá.": "Hold ⇧ and tap letter keys to type the small character in the key corner (q w e → 1 2 3) instead of a capital. Tapping ⇧ still capitalises one letter; double-tap to lock.",
         "Giữ a … l, z … m để gõ @ # $ _ & - + ( ) … Giữ , để ra dấu chấm.": "Hold a … l, z … m to type @ # $ _ & - + ( ) … Hold , for a period.",
         "Phím": "Keys",
         "Vuốt nhanh phím cách sang trái/phải. Góc phím cách hiện VI / EN. Tiếng Anh gõ nguyên văn. Giữ rồi kéo vẫn là di con trỏ.": "Flick the space bar left/right. The space bar corner shows VI / EN. English types as-is. Hold and drag still moves the cursor.",
