@@ -382,6 +382,11 @@ data class ThemeSlots(
     val balloon: Int? = null, val trail: Int? = null, val deco: ThemeDeco? = null,
     /** Hiệu ứng viền phím: "rainbow" (Gaming RGB — chỉ xoay màu khi đang gõ) | "none" (bản vá: bỏ). iOS y hệt. */
     val borderFx: String? = null,
+    /**
+     * Hình vẽ trên phím cách: "soundhole" (Ghi-ta — lỗ thoát âm + vành hoa văn, vẽ một lần cùng nền phím) | "none"
+     * (bản vá: bỏ). iOS y hệt. Skin ảnh ("keys") là tệp tải về ⇒ theme có sẵn dùng slot tối giản này.
+     */
+    val spaceDeco: String? = null,
 ) {
     val isEmpty: Boolean get() = this == ThemeSlots()
 
@@ -412,6 +417,7 @@ data class ThemeSlots(
         }
         if (deco != base.deco) p = p.copy(deco = deco ?: ThemeDeco(null))
         if (borderFx != base.borderFx) p = p.copy(borderFx = borderFx ?: "none")
+        if (spaceDeco != base.spaceDeco) p = p.copy(spaceDeco = spaceDeco ?: "none")
         return p to lostBg
     }
 
@@ -421,6 +427,9 @@ data class ThemeSlots(
         const val RAINBOW = "rainbow"
         /** Giá trị hợp lệ của "borderFx" (iOS ThemeSlots.borderFxValues y hệt). */
         val BORDER_FX = setOf(RAINBOW, "none")
+        const val SOUNDHOLE = "soundhole"
+        /** Giá trị hợp lệ của "spaceDeco" (iOS ThemeSlots.spaceDecoValues y hệt). */
+        val SPACE_DECO = setOf(SOUNDHOLE, "none")
     }
 }
 
@@ -579,6 +588,7 @@ data class ThemeSpec(
                 m.add("deco" to SJ.Obj(dm))
             }
             s.borderFx?.let { m.add("borderFx" to SJ.Str(it)) }
+            s.spaceDeco?.let { m.add("spaceDeco" to SJ.Str(it)) }
             return SJ.Obj(m)
         }
 
@@ -624,7 +634,7 @@ data class ThemeSpec(
                 actionInk = s.accentInk ?: autoAccentInk(accent), chip = special, keyBorder = s.border,
                 isDark = c.luminance(ink) > 0.5, functionFill = s.fn, functionInk = s.fnInk,
                 decoration = s.deco?.let { d -> d.motif?.let { ThemeDecoration(it, d.color, d.density, d.alt) } },
-                rainbowBorder = s.borderFx == ThemeSlots.RAINBOW)
+                rainbowBorder = s.borderFx == ThemeSlots.RAINBOW, spaceSoundhole = s.spaceDeco == ThemeSlots.SOUNDHOLE)
         }
 
         /** Palette (đã giải) → màu một chế độ; bỏ trường bằng mặc định tự tính. */
@@ -635,7 +645,8 @@ data class ThemeSpec(
                 fn = p.functionFill, fnInk = p.functionInk, balloon = p.balloon.takeIf { it != p.keyFill },
                 trail = p.trail.takeIf { it != c.withAlpha(p.action, 0.6f) },
                 deco = p.decoration?.let { ThemeDeco(it.motif, it.color, it.density, it.alt) },
-                borderFx = if (p.rainbowBorder) ThemeSlots.RAINBOW else null)
+                borderFx = if (p.rainbowBorder) ThemeSlots.RAINBOW else null,
+                spaceDeco = if (p.spaceSoundhole) ThemeSlots.SOUNDHOLE else null)
         }
 
         /** Theme đầy đủ từ palette sáng/tối đã giải + kiểu chữ ("Chép JSON"). */
@@ -664,7 +675,7 @@ object ThemeSpecParser {
     private val ASSET_KEYS = setOf("background", "foreground", "keys")
     private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
         "sound", "effect", "swipe") + ASSET_KEYS
-    private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco" + "borderFx").toSet()
+    private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco" + "borderFx" + "spaceDeco").toSet()
 
     fun parse(text: String): Outcome = when (val r = StrictJson.parse(text)) {
         is StrictJson.Result.Err -> Outcome(null, listOf(r.issue))
@@ -739,6 +750,14 @@ object ThemeSpecParser {
                     value !is SJ.Str -> c.err(ThemeIssue.Code.wrongType, path)
                     value.s !in ThemeSlots.BORDER_FX -> c.err(ThemeIssue.Code.badValue, path)
                     else -> s = s.copy(borderFx = value.s)
+                }
+                continue
+            }
+            if (k == "spaceDeco") {
+                when {
+                    value !is SJ.Str -> c.err(ThemeIssue.Code.wrongType, path)
+                    value.s !in ThemeSlots.SPACE_DECO -> c.err(ThemeIssue.Code.badValue, path)
+                    else -> s = s.copy(spaceDeco = value.s)
                 }
                 continue
             }

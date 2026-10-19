@@ -153,6 +153,15 @@ internal object BuiltinThemesData {
                 "accentInk": "#1A0A00", "fn": "#24123A", "fnInk": "#FF9A3C",
                 "deco": {"motif": "pumpkin", "alt": "bat", "color": "#80FF7A1A"}},
       "dark": "same"
+    },
+    {
+      "v": 1, "id": "guitar", "name": {"vi": "Ghi-ta", "en": "Guitar"}, "sound": "guitar", "effect": "string",
+      "light": {"bg": "#DDA35C", "key": "#4A2A1C", "special": "#6B4030", "ink": "#F6EBD5", "accent": "#E8A93A",
+                "accentInk": "#2A1606", "fn": "#351D13", "fnInk": "#F2C46D",
+                "deco": {"motif": "strings", "alt": "inlay", "color": "#D9FBF1DC"}, "spaceDeco": "soundhole"},
+      "dark": {"bg": "#1A1009", "key": "#4A2A1C", "special": "#6B4030", "ink": "#F6EBD5", "accent": "#E8A93A",
+               "accentInk": "#2A1606", "fn": "#351D13", "fnInk": "#F2C46D",
+               "deco": {"motif": "strings", "alt": "inlay", "color": "#73C9A46A"}, "spaceDeco": "soundhole"}
     }
   ]
 }

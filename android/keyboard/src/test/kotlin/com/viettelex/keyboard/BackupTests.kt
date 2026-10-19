@@ -59,7 +59,7 @@ class BackupTests {
     @Test fun keySoundStyleWhitelist() {
         fun style(id: String) = BackupCodec.decode("""{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"ios","settings":{"keySoundStyle":"$id"}}""")
             .settings?.get(Keys.KEY_SOUND_STYLE)
-        for (id in listOf("system", "subtle", "rock", "pop", "water", "vintage", "phao", "jingle", "piano", "dantranh", "custom", "trong", "boo"))
+        for (id in listOf("system", "subtle", "rock", "pop", "water", "vintage", "phao", "jingle", "piano", "dantranh", "custom", "trong", "boo", "guitar"))
             assertEquals(id, style(id), id)
         assertNull(style("loud"))
         assertNull(style("theme"))   // "Theo giao diện" đã bỏ — không vào whitelist

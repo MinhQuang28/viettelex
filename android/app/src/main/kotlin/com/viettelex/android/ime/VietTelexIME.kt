@@ -353,6 +353,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         v.configure(fx, th.action, th.keyFill, th.dark)
         r.effects = v          // dải dưới / trên phím theo kiểu vừa cấu hình
         kb.effects = v
+        r.refreshStringGaps()  // Rung dây: khe hàng cho overlay (đã layout thì đặt ngay)
     }
 
     /**

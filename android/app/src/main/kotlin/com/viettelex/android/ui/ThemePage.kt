@@ -528,7 +528,8 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
                 val kh = (size.height - bottomPadDp.dp.toPx() - pad * 2 - gap * 3) / 4
                 val gaps = (1..3).map { i -> com.viettelex.keyboard.ThemeDecoration.Gap(((pad + i * kh + (i - 0.5f) * gap) / unit).toDouble(), 11.0) }
                 val path = android.graphics.Path()
-                com.viettelex.android.ime.decorPath(path, d.motif, com.viettelex.keyboard.ThemeDecoration.placements(390.0, gaps, d.density), unit, alt = d.alt)
+                com.viettelex.android.ime.decorPath(path, d.motif, com.viettelex.keyboard.ThemeDecoration.placements(390.0, gaps, d.density), unit,
+                    alt = d.alt, width = 390.0)
                 drawPath(path.asComposePath(), Color(d.color))
             }
         }
@@ -578,6 +579,16 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
             key(pad, y, kw * 2 + gap, p.fnFill)
             label("123", pad, y, kw * 2 + gap, p.fnInk, kh * 0.36f * keyStyle.controlScale)
             key(pad + 2 * (kw + gap), y, kw * 6 + gap * 5, p.spaceFill)
+            if (p.spaceSoundhole) {
+                // Ghi-ta: lỗ thoát âm + hai vành hoa văn (cùng hình học Soundhole của bàn phím thật).
+                val sw = kw * 6 + gap * 5
+                val c = Offset(pad + 2 * (kw + gap) + sw / 2, y + kh / 2)
+                val rr = com.viettelex.keyboard.Soundhole.radius(sw.toDouble(), kh.toDouble()).toFloat()
+                drawCircle(Color.Black.copy(alpha = com.viettelex.keyboard.Soundhole.HOLE_ALPHA.toFloat()), rr, c)
+                val rings = com.viettelex.keyboard.Soundhole.RINGS
+                drawCircle(Color(p.action).copy(alpha = 0.85f), (rings[0][0] * rr).toFloat(), c, style = Stroke((rings[0][1] * rr).toFloat()))
+                drawCircle(Color(p.fnInk).copy(alpha = 0.45f), (rings[1][0] * rr).toFloat(), c, style = Stroke((rings[1][1] * rr).toFloat()))
+            }
             key(pad + 8 * (kw + gap), y, kw * 2 + gap, p.action)
         }
     }

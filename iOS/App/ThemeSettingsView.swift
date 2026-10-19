@@ -599,7 +599,7 @@ struct ThemePreview: View {
         let gaps = (1...3).map { i in
             KeyboardDecoration.Gap(center: Double((pad + CGFloat(i) * keyH + (CGFloat(i) - 0.5) * gap) / k), height: 11)
         }
-        let path = d.path(KeyboardDecoration.placements(width: 390, gaps: gaps, density: d.density))
+        let path = d.path(KeyboardDecoration.placements(width: 390, gaps: gaps, density: d.density), width: 390)
         return Path(path).applying(CGAffineTransform(scaleX: k, y: k)).fill(Color(d.color.ui))
     }
 
@@ -621,8 +621,8 @@ struct ThemePreview: View {
             HStack(spacing: gap) {
                 key(large ? "123" : "", w: keyW * 2, h: keyH, r: radius, custom: custom,
                     fill: palette.functionFill ?? palette.specialFill, ink: palette.fnInk, outline: outline)
-                key(large ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius, custom: custom, fill: palette.fnFill,
-                    outline: outline)
+                key(large && !palette.spaceSoundhole ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius, custom: custom,
+                    fill: palette.fnFill, outline: outline, soundhole: palette.spaceSoundhole)
                 key(large ? "return" : "", w: keyW * 2 + gap, h: keyH, r: radius, custom: custom, fill: palette.accent,
                     ink: palette.accentInk, outline: outline)
             }
@@ -632,11 +632,20 @@ struct ThemePreview: View {
 
     @ViewBuilder
     private func key(_ label: String, w: CGFloat, h: CGFloat, r: CGFloat, custom: CTFontDescriptor?,
-                     fill: RGBA? = nil, ink: RGBA? = nil, outline: Bool = false) -> some View {
+                     fill: RGBA? = nil, ink: RGBA? = nil, outline: Bool = false, soundhole: Bool = false) -> some View {
         if outline {
             let rr = KeyStyle.cornerRadius(percent: keyStyle.corner, size: CGSize(width: w, height: h), fallback: r)
             RoundedRectangle(cornerRadius: rr).strokeBorder(Color.black, lineWidth: large ? 1.5 : 1)
                 .frame(width: max(w, 1), height: max(h, 1))
+        } else if soundhole {
+            // Ghi-ta: lỗ thoát âm + hai vành hoa văn (cùng hình học Soundhole của bàn phím thật).
+            let rr = CGFloat(Soundhole.radius(width: Double(w), height: Double(h)))
+            keyFace(label, w: w, h: h, r: r, custom: custom, fill: fill, ink: ink)
+                .overlay(Circle().fill(Color.black.opacity(Soundhole.holeAlpha)).frame(width: 2 * rr, height: 2 * rr))
+                .overlay(Circle().stroke(Color(palette.accent.alpha(0.85).ui), lineWidth: CGFloat(Soundhole.rings[0].width) * rr)
+                    .frame(width: 2 * rr * CGFloat(Soundhole.rings[0].radius), height: 2 * rr * CGFloat(Soundhole.rings[0].radius)))
+                .overlay(Circle().stroke(Color(palette.fnInk.alpha(0.45).ui), lineWidth: CGFloat(Soundhole.rings[1].width) * rr)
+                    .frame(width: 2 * rr * CGFloat(Soundhole.rings[1].radius), height: 2 * rr * CGFloat(Soundhole.rings[1].radius)))
         } else {
             keyFace(label, w: w, h: h, r: r, custom: custom, fill: fill, ink: ink)
         }

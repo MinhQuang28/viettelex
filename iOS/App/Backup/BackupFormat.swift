@@ -124,6 +124,7 @@ enum BackupSettings {
         Spec(key: "systemBackdropTrungthu", kind: .bool(false)),
         Spec(key: "systemBackdropValentine", kind: .bool(false)),
         Spec(key: "systemBackdropHalloween", kind: .bool(false)),
+        Spec(key: "systemBackdropGuitar", kind: .bool(false)),
         // Ngôn ngữ giao diện app (L10n) — mặc định "vi", không theo máy.
         Spec(key: "uiLanguage", kind: .string("vi", ["vi", "en"])),
         // Dịch trên máy (Plus): ngôn ngữ đích — chỉ iOS dùng.

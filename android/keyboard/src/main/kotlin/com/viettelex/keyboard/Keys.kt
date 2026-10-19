@@ -96,9 +96,9 @@ object Keys {
     const val KEY_SOUND = "keySound"
     /** Int 0…100 (%) — âm lượng âm phím riêng, mặc định 50. */
     const val KEY_SOUND_VOLUME = "keySoundVolume"
-    /** String — kiểu âm phím ([KeySoundStyle.id]): system|subtle|wood|mechanical|typewriter|bubble|rock|pop|water|vintage|phao|jingle|piano|trong|boo|custom, mặc định subtle. */
+    /** String — kiểu âm phím ([KeySoundStyle.id]): system|subtle|wood|mechanical|typewriter|bubble|rock|pop|water|vintage|phao|jingle|piano|dantranh|trong|boo|guitar|custom, mặc định subtle. */
     const val KEY_SOUND_STYLE = "keySoundStyle"
-    /** String — "Hiệu ứng khi bấm phím" ([KeyEffect.id], Plus): none|heart|bubble|ripple|petal|firework|flash|matrix|lightning|emojiword|blossom|combo|ink|wave|snow, mặc định none. Tên như iOS App Group. */
+    /** String — "Hiệu ứng khi bấm phím" ([KeyEffect.id], Plus): none|heart|bubble|ripple|petal|firework|flash|matrix|lightning|emojiword|blossom|combo|ink|wave|snow|meteor|lantern|smoke|string, mặc định none. Tên như iOS App Group. */
     const val KEY_EFFECT = "keyEffect"
     /** String — "Hiệu ứng nét vuốt" ([SwipeTrailStyle.id]): none|simple|fire|electric|brush|rainbow|neon|stardust|firework|theme, mặc định simple. Tên như iOS App Group. */
     const val SWIPE_TRAIL = "swipeTrail"
