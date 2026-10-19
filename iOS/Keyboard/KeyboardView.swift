@@ -359,6 +359,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         overlayPanel?.removeFromSuperview(); overlayPanel = nil
         keyEffects?.halt(); keyEffects = nil; fxRect = nil
         rainbow?.halt(); rainbow = nil
+        mole?.halt(); mole = nil
         wallpaperView.image = nil
         wallpaperLoadedFor = .zero
         themeImageView.image = nil; foregroundView.image = nil; themeScreenLoadedFor = nil
@@ -2049,6 +2050,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         resolvePalette()
         configureKeyEffects()
         configureRainbow()
+        configureMole()
         // Chiều cao hàng phím ±10pt (Settings → Giao diện) — đọc mỗi lần hiện. Bản cũ (có công
         // tắc "Kích thước như bàn phím iPhone") chưa được app chuyển đổi ⇒ tính trong bộ nhớ,
         // không ghi (KeyGeometry.RowAdjust.effectiveAdjust).
@@ -2309,6 +2311,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // Hoạ tiết nền (chỉ theme có hoạ tiết): hàng phím mới ⇒ lượt layout kế đo lại khe giữa hàng
         // (khe không đổi thì không dựng lại path).
         if palette.decoration != nil || rainbow != nil { setNeedsLayout() }   // + viền cầu vồng: khung phím mới
+        if let m = mole, m.isMoleUp || m.game.pending { m.hideNow() }   // Đập chuột: bảng phím đổi ⇒ dẹp chuột
         activeAlts = currentAlts()
         shiftAlts = currentShiftAlts()
         updateSuggestionChrome()
@@ -5967,7 +5970,61 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         onKey(key)
         if let fx, let o = keyEffects { o.emit(key: fx) }
         rainbow?.poke()                          // Gaming RGB: theme khác ⇒ nil, chỉ đọc một optional
+        if let m = mole { m.typed(Self.moleLetter(key), at: CACurrentMediaTime()) }   // Đập chuột: theme khác ⇒ nil
     }
+
+    // MARK: Đập chuột (MoleGame.swift / MoleOverlay.swift) — chỉ theme có "game":"mole"; khác ⇒ nil (0 lớp, 0 việc).
+    private(set) var mole: MoleOverlayView?
+    /// Chữ đang soạn (controller: bridge.composedWord) — chỉ đọc lúc thả chuột.
+    var moleWordPrefix: (() -> String)?
+
+    /// Phím chữ ⇒ chữ thường a–z (ASCII); phím khác ⇒ nil. O(1), không cấp phát.
+    @inline(__always) static func moleLetter(_ key: Key) -> Character? {
+        guard case .letter(let c) = key, let a = c.asciiValue else { return nil }
+        if a >= 65 && a <= 90 { return Character(Unicode.Scalar(a + 32)) }
+        return a >= 97 && a <= 122 ? c : nil
+    }
+
+    /// Lúc hiện / đổi theme: gắn hoặc gỡ lớp chuột (trên hàng phím + hiệu ứng, không nhận chạm).
+    private func configureMole() {
+        let on = MolePolicy.active(game: themeSettings.effectiveKeyStyle.game,
+                                   plus: PlusGate.isUnlocked(.premiumThemes),
+                                   lowPower: ProcessInfo.processInfo.isLowPowerModeEnabled,
+                                   voiceOver: UIAccessibility.isVoiceOverRunning)
+        KeySound.shared.setSqueakEnabled(on)
+        guard on else {
+            mole?.halt(); mole?.removeFromSuperview(); mole = nil
+            return
+        }
+        let v = mole ?? MoleOverlayView()
+        if v.superview !== self {
+            v.frame = bounds
+            v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            addSubview(v)
+            v.layer.zPosition = 6                 // trên phím + hiệu ứng (5), dưới ô phóng to (10)
+        }
+        v.keyFrame = { [weak self, weak v] c in
+            guard let self, let v, self.lettersLike, !self.rowsContainer.isHidden,
+                  let b = self.letterKeys.first(where: { $0.base.count == 1 && $0.base.first == c })?.button,
+                  !b.isHidden, b.bounds.width > 0, b.window != nil || self.window == nil else { return nil }
+            return (b.convert(b.bounds, to: v), b.layer.cornerRadius)
+        }
+        v.context = { [weak self] in
+            guard let self else { return ("", []) }
+            let set = self.lastShownSet
+            var words: [String] = []
+            for w in [set?.word, set?.word2].compactMap({ $0 }) { words.append(w) }
+            words += set?.moreWords ?? []
+            words += set?.nextWords ?? []
+            return (self.moleWordPrefix?() ?? "", words)
+        }
+        mole = v
+    }
+
+    #if DEBUG
+    /// Test: khung phím chữ `s` theo toạ độ của chính view này.
+    func debugMoleKeyFrame(_ c: Character) -> CGRect? { mole?.keyFrame?(c)?.rect }
+    #endif
 
     // MARK: Viền phím cầu vồng (RainbowBorder.swift) — chỉ theme có "borderFx":"rainbow"; khác ⇒ nil (0 chi phí).
     private(set) var rainbow: RainbowBorderView?

@@ -153,6 +153,13 @@ internal object BuiltinThemesData {
                 "accentInk": "#1A0A00", "fn": "#24123A", "fnInk": "#FF9A3C",
                 "deco": {"motif": "pumpkin", "alt": "bat", "color": "#80FF7A1A"}},
       "dark": "same"
+    },
+    {
+      "v": 1, "id": "mole", "name": {"vi": "Đập chuột", "en": "Whack-a-mole"}, "corner": 80, "sound": "bop", "game": "mole",
+      "light": {"bg": "#3D7A24", "key": "#7A4A2A", "special": "#5C3820", "ink": "#FFF4DC", "accent": "#F4C542",
+                "accentInk": "#3B2410", "fn": "#5C3820", "fnInk": "#FFE3A3", "border": "#3A2212",
+                "deco": {"motif": "flowers", "color": "#73245214"}},
+      "dark": "same"
     }
   ]
 }

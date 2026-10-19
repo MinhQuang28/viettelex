@@ -12,7 +12,10 @@ import Foundation
 //             "borderFx":"rainbow"},
 //             (deco "alt": motif thứ hai xen kẽ, vd {"motif":"pumpkin","alt":"bat",…})
 //    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold",
-//    "sound":"phao", "effect":"blossom"}
+//    "sound":"phao", "effect":"blossom", "game":"mole"}
+//
+// "game" (tuỳ chọn, danh sách trắng ThemeExtraIds.games): trò chơi khi gõ CHẠY KHI theme này đang dùng — "mole" = Đập
+// chuột (MoleGame.swift). Khác "sound"/"effect": không ghi gì lúc chọn theme, bàn phím đọc từ kiểu thực dùng.
 //
 // "sound" / "effect" (tuỳ chọn, id trong danh sách trắng ThemeExtraIds): âm phím / hiệu ứng bấm phím ĐI KÈM theme —
 // CHỈ áp MỘT lần lúc người dùng chọn theme (ThemeExtras.applyOnSelect); không bao giờ tự bật âm thanh phím.
@@ -613,6 +616,8 @@ struct ThemeSpec: Equatable {
     /// Âm phím / hiệu ứng bấm phím đi kèm (id ThemeExtraIds) — chỉ áp lúc chọn theme.
     var sound: String?
     var effect: String?
+    /// Trò chơi khi gõ ("mole") — chạy khi theme đang dùng (ThemeExtraIds.games).
+    var game: String?
 
     func slots(dark d: Bool) -> ThemeSlots { d ? (dark ?? light) : light }
     var name: String { L10n.isEnglish ? (nameEn ?? nameVi) : nameVi }
@@ -623,6 +628,7 @@ struct ThemeSpec: Equatable {
         k.assets = assets
         k.sound = sound
         k.effect = effect
+        k.game = game
         return k
     }
 }
@@ -632,6 +638,8 @@ struct ThemeSpec: Equatable {
 enum ThemeExtraIds {
     static let sounds: Set<String> = Set(KeySoundStyle.presetIDs)
     static let effects: Set<String> = Set(KeyEffect.allCases.map(\.rawValue))
+    /// "game": trò chơi khi gõ (Android ThemeExtraIds.GAMES y hệt).
+    static let games: Set<String> = [MoleGame.themeGame]
 }
 
 // MARK: - Đọc / kiểm
@@ -651,7 +659,7 @@ enum ThemeSpecParser {
 
     static let assetKeys: Set<String> = ["background", "foreground", "keys"]
     static let rootKeys: Set<String> = Set(["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
-                                            "sound", "effect"])
+                                            "sound", "effect", "game"])
         .union(assetKeys)
     static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco", "borderFx"])
 
@@ -719,6 +727,7 @@ enum ThemeSpecParser {
         if spec.assets.font != nil { spec.font = nil }
         spec.sound = typo.sound
         spec.effect = typo.effect
+        spec.game = typo.game
         if contrast { c.issues += contrastIssues(spec) }
         return Outcome(spec: c.failed ? nil : spec, issues: c.issues)
     }
@@ -848,6 +857,7 @@ enum ThemeSpecParser {
         }
         s.sound = pick("sound", ThemeExtraIds.sounds)
         s.effect = pick("effect", ThemeExtraIds.effects)
+        s.game = pick("game", ThemeExtraIds.games)
     }
 
     // MARK: tệp tải về
@@ -933,7 +943,7 @@ enum ThemeSpecParser {
         guard case .object(let m) = j else { return nil }
         var c = Ctx()
         let allowed: Set<String> = Set(["label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark",
-                                        "sound", "effect"])
+                                        "sound", "effect", "game"])
             .union(assetKeys)
         for (k, _) in m where !allowed.contains(k) { c.err(.unknownKey, k) }
         let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
@@ -998,6 +1008,7 @@ extension ThemeSpec {
         Self.appendImages(assets, to: &m)
         if let sound { m.append(("sound", .string(sound))) }
         if let effect { m.append(("effect", .string(effect))) }
+        if let game { m.append(("game", .string(game))) }
         return .object(m)
     }
 
@@ -1108,6 +1119,7 @@ extension ThemeSpec {
         if s.assets.font != nil { s.font = nil }
         s.sound = style.sound
         s.effect = style.effect
+        s.game = style.game
         return s
     }
 }
@@ -1247,6 +1259,7 @@ enum ThemeJSONActions {
             if let w = b.spec?.weight, st.weight == w { st.weight = .regular }
             if st.sound == b.spec?.sound { st.sound = nil }
             if st.effect == b.spec?.effect { st.effect = nil }
+            if st.game == b.spec?.game { st.game = nil }
             s.setStyle(st, for: b)
             if r.lostBg { warnings.append(ThemeIssue(code: .bgKept, path: "bg")) }
         case .custom(let id):

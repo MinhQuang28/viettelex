@@ -355,6 +355,39 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         kb.effects = v
     }
 
+    /**
+     * Đập chuột (theme có "game":"mole" — [com.viettelex.keyboard.MoleGame]): theme + Plus + không tiết kiệm pin + không
+     * TalkBack — đọc MỘT lần mỗi lần hiện. Không ⇒ gỡ view (0 chi phí mỗi phím), không nạp mẫu "éc".
+     */
+    private fun applyMole(th: ImeTheme, kb: KeyboardView) {
+        val r = root ?: return
+        val on = com.viettelex.keyboard.MolePolicy.active(th.keyStyle.game,
+            PlusGate.isUnlocked(PlusFeature.PREMIUM_THEMES),
+            powerSave = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true,
+            talkBack = accessibility?.isTouchExplorationEnabled == true)
+        feedback.setSqueakEnabled(on)
+        if (!on) { r.mole = null; kb.mole = null; return }
+        val v = r.mole ?: MoleView(this, th.density)
+        v.keyFrame = { c, out -> kb.moleKeyFrame(c, out, v) }
+        v.context = {
+            val set = strip?.shownSet
+            session.bridge.composedWord to (listOfNotNull(set?.word, set?.word2) + (set?.nextWords ?: emptyList()))
+        }
+        if (r.mole == null) moleStats = MoleStatsFile.read(this)
+        v.onHit = { streak ->
+            feedback.squeak()
+            val st = moleStats.record(1, streak, com.viettelex.keyboard.MoleStats.dayNumber())
+            moleStats = st
+            worker().post { MoleStatsFile.write(this, st) }
+            st.today
+        }
+        r.mole = v
+        kb.mole = v
+    }
+
+    /** Thống kê Đập chuột trong RAM (đọc file lúc gắn view, ghi file trên worker mỗi lần đập). */
+    private var moleStats = com.viettelex.keyboard.MoleStats()
+
     /** "Emoji theo chữ": phím ranh giới vừa chốt từ ⇒ tra bảng O(1) (chỉ khi chọn kiểu này). */
     private fun fxBoundaryEmoji() {
         val fx = root?.effects ?: return
@@ -451,6 +484,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         kb.keyPreview = settings.keyPreview
         kb.keyPressHighlight = settings.keyPressHighlight
         applyKeyEffect(settings.keyEffect, th, kb)
+        applyMole(th, kb)
         kb.configureSpaceFlick(settings.spaceSwipeLanguage, session.language)
         if (session.language == com.viettelex.keyboard.KeyboardLanguage.EN) warmEnglish()
         // Plus + công tắc "Công cụ văn bản" (mặc định bật) + không phải ô mật khẩu.

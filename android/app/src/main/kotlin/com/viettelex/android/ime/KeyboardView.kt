@@ -552,6 +552,27 @@ class KeyboardView(
         if (k is Key.Letter || k is Key.Text || k == Key.Space || k == Key.DoubleSpacePeriod) fx.burst(fxX, fxY, fxW, fxH)
     }
 
+    /** Đập chuột (theme "game":"mole", [MoleView]) — null = theme khác: đường phím chỉ đọc một biến null. */
+    var mole: MoleView? = null
+
+    /** Phím chữ ⇒ chữ thường a–z; khác ⇒ null. O(1), không cấp phát. */
+    private fun moleLetter(k: Key): Char? {
+        if (k !is Key.Letter) return null
+        val c = k.ch
+        return when (c) { in 'a'..'z' -> c; in 'A'..'Z' -> c + 32; else -> null }
+    }
+
+    /** Khung phím chữ [c] theo toạ độ [target] (con của cùng view cha) vào [out]; null ⇒ không ở bảng chữ / chưa xếp. */
+    fun moleKeyFrame(c: Char, out: android.graphics.RectF, target: View): Float? {
+        if (plane != Plane.LETTERS) return null
+        val s = c.toString()
+        val k = keys.firstOrNull { it.kind == KeyKind.LETTER && it.label == s } ?: return null
+        if (k.width <= 0f || k.height <= 0f) return null
+        val dx = left - target.left; val dy = top - target.top
+        out.set(k.left + dx, k.top + dy, k.right + dx, k.bottom + dy)
+        return theme.keyRadius(k.width, k.height, radius)
+    }
+
     /** Viền cầu vồng (theme Gaming RGB, [RainbowBorderView]) — null = theme khác: đường phím chỉ đọc một biến null. */
     var rainbow: RainbowBorderView? = null
 
@@ -569,7 +590,11 @@ class KeyboardView(
 
     /** Mọi phím đi qua đây: plane tìm emoji giữ phím cho ô tìm, còn lại tới IME. */
     private fun emit(k: Key) {
-        if (plane != Plane.EMOJI_SEARCH) { listener?.onKey(k); fxAfter(k); rainbow?.poke(); return }
+        if (plane != Plane.EMOJI_SEARCH) {
+            listener?.onKey(k); fxAfter(k); rainbow?.poke()
+            mole?.typed(moleLetter(k), android.os.SystemClock.uptimeMillis() / 1000.0)   // Đập chuột: theme khác ⇒ null
+            return
+        }
         fxPending = false
         when (k) {
             is Key.Letter -> search.type(k.ch)
@@ -725,6 +750,7 @@ class KeyboardView(
         if (p == Plane.TEMPLATES) templatesPane.resetScroll()
         if (textToolsMode) { textToolsMode = false; refreshTemplatesPane() }
         editSelecting = false
+        mole?.hideNow()                     // Đập chuột: đổi bảng phím ⇒ dẹp chuột
         rebuild()
         listener?.onPlaneChanged(p)
     }

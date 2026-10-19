@@ -36,7 +36,9 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
     SCIFI("scifi", "Bíp sci-fi"), // l10n-key
     // Bộ theme đủ món 10/2026: Trống lân (Trung Thu), Ma quái (Halloween) — công thức đầu file Swift.
     TRONG("trong", "Trống lân"), // l10n-key
-    BOO("boo", "Ma quái"); // l10n-key
+    BOO("boo", "Ma quái"), // l10n-key
+    /** Theme "Đập chuột" (10/2026): búa gỗ bọc vải gõ nhẹ — công thức đầu file Swift. */
+    BOP("bop", "Búa gỗ"); // l10n-key
 
     /** true ⇒ phát qua SoundPool riêng; [SYSTEM] ⇒ playSoundEffect, không dựng gì. */
     val usesPool: Boolean get() = this != SYSTEM
@@ -46,7 +48,7 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
         val DEFAULT = SUBTLE
         /** Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức [KeySoundSynth.baseRecipe]. */
         val PRESETS = listOf(SUBTLE, WOOD, MECHANICAL, TYPEWRITER, BUBBLE, ROCK, POP, WATER, VINTAGE, PHAO, JINGLE, SCIFI,
-            TRONG, BOO)
+            TRONG, BOO, BOP)
         /** Mọi kiểu dựng sẵn (3 tiếng + nhạc cụ mỗi phím một nốt: Piano, Đàn tranh). */
         val ALL_PRESETS = PRESETS + PIANO + DANTRANH
         /**
@@ -145,7 +147,18 @@ object KeySoundSynth {
             listOf(t(1.0, 330.0, 520.0, glide = 0.012, tau = 0.017), t(0.45, 336.6, 530.4, glide = 0.012, tau = 0.017),
                 t(0.10, 990.0, 1560.0, glide = 0.012, tau = 0.010)),
             listOf(n(0.06, hp = 200.0, lp = 1200.0, tau = 0.004)), 0.004, 0.054, 2000.0, 0.45)
+        KeySoundStyle.BOP -> Recipe(
+            listOf(t(1.0, 210.0, 165.0, glide = 0.006, tau = 0.011), t(0.22, 210 * 2.4, 165 * 2.4, glide = 0.006, tau = 0.003)),
+            listOf(n(0.18, hp = 90.0, lp = 900.0, tau = 0.0018)), 0.0018, 0.048, 1500.0, 0.50)
     }
+
+    /** "Éc" khi đập trúng chuột (theme Đập chuột — [MoleGame]): hai tiếng chíp vút lên, nhỏ + mềm. iOS squeakRecipe y hệt. */
+    val SQUEAK_RECIPE = Recipe(
+        listOf(t(1.0, 1900.0, 2700.0, glide = 0.018, tau = 0.030), t(0.18, 3800.0, 5400.0, glide = 0.018, tau = 0.012),
+            t(0.75, 2200.0, 3100.0, glide = 0.016, tau = 0.026, delay = 0.062), t(0.12, 4400.0, 6200.0, glide = 0.016, tau = 0.010, delay = 0.062)),
+        emptyList(), 0.006, 0.130, 4200.0, 0.42)
+    const val SQUEAK_SEED = 0x6D6F6C65
+    fun squeakSamples(): FloatArray = render(SQUEAK_RECIPE, SQUEAK_SEED)
 
     /**
      * Tiếng Enter RIÊNG của kiểu (null = như phím chức năng). Máy chữ: tiếng phím chức năng + "ding" chuông về dòng

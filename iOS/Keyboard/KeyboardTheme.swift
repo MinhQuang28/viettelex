@@ -257,6 +257,8 @@ enum KeyboardTheme: String, CaseIterable {
     case typewriter, rgb, space
     // Bộ đủ món 10/2026 (màu + hoạ tiết + hiệu ứng + âm): Trung Thu, Valentine, Halloween.
     case trungthu, valentine, halloween
+    // Trò chơi khi gõ 10/2026: Đập chuột (bãi cỏ + phím hang đất; "game":"mole" — MoleGame).
+    case mole
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
     // Hệ thống + Màu nhấn D6336C (KeyStyleStore.migrate). Id lạ / đã bỏ luôn về Hệ thống.
 
@@ -287,6 +289,7 @@ enum KeyboardTheme: String, CaseIterable {
         case .trungthu: return L("Trung Thu")
         case .valentine: return L("Valentine")
         case .halloween: return L("Halloween")
+        case .mole: return L("Đập chuột")
         }
     }
 
@@ -314,7 +317,8 @@ enum KeyboardTheme: String, CaseIterable {
              .tet, .tetMai, .xmas, .xmasSnow, .piano,
              .sen,
              .typewriter, .rgb, .space,
-             .trungthu, .valentine, .halloween: return true
+             .trungthu, .valentine, .halloween,
+             .mole: return true
         }
     }
 
@@ -839,6 +843,7 @@ struct ThemeSettings: Equatable {
             if s.weight == .regular { s.weight = t.weight }
             if s.sound == nil { s.sound = t.sound }
             if s.effect == nil { s.effect = t.effect }
+            if s.game == nil { s.game = t.game }
             s.assets = s.assets.merged(over: t.assets)
             if userSystemFont { s.assets.font = nil }
             if s.assets.font != nil { s.font = .standard }
@@ -988,6 +993,8 @@ struct KeyStyle: Equatable {
     /// Âm phím / hiệu ứng đi kèm theme ("sound" / "effect", ThemeExtraIds) — CHỈ áp lúc chọn theme (ThemeExtras).
     var sound: String? = nil
     var effect: String? = nil
+    /// Trò chơi khi gõ của theme ("game", ThemeExtraIds.games) — bàn phím đọc từ kiểu thực dùng (MolePolicy).
+    var game: String? = nil
 
     static let `default` = KeyStyle()
     var isDefault: Bool { self == .default }
@@ -1120,6 +1127,7 @@ struct KeyStyle: Equatable {
         st.assets = edited.assets
         st.sound = edited.sound
         st.effect = edited.effect
+        st.game = edited.game
         return (st, l.lostBg || d.lostBg)
     }
 }
@@ -1181,6 +1189,7 @@ enum KeyStyleStore {
         ThemeSpec.appendImages(st.assets, to: &f)
         if let v = st.sound { f.append(("sound", .string(v))) }
         if let v = st.effect { f.append(("effect", .string(v))) }
+        if let v = st.game { f.append(("game", .string(v))) }
         if !st.light.isEmpty { f.append(("light", ThemeSpec.json(st.light))) }
         if !st.dark.isEmpty { f.append(("dark", ThemeSpec.json(st.dark))) }
         return .object(f)

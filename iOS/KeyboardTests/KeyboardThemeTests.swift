@@ -193,7 +193,7 @@ final class KeyboardThemeTests: XCTestCase {
     /// Theme tối cố định (OLED, Tương phản cao, Tim đen, Neon) không đổi theo hệ thống; mọi theme
     /// nền đục khác có bản tối riêng (bug 10/2026: "giao diện plus ở chế độ tối không chuyển tối").
     func testFixedThemesIgnoreSystemAppearance() {
-        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon, .tet, .xmas, .piano, .rgb, .space, .trungthu, .halloween]
+        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon, .tet, .xmas, .piano, .rgb, .space, .trungthu, .halloween, .mole]
         for t in KeyboardTheme.allCases where t != .system && t != .glass {
             XCTAssertNotNil(t.palette(systemDark: false).background, "\(t) cần nền đục")
             if fixed.contains(t) {
@@ -866,7 +866,8 @@ final class ThemeSetTests: XCTestCase {
                                              .tet, .tetMai, .xmas, .xmasSnow, .piano,
                                              .sen,
                                              .typewriter, .rgb, .space,
-                                             .trungthu, .valentine, .halloween]
+                                             .trungthu, .valentine, .halloween,
+                                             .mole]
     static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
 
     // MARK: bảng màu chung iOS ↔ Android
@@ -901,7 +902,7 @@ final class ThemeSetTests: XCTestCase {
         let f = try fixture()
         XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
         XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
-        XCTAssertEqual(f.rows.count, 46)
+        XCTAssertEqual(f.rows.count, 48)
         for r in f.rows {
             let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
             let p = t.palette(systemDark: r.dark)
@@ -1340,6 +1341,7 @@ final class ThemeSetTests: XCTestCase {
                 case .trungthu: XCTAssertEqual(m, .lantern)
                 case .valentine: XCTAssertEqual(m, .hearts)
                 case .halloween: XCTAssertEqual(m, .pumpkin)
+                case .mole: XCTAssertEqual(m, .flowers)
                 default: XCTAssertNil(m, t.rawValue)
                 }
             }

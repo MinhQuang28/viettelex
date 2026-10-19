@@ -373,6 +373,7 @@ class ImeRootView(
         // ⇒ trùm từ đỉnh cửa sổ tới đáy vùng phím: preview / popup hàng trên nổi ra ngoài khung.
         balloon.layout(px, 0, px + pw, py + s + keyH)
         effects?.layout(px, 0, px + pw, py + s + keyH)
+        mole?.layout(px, 0, px + pw, py + s + keyH)
         if (wallpaperFile != null && (wallW != pw || wallH != ph)) loadWallpaperFor(pw, ph) else updateWallMatrix()
         loadThemeBgFor(pw, ph)
     }
@@ -393,6 +394,18 @@ class ImeRootView(
             }
         }
     private var effectsBand = com.viettelex.keyboard.KeyEffectBand.ABOVE_KEYS
+
+    /**
+     * Đập chuột ([MoleView], theme có "game":"mole") — cùng khung với balloon, ngay DƯỚI balloon (trên phím +
+     * hiệu ứng), không nhận chạm. null = theme khác (không có view, 0 chi phí). IME gắn/gỡ mỗi lần hiện.
+     */
+    var mole: MoleView? = null
+        set(v) {
+            if (field === v) return
+            field?.let { it.halt(); removeView(it) }
+            field = v
+            if (v != null) addView(v, indexOfChild(balloon))
+        }
 
     /** Bảng phủ đúng vùng phím (lịch sử clipboard); null = không có. Thêm lười khi mở lần đầu. */
     var overlay: android.view.View? = null
@@ -420,6 +433,8 @@ class ImeRootView(
             MeasureSpec.makeMeasureSpec(s + keyH, MeasureSpec.EXACTLY))
         effects?.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(s + keyH, MeasureSpec.EXACTLY))
+        mole?.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(s + keyH, MeasureSpec.EXACTLY))
         setMeasuredDimension(w, h)
     }
 
@@ -441,6 +456,7 @@ class ImeRootView(
         overlay?.measure(ew, MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
         balloon.measure(ew, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
         effects?.measure(ew, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+        mole?.measure(ew, MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
         setMeasuredDimension(w, h)
     }
 
@@ -459,6 +475,7 @@ class ImeRootView(
         overlay?.layout(0, s, w, s + keyH)
         balloon.layout(0, 0, w, s + keyH)
         effects?.layout(0, 0, w, s + keyH)
+        mole?.layout(0, 0, w, s + keyH)
     }
 
     private var insetsKnown = false

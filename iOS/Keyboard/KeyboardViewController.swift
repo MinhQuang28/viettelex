@@ -139,6 +139,8 @@ final class KeyboardViewController: UIInputViewController {
         keyboard.onDeleteWord = { [weak self] in self?.deleteWordBackward() }
         wireWordSwipe()
         wireSwipeTyping()
+        // Đập chuột (theme "mole"): chữ đang soạn — chỉ đọc lúc thả chuột (vài giây một lần), không mỗi phím.
+        keyboard.moleWordPrefix = { [weak self] in self?.bridge.composedWord ?? "" }
         #if DEBUG
         Self.debugKeyboardInstalls += 1
         #endif

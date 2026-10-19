@@ -252,7 +252,9 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     // Bộ đủ món 10/2026 (màu + hoạ tiết + hiệu ứng + âm) — id trùng iOS.
     TRUNG_THU("trungthu", "Trung Thu", true), // l10n-key
     VALENTINE("valentine", "Valentine", true), // l10n-key
-    HALLOWEEN("halloween", "Halloween", true); // l10n-key
+    HALLOWEEN("halloween", "Halloween", true), // l10n-key
+    // Trò chơi khi gõ 10/2026: Đập chuột (bãi cỏ + phím hang đất; "game":"mole" — [MoleGame]). Id trùng iOS.
+    MOLE("mole", "Đập chuột", true); // l10n-key
 
     /** Bo góc mặc định (% như [KeyStyle.corner]) khi người dùng chưa chỉnh — null = bo stock. iOS cùng giá trị. */
     val defaultCorner: Int? get() = spec?.corner
@@ -517,6 +519,8 @@ class MotifSub(val sx: Double, val sy: Double, val segs: List<DoubleArray>)
 object ThemeExtraIds {
     val SOUNDS: Set<String> get() = KeySoundStyle.PRESET_IDS.toSet()
     val EFFECTS: Set<String> get() = KeyEffect.entries.map { it.id }.toSet()
+    /** "game": trò chơi khi gõ (iOS ThemeExtraIds.games y hệt). */
+    val GAMES: Set<String> = setOf(MoleGame.THEME_GAME)
 }
 
 /**
@@ -646,6 +650,7 @@ data class ThemeSettings(
             if (s.weight == KeyLabelWeight.REGULAR) s = s.copy(weight = typography.weight)
             if (s.sound == null) s = s.copy(sound = typography.sound)
             if (s.effect == null) s = s.copy(effect = typography.effect)
+            if (s.game == null) s = s.copy(game = typography.game)
             var a = s.assets.mergedOver(typography.assets)
             if (userSystemFont) a = a.copy(font = null)
             s = s.copy(assets = a)

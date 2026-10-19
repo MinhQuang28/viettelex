@@ -39,6 +39,8 @@ targets:
       - Keyboard/KeyEffects.swift
       # Viền cầu vồng (Gaming RGB): thẻ xem trước dùng cùng dải màu.
       - Keyboard/RainbowBorder.swift
+      # Đập chuột (theme "mole"): id "game" + thẻ "Hôm nay đập N con chuột".
+      - Keyboard/MoleGame.swift
       - Keyboard/Shortcuts.swift
       - Shared
       # Từ điển cá nhân: app đọc/sửa userlm.plist bằng chính model của bàn phím.
@@ -183,6 +185,8 @@ targets:
       - Keyboard/Wallpaper.swift
       - Keyboard/KeyEffects.swift
       - Keyboard/RainbowBorder.swift
+      - Keyboard/MoleGame.swift
+      - Keyboard/MoleOverlay.swift
       - Keyboard/KeyCommitQueue.swift
       - Keyboard/AdjacentKeyFixer.swift
       - Keyboard/AutoCorrect.swift

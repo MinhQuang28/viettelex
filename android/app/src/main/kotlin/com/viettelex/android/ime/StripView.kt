@@ -118,6 +118,8 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
     var emojiButton = false; private set
     private var lastSig = ""
     private var lastSet: SuggestionSet? = null
+    /** Bộ gợi ý đang hiện (Đập chuột đọc ứng viên lúc thả chuột — không mỗi phím). */
+    val shownSet: SuggestionSet? get() = lastSet
     /** Bar đang có nội dung gợi ý (chữ/emoji/chip/thẻ Dán/pill) ⇒ ẩn icon con trỏ + 📋 (#113). */
     private var hasContent = false
 
