@@ -127,8 +127,8 @@ struct FeatureSearchEntry: Identifiable {
             .init(viTitle: LK("Phím sẫm khi bấm"), keywords: "pressed key highlight", page: .phim),
             .init(viTitle: LK("Rung phím"), keywords: "haptic rung vibrate", page: .phim),
             .init(viTitle: LK("Âm thanh phím"), keywords: "sound click tiếng âm lượng volume kiểu style gỗ cơ máy chữ bong bóng custom", page: .phim),
-            .init(viTitle: LK("Âm thanh gõ"), keywords: "typing sound key sound style kiểu âm iOS system click hệ thống gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc bàn phím cơ mechanical máy chữ typewriter bong bóng bubble trống lân lion drum trung thu mid autumn ma quái spooky boo halloween", page: .phim),
-            .init(viTitle: LK("Theme & ảnh nền"), keywords: "theme màu chủ đề wallpaper hình nền tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm trung thu mid autumn đèn lồng lantern trăng moon valentine tình yêu love tim heart halloween bí ngô pumpkin dơi bat", page: .giaoDien),
+            .init(viTitle: LK("Âm thanh gõ"), keywords: "typing sound key sound style kiểu âm iOS system click hệ thống gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc đàn tranh dan tranh zither việt nam viet nam bàn phím cơ mechanical máy chữ typewriter bong bóng bubble trống lân lion drum trung thu mid autumn ma quái spooky boo halloween", page: .phim),
+            .init(viTitle: LK("Theme & ảnh nền"), keywords: "theme màu chủ đề wallpaper hình nền tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm sen lotus hoa sen sen việt đàn tranh dan tranh zither việt nam viet nam trung thu mid autumn đèn lồng lantern trăng moon valentine tình yêu love tim heart halloween bí ngô pumpkin dơi bat", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt phím"), keywords: "trong suốt transparent", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt ký tự"), keywords: "trong suốt transparent chữ", page: .giaoDien),
             .init(viTitle: LK("Tuỳ chỉnh nâng cao"), keywords: "màu chữ màu phím màu nhấn accent color colour bo góc tròn vuông corner radius cỡ chữ size phông font độ đậm weight bold đặt lại reset mặc định giao diện theme", page: .giaoDien),
@@ -146,6 +146,7 @@ struct FeatureSearchEntry: Identifiable {
         ]
         if UIDevice.current.userInterfaceIdiom == .phone {
             e.append(.init(viTitle: LK("Giữ phím hàng trên để ra số"), keywords: "số giữ lâu number", page: .phim))
+            e.append(.init(viTitle: LK("Giữ Shift để gõ số và ký hiệu"), keywords: "shift giữ hold số number ký hiệu symbol 123", page: .phim))
             e.append(.init(viTitle: LK("Chế độ một tay"), keywords: "one hand một tay", page: .phim))
         }
         if PlusGate.isUnlocked(.sentenceDiacritics) {
@@ -608,6 +609,8 @@ struct PhimPage: View {
     /// Giữ phím chữ ra ký tự phụ (KeyAlternates) — số mặc định BẬT, ký hiệu TẮT.
     @AppStorage("longPressNumbers", store: featureDefaults) private var longPressNumbers = true
     @AppStorage("longPressSymbols", store: featureDefaults) private var longPressSymbols = false
+    /// Giữ ⇧ + phím chữ ra ký tự phụ (ShiftHold) — mặc định BẬT.
+    @AppStorage("holdShiftSymbols", store: featureDefaults) private var holdShiftSymbols = true
     /// Vuốt phím cách đổi Tiếng Việt ↔ Tiếng Anh — mặc định TẮT (KeyboardSettings.spaceSwipeLanguage).
     @AppStorage("spaceSwipeLanguage", store: featureDefaults) private var spaceSwipeLanguage = false
     /// Vuốt phím C / X / V lên ra lệnh sao chép / cắt / dán — mặc định TẮT (KeyCommandGesture).
@@ -674,6 +677,7 @@ struct PhimPage: View {
                         settingToggle(L("Giữ phím hàng trên để ra số"), L("Giữ q … p để gõ 1 … 0 (số nhỏ ở góc phím)."), isOn: $longPressNumbers)
                     }
                     settingToggle(L("Giữ phím hàng 2, 3 để ra ký tự đặc biệt"), L("Giữ a … l, z … m để gõ @ # $ _ & - + ( ) … Giữ , để ra dấu chấm."), isOn: $longPressSymbols)
+                    settingToggle(L("Giữ Shift để gõ số và ký hiệu"), L("Giữ ⇧ rồi chạm phím chữ để gõ ký tự nhỏ ở góc phím (q w e → 1 2 3) thay vì chữ hoa. Chạm ⇧ vẫn viết hoa một chữ, chạm đôi để khoá."), isOn: $holdShiftSymbols)
                 }
                 settingToggle(L("Tự thêm dấu cách sau dấu câu"), L("Gõ . , ? ! ; : tự có dấu cách phía sau. Không thêm trong số (3.5, 1,000), email, đường dẫn. Gõ dấu cách ngay sau không thành hai dấu cách; ⌫ ngay sau chỉ xoá dấu cách đó."), isOn: $autoSpaceAfterPunct)
             } header: { Text(L("Phím")) }

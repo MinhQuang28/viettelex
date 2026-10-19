@@ -30,6 +30,9 @@
 //   hiện (~1.97 MB). Pedal (Shift/Caps): pool 8 node thứ hai 11.025 kHz với bộ nốt ngân 2.5 s, dựng
 //   LƯỜI lần đầu đạp pedal (~2.76 MB; trong lúc dựng nốt phát bản thường). Kiểu khác: đường 3 tiếng
 //   như cũ, chỉ thêm một phép so bool.
+// - ĐÀN TRANH (theme Sen Việt, 19/10/2026): CÙNG đường Piano (pool 8 giọng, pedal, bộ ngân dựng lười, damper) —
+//   chỉ khác bảng nốt + bộ tổng hợp (KeyInstrument). Bộ nốt thường 1.0 s ⇒ ~2.45 MB Float32; bộ ngân ~2.76 MB như
+//   Piano. Đổi Piano ⇄ Đàn tranh: dựng lại bộ nốt, giữ node (cùng định dạng 22.05 kHz), bỏ bộ ngân cũ.
 import AVFoundation
 
 final class KeySound {
@@ -61,8 +64,10 @@ final class KeySound {
     /// Kiểu thật sự đang phát (custom thiếu file ⇒ subtle) — log/test.
     private(set) var activeStyle: KeySoundStyle = .defaultStyle
 
-    // --- Piano (chỉ khi kiểu = piano) ---
+    // --- Nhạc cụ mỗi phím một nốt (kiểu = piano / dantranh) ---
     private var pianoMode = false
+    /// Nhạc cụ đang dựng (pianoMode). Bộ nốt / bộ ngân thuộc nhạc cụ này.
+    private(set) var instrument: KeyInstrument = .piano
     private var pianoNodes: [AVAudioPlayerNode] = []
     private var sustainNodes: [AVAudioPlayerNode] = []
     /// Buffer theo số MIDI (0…127), nil = không có. Tra mỗi phím không cấp phát.
@@ -229,11 +234,12 @@ final class KeySound {
     private func kickSustainBuildLocked() {
         guard pianoMode, !sustainReady, !sustainBuilding else { return }
         sustainBuilding = true
+        let inst = instrument
         queue.async { [self] in
-            let banks = PianoMap.notes.map { ($0, PianoSynth.note($0, sustain: true)) }
+            let banks = inst.map.notes.map { ($0, inst.note($0, sustain: true)) }
             lock.lock(); defer { lock.unlock() }
             sustainBuilding = false
-            guard pianoMode, let e = engine,
+            guard pianoMode, instrument == inst, let e = engine,
                   let fmt = AVAudioFormat(standardFormatWithSampleRate: PianoSynth.sustainSampleRate, channels: 1) else { return }
             for (m, s) in banks { sustainBuf[m] = Self.pcm(s, fmt) }
             if sustainNodes.isEmpty {
@@ -256,13 +262,21 @@ final class KeySound {
         return b
     }
 
-    /// Dựng bộ nốt thường + pool giọng (trong lock, lúc khởi động engine với kiểu piano).
-    private func buildPianoLocked(_ e: AVAudioEngine) -> Bool {
+    /// Dựng bộ nốt thường + pool giọng (trong lock, lúc khởi động engine với kiểu piano / đàn tranh).
+    /// Đổi nhạc cụ: bộ ngân của nhạc cụ cũ bỏ (dựng lại lười), node giữ nguyên.
+    private func buildPianoLocked(_ e: AVAudioEngine, _ inst: KeyInstrument) -> Bool {
         guard let fmt = AVAudioFormat(standardFormatWithSampleRate: PianoSynth.sampleRate, channels: 1) else { return false }
         var nb = [AVAudioPCMBuffer?](repeating: nil, count: 128)
-        for m in PianoMap.notes { nb[m] = Self.pcm(PianoSynth.note(m), fmt) }
-        let extra = [PianoSynth.space(), PianoSynth.returnChord(), PianoSynth.delete(), PianoSynth.pedal()].compactMap { Self.pcm($0, fmt) }
+        for m in inst.map.notes { nb[m] = Self.pcm(inst.note(m), fmt) }
+        let extra = [inst.space(), inst.returnChord(), inst.delete(), inst.pedal()].compactMap { Self.pcm($0, fmt) }
         guard extra.count == 4 else { return false }
+        if instrument != inst || !pianoMode {
+            for n in sustainNodes { n.stop() }
+            sustainBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)
+            sustainReady = false
+            sustainPool = VoicePool(size: PianoSynth.voices)
+        }
+        instrument = inst
         pianoBuf = nb; pianoExtra = extra
         if pianoNodes.isEmpty {
             for _ in 0..<PianoSynth.voices {
@@ -329,9 +343,9 @@ final class KeySound {
                     self.queue.async { _ = self.startNow() }
                 }
             }
-            if builtKey != key && styleRaw == KeySoundStyle.piano.rawValue {
-                guard buildPianoLocked(e) else { return false }
-                buffers = []; builtKey = key; activeStyle = .piano; pianoMode = true
+            if builtKey != key, let inst = KeyInstrument.of(styleRaw) {
+                guard buildPianoLocked(e, inst) else { return false }
+                buffers = []; builtKey = key; activeStyle = inst.style; pianoMode = true
             } else if builtKey != key {
                 if pianoMode { releasePianoLocked() }
                 let custom = styleRaw == KeySoundStyle.custom.rawValue ? KeySoundCustom.load(customURL) : nil

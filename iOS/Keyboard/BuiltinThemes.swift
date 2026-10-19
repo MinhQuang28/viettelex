@@ -101,6 +101,13 @@ enum BuiltinThemesData {
       "dark": "same"
     },
     {
+      "v": 1, "id": "sen", "name": {"vi": "Sen Việt", "en": "Vietnamese Lotus"}, "sound": "dantranh", "effect": "petal",
+      "light": {"bg": "#FCE4EC", "key": "#FFFFFF", "special": "#F8BBD0", "ink": "#14421A", "accent": "#EC6A9C",
+                "accentInk": "#33091C", "fn": "#2E7D32", "fnInk": "#FFFFFF", "deco": {"motif": "lotus", "color": "#66EC6A9C"}},
+      "dark": {"bg": "#0D1A11", "key": "#1E3324", "special": "#2E4A35", "ink": "#FCE4EC", "accent": "#EC6A9C",
+               "accentInk": "#33091C", "fn": "#15281B", "fnInk": "#F48FB1", "deco": {"motif": "lotus", "color": "#66F48FB1"}}
+    },
+    {
       "v": 1, "id": "trungthu", "name": {"vi": "Trung Thu", "en": "Mid-Autumn"}, "sound": "trong", "effect": "lantern",
       "light": {"bg": "#0B1636", "key": "#1A2A57", "special": "#13214A", "ink": "#FFF1D0", "accent": "#F59E2B",
                 "accentInk": "#2B1300", "fn": "#142352", "fnInk": "#FFC857",

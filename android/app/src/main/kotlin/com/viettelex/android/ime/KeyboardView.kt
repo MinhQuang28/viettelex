@@ -20,6 +20,8 @@ import com.viettelex.keyboard.EmojiKeyAction
 import com.viettelex.keyboard.EmojiKeyMenu
 import com.viettelex.keyboard.KeyAlternates
 import com.viettelex.keyboard.KeyVariants
+import com.viettelex.keyboard.ShiftHold
+import com.viettelex.keyboard.SuggestionCase
 import com.viettelex.keyboard.EmojiSearch
 import com.viettelex.keyboard.EmojiSearchSession
 import com.viettelex.keyboard.GestureClassifier
@@ -194,6 +196,9 @@ class KeyboardView(
         dropAlt()
         if (plane == Plane.LETTERS || plane == Plane.EMOJI_SEARCH) invalidate()
     }
+    /** "Giữ Shift để gõ số và ký hiệu" ([ShiftHold], [KeyAlternates.shiftMap]) — rỗng khi tắt. */
+    private var shiftAlts: Map<Char, String> = emptyMap()
+    fun setShiftAlternates(map: Map<Char, String>) { shiftAlts = map }
     private var altHold: KeyAlternates.Hold? = null
     private var altPid = -1
     private var altKey: LaidKey? = null
@@ -265,7 +270,8 @@ class KeyboardView(
     private val planeCache = HashMap<Plane, List<LaidKey>>()
 
     private val commits = KeyCommitQueue()
-    private var lastShiftTap = 0L
+    /** Chạm / chạm đôi / GIỮ ⇧ (THUẦN, ShiftHoldTests). */
+    private val shiftHold = ShiftHold()
     private var lastSpaceTap = 0L
 
     // --- pointer → phím (id pointer ≤ 31) ---
@@ -371,8 +377,12 @@ class KeyboardView(
     private var keyCmdShown = false
     /** Giữ ⇧ (ngón đang đè phím shift) — trackpad thành chọn chữ. */
     private var shiftPtr = -1
-    private var shiftBeforeTap = Shift.OFF
-    private var shiftUsedAsModifier = false
+    private fun toCase(s: Shift) = when (s) {
+        Shift.OFF -> SuggestionCase.Shift.OFF; Shift.ON -> SuggestionCase.Shift.ONCE; Shift.CAPS -> SuggestionCase.Shift.CAPS_LOCK
+    }
+    private fun fromCase(s: SuggestionCase.Shift) = when (s) {
+        SuggestionCase.Shift.OFF -> Shift.OFF; SuggestionCase.Shift.ONCE -> Shift.ON; SuggestionCase.Shift.CAPS_LOCK -> Shift.CAPS
+    }
     private var trackpadSelect = false
     private val yOffPx = TouchGeometry.yOffset * d
 
@@ -1300,12 +1310,22 @@ class KeyboardView(
         // ĐẦU TIÊN: chốt các phím nhấc-mới-chốt đang đè (thứ tự khi gõ chồng ngón).
         commits.flush(hit)
         // Chọn phím theo ngữ cảnh (thử nghiệm) — SAU flush để prior thấy từ đang gõ mới nhất.
-        val prior = if (forced == null && hit.kind == KeyKind.LETTER && plane == Plane.LETTERS) letterPrior?.invoke() else null
+        // Giữ ⇧ + phím có ký tự phụ ⇒ gõ ký tự phụ: không chọn phím theo ngữ cảnh chữ.
+        val shiftSym = if (shiftPtr >= 0 && hit.kind == KeyKind.LETTER && shiftAlts.isNotEmpty())
+            shiftHold.symbol(hit.label[0], shiftAlts, e.eventTime) else null
+        val prior = if (shiftSym == null && forced == null && hit.kind == KeyKind.LETTER && plane == Plane.LETTERS) letterPrior?.invoke() else null
         val k = if (prior != null) SmartTouch.refine(keys, hit, x, y - TouchGeometry.yOffset * d, prior) else hit
         ptrKey[pid] = k
         if (effects != null) fxMark(k)
         when (k.kind) {
-            KeyKind.LETTER -> {
+            KeyKind.LETTER -> if (shiftSym != null) {
+                // Giữ ⇧: ký tự phụ nguyên văn (VNI không bỏ dấu); không vuốt / lệnh / giữ ký tự phụ.
+                feedback.clickKey(k.label, Feedback.LETTER, this)
+                pressDown(pid, k)
+                if (keyPreview) showBalloon(k, shiftSym)
+                emit(ShiftHold.key(shiftSym))
+                lastLetterDownT = e.eventTime
+            } else {
                 feedback.clickKey(k.label, Feedback.LETTER, this)
                 pressDown(pid, k)
                 if (keyPreview) showBalloon(k, if (shift == Shift.OFF) k.label else k.upper)
@@ -1382,14 +1402,10 @@ class KeyboardView(
                 }
             }
             KeyKind.SHIFT -> {
-                val now = SystemClock.uptimeMillis()
-                shiftBeforeTap = shift
-                shift = if (now - lastShiftTap < SHIFT_DOUBLE_MS) Shift.CAPS
-                        else if (shift == Shift.OFF) Shift.ON else Shift.OFF
-                lastShiftTap = now
+                shift = fromCase(shiftHold.down(toCase(shift), e.eventTime))
                 // Sau khi đổi: Piano cần biết Shift một-lần hay Caps (pedal); kiểu khác = tiếng chức năng.
                 feedback.shiftPressed(pedalShift(shift), this)
-                shiftPtr = pid; shiftUsedAsModifier = false
+                shiftPtr = pid
                 k.pressed = true
                 invalidate()   // mọi nhãn chữ đổi hoa/thường
             }
@@ -1548,8 +1564,10 @@ class KeyboardView(
             }
             KeyKind.SHIFT -> if (pid == shiftPtr) {
                 shiftPtr = -1
-                // ⇧ vừa dùng làm phím bổ trợ (giữ + kéo phím cách chọn chữ): trả shift như trước khi chạm.
-                if (shiftUsedAsModifier) { shift = shiftBeforeTap; lastShiftTap = 0L; shiftUsedAsModifier = false }
+                // ⇧ vừa làm phím bổ trợ: chọn chữ ⇒ trả shift như trước khi chạm; ký tự phụ ⇒ không
+                // để lại một-lần (Caps Lock giữ nguyên) — ShiftHold.up.
+                val s = fromCase(shiftHold.up(toCase(shift)))
+                if (s != shift) shift = s
             }
             KeyKind.EDIT -> if (pid == editPtr) {
                 removeCallbacks(editRepeatRun); editPtr = -1; editRepeatKey = null
@@ -1609,7 +1627,7 @@ class KeyboardView(
     private fun cancelAllTouches() {
         abortSwipe()
         endKeyCmd()
-        shiftPtr = -1; shiftUsedAsModifier = false
+        shiftPtr = -1; shiftHold.cancel()
         dropAlt()
         // Bàn phím ẩn / đổi một tay giữa lúc popup mở: không chèn đuôi đang chọn (flush dưới).
         popKey?.let { if (popHold?.fired == true) commits.disarm(it) }
@@ -2077,7 +2095,7 @@ class KeyboardView(
     private fun sendTrackpadStep(s: TrackpadGesture.Step) {
         if (plane == Plane.EMOJI_SEARCH) return
         // Giữ ⇧ lúc kéo (chỉ khi bật "Vuốt phím để sao chép/dán") ⇒ chọn chữ; chốt tới khi nhả trackpad.
-        if (keyCommands && shiftPtr >= 0) { trackpadSelect = true; shiftUsedAsModifier = true }
+        if (keyCommands && shiftPtr >= 0) { trackpadSelect = true; shiftHold.markSelect() }
         if (trackpadSelect) listener?.onTrackpadSelect(s.count, s.axis == TrackpadGesture.Axis.V)
         else listener?.onTrackpadMove(s.count, s.axis == TrackpadGesture.Axis.V)
     }
@@ -2151,7 +2169,6 @@ class KeyboardView(
         const val SIDE_SP = 20f
         const val HINT_SP = 10f
         const val DOUBLE_SPACE_MS = 350L
-        const val SHIFT_DOUBLE_MS = 300L
         const val SPACE_HOLD_MS = 300L
         const val BS_HOLD_MS = 500L
         const val BS_INTERVAL = 90L

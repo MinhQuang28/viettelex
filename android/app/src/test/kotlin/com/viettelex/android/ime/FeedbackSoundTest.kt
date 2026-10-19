@@ -31,6 +31,7 @@ class FeedbackSoundTest {
     /** Piano: chỉ kiểu piano đi đường nốt; loại phím không nhãn ⇒ sự kiện piano; kiểu khác giữ 3 tiếng. */
     @Test fun pianoRouting() {
         assertTrue(Feedback.isPiano("piano"))
+        assertTrue("đàn tranh đi chung đường nốt", Feedback.isPiano("dantranh"))
         for (id in listOf("subtle", "wood", "phao", "jingle", "system", "custom", "loud")) assertFalse(id, Feedback.isPiano(id))
         assertEquals(com.viettelex.keyboard.PianoEvent.SPACE, Feedback.pianoEvent(Feedback.SPACE))
         assertEquals(com.viettelex.keyboard.PianoEvent.RETURN, Feedback.pianoEvent(Feedback.RETURN))
@@ -55,6 +56,24 @@ class FeedbackSoundTest {
             assertEquals(f, Feedback.pianoNoteFile(dir, 60, sustain = false)); assertEquals(stamp, f.lastModified())
             assertEquals(11_025.0, KeySoundSynth.parseWav(Feedback.pianoNoteFile(dir, 60, sustain = true)!!.readBytes())!!.second, 0.0)
             assertEquals(4, Feedback.pianoExtraFiles(dir).filterNotNull().size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    /** Đàn tranh: WAV cache riêng (tên khác Piano — đổi kiểu không dùng nhầm nốt piano), cùng tần số mẫu. */
+    @Test fun danTranhWavCache() {
+        val dir = Files.createTempDirectory("keysound").toFile()
+        try {
+            val inst = com.viettelex.keyboard.KeyInstrument.DANTRANH
+            val f = Feedback.pianoNoteFile(dir, inst, 65, sustain = false)!!
+            assertEquals("keysound-dantranh-v1-n-65.wav", f.name)
+            assertEquals("keysound-piano-v1-n-65.wav", Feedback.pianoNoteFile(dir, 65, sustain = false)!!.name)
+            val (s, rate) = KeySoundSynth.parseWav(f.readBytes())!!
+            assertEquals(22_050.0, rate, 0.0)
+            assertEquals(com.viettelex.keyboard.DanTranhSynth.note(65).size, s.size)
+            assertEquals(11_025.0, KeySoundSynth.parseWav(Feedback.pianoNoteFile(dir, inst, 65, sustain = true)!!.readBytes())!!.second, 0.0)
+            val extras = Feedback.pianoExtraFiles(dir, inst)
+            assertEquals(4, extras.filterNotNull().size)
+            assertEquals("keysound-dantranh-v1-pedal.wav", extras[3]!!.name)
         } finally { dir.deleteRecursively() }
     }
 

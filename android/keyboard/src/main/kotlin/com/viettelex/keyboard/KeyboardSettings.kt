@@ -104,6 +104,8 @@ data class KeyboardSettings(
     var longPressNumbers: Boolean = true,
     /** Giữ a–l, z–m ra ký hiệu — mặc định TẮT. Giống iOS. */
     var longPressSymbols: Boolean = false,
+    /** "Giữ Shift để gõ số và ký hiệu" ([ShiftHold]) — mặc định BẬT. Giống iOS. */
+    var holdShiftSymbols: Boolean = true,
     /** Phím cạnh dấu cách (bàn chữ ô thường; tablet: có / không "," "." hai bên space) — mặc định "," ([SpaceSideKey]). */
     var spaceSideKey: SpaceSideKey = SpaceSideKey.DEFAULT,
     /** Nút 😊: hàng đáy (mặc định) / thanh gợi ý ([EmojiKeyPlacement]). */
@@ -198,6 +200,7 @@ data class KeyboardSettings(
             s.keyboardRaise = clampRaise((get(Keys.KEYBOARD_RAISE) as? Number)?.toInt() ?: 0)
             s.longPressNumbers = b(Keys.LONG_PRESS_NUMBERS, s.longPressNumbers)
             s.longPressSymbols = b(Keys.LONG_PRESS_SYMBOLS, s.longPressSymbols)
+            s.holdShiftSymbols = b(Keys.HOLD_SHIFT_SYMBOLS, s.holdShiftSymbols)
             s.spaceSideKey = SpaceSideKey.of(get(Keys.SPACE_SIDE_KEY))
             s.suggestionBarHeight = SuggestionBarHeight.of(get(Keys.SUGGESTION_BAR_HEIGHT))
             s.emojiKeyPlacement = EmojiKeyPlacement.of(get(Keys.EMOJI_KEY_PLACEMENT))
