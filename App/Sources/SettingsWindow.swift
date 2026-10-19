@@ -520,27 +520,44 @@ final class SettingsModel: ObservableObject {
         return filtered.sorted(using: modeSortOrder)
     }
 
-    /// Extracts a bundle ID from a typed or dropped .app path or URL, or returns nil if it is not a path.
+    /// Text that looks like a file path (typed / dragged .app) rather than a bundle id.
+    static func looksLikeAppPath(_ text: String) -> Bool {
+        let t = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return t.hasPrefix("/") || t.hasPrefix("~") || t.hasPrefix("file://") || t.hasSuffix(".app") || t.hasSuffix(".app/")
+    }
+
+    /// Bundle id of the .app at `url` (Bundle API, then Contents/Info.plist); caches its display name.
+    static func bundleID(atAppURL url: URL) -> String? {
+        let bid = Bundle(url: url)?.bundleIdentifier
+            ?? (NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist"))?["CFBundleIdentifier"] as? String)
+        guard let bid, !bid.isEmpty else { return nil }
+        let displayName = FileManager.default.displayName(atPath: url.path)
+        nameCache[bid] = displayName.hasSuffix(".app") ? String(displayName.dropLast(4)) : displayName
+        return bid
+    }
+
+    /// Extracts a bundle ID from a typed or dropped .app path / file URL; nil if not a readable app.
     static func extractBundleID(from pathOrID: String) -> String? {
         let trimmed = pathOrID.trimmingCharacters(in: .whitespacesAndNewlines)
-        if trimmed.hasPrefix("/") || trimmed.hasSuffix(".app") || trimmed.hasPrefix("~") {
-            let expanded = (trimmed as NSString).expandingTildeInPath
-            let url = URL(fileURLWithPath: expanded)
-            if let bid = Bundle(url: url)?.bundleIdentifier
-                ?? (NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist"))?["CFBundleIdentifier"] as? String) {
-                let displayName = FileManager.default.displayName(atPath: url.path)
-                nameCache[bid] = displayName.hasSuffix(".app") ? String(displayName.dropLast(4)) : displayName
-                return bid
-            }
-        }
-        return nil
+        guard looksLikeAppPath(trimmed) else { return nil }
+        let url: URL
+        if trimmed.hasPrefix("file://"), let u = URL(string: trimmed) { url = u }
+        else { url = URL(fileURLWithPath: (trimmed as NSString).expandingTildeInPath) }
+        return bundleID(atAppURL: url)
     }
 
     /// Add a row by hand (recent-apps picker, typed bundle id, or dragged .app path), mode = Auto.
     func addApp() {
         let text = newModeAppID.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else { return }
-        let id = Self.extractBundleID(from: text) ?? text
+        let id: String
+        if Self.looksLikeAppPath(text) {
+            // A path that is not a readable app must not be stored as a "bundle id".
+            guard let bid = Self.extractBundleID(from: text) else { return showBundleIDError(text) }
+            id = bid
+        } else {
+            id = text
+        }
         addedApps.insert(id)
         newModeAppID = ""
         reloadModeTable()
@@ -558,21 +575,18 @@ final class SettingsModel: ObservableObject {
         panel.message = loc("Select an application to add")
 
         guard panel.runModal() == .OK, let url = panel.url else { return }
-        let bid = Bundle(url: url)?.bundleIdentifier
-            ?? (NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist"))?["CFBundleIdentifier"] as? String)
-        if let bid = bid, !bid.isEmpty {
-            let displayName = FileManager.default.displayName(atPath: url.path)
-            Self.nameCache[bid] = displayName.hasSuffix(".app") ? String(displayName.dropLast(4)) : displayName
-            addedApps.insert(bid)
-            newModeAppID = ""
-            reloadModeTable()
-        } else {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = loc("Could not read application bundle identifier")
-            alert.informativeText = url.lastPathComponent
-            alert.runModal()
-        }
+        guard let bid = Self.bundleID(atAppURL: url) else { return showBundleIDError(url.lastPathComponent) }
+        addedApps.insert(bid)
+        newModeAppID = ""
+        reloadModeTable()
+    }
+
+    private func showBundleIDError(_ detail: String) {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = loc("Could not read application bundle identifier")
+        alert.informativeText = (detail as NSString).lastPathComponent
+        alert.runModal()
     }
 
     /// Forget everything learned so the probe re-classifies from scratch. Keeps the
