@@ -127,6 +127,7 @@ struct FeatureSearchEntry: Identifiable {
             .init(viTitle: LK("Phím sẫm khi bấm"), keywords: "pressed key highlight", page: .phim),
             .init(viTitle: LK("Rung phím"), keywords: "haptic rung vibrate", page: .phim),
             .init(viTitle: LK("Âm thanh phím"), keywords: "sound click tiếng âm lượng volume kiểu style gỗ cơ máy chữ bong bóng custom", page: .phim),
+            .init(viTitle: LK("Âm thanh gõ"), keywords: "typing sound key sound style kiểu âm iOS system click hệ thống gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc bàn phím cơ mechanical máy chữ typewriter bong bóng bubble", page: .phim),
             .init(viTitle: LK("Theme & ảnh nền"), keywords: "theme màu chủ đề wallpaper hình nền", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt phím"), keywords: "trong suốt transparent", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt ký tự"), keywords: "trong suốt transparent chữ", page: .giaoDien),
@@ -626,15 +627,9 @@ struct PhimPage: View {
     @AppStorage("hapticFeedback", store: featureDefaults) private var hapticFeedback = false
     @AppStorage("hapticStrength", store: featureDefaults) private var hapticStrength = 45
     @AppStorage("keySound", store: featureDefaults) private var keySound = false
-    @AppStorage("keySoundVolume", store: featureDefaults) private var keySoundVolume = 50
     @AppStorage("keySoundStyle", store: featureDefaults) private var keySoundStyle = KeySoundStyle.defaultStyle.rawValue
-    /// Nghe/rung thử khi kéo thanh trượt: ≤ 1 lần / 120 ms + lúc thả.
+    /// Rung thử khi kéo thanh trượt: ≤ 1 lần / 120 ms + lúc thả.
     @State private var hapticThrottle = PreviewThrottle()
-    @State private var volumeThrottle = PreviewThrottle()
-    @State private var importing = false
-    @State private var styleBeforeImport: String?
-    @State private var customDuration: Double?
-    @State private var importMessage: String?
 
     private var isPhone: Bool { UIDevice.current.userInterfaceIdiom == .phone }
 
@@ -723,14 +718,69 @@ struct PhimPage: View {
                 }
                 settingToggle(L("Âm thanh phím"), L("Tiếng phím riêng của VietTelex: chọn kiểu, chỉnh âm lượng. Tắt: dùng tiếng bấm bàn phím của iOS (Cài đặt → Âm thanh). Im khi gạt chế độ im lặng."), isOn: $keySound)
                 if keySound {
-                    Picker(L("Kiểu âm"), selection: Binding(get: { keySoundStyle }, set: { pickStyle($0) })) {
-                        ForEach(KeySoundStyle.allCases, id: \.rawValue) { st in
-                            Text(L(st.viTitle)).tag(st.rawValue)
+                    // "Âm thanh gõ" (Phil 19/10/2026): trang con chọn kiểu + âm lượng + âm tự chọn.
+                    NavigationLink { KeySoundStylePage() } label: {
+                        HStack {
+                            Text(L("Âm thanh gõ"))
+                            Spacer()
+                            Text(L(KeySoundStyle.resolve(keySoundStyle, customAvailable: true).viTitle))
+                                .foregroundStyle(.secondary).lineLimit(1)
                         }
                     }
-                    if keySoundStyle == KeySoundStyle.custom.rawValue || customDuration != nil {
-                        customSoundRow
+                    if KeySoundStyle.needsEngine(keySoundStyle) {
+                        FullAccessNotice(reason: L("Âm thanh phím"))
                     }
+                }
+            } header: { Text(L("Phản hồi khi chạm")) }
+        }
+    }
+
+    private func previewHaptic(final: Bool) {
+        guard hapticThrottle.shouldFire(value: hapticStrength, now: CACurrentMediaTime(), final: final) else { return }
+        KeyFeedbackPreview.shared.playHaptic(strength: hapticStrength)
+    }
+}
+
+/// "Âm thanh gõ" (Phil 19/10/2026): chọn kiểu âm phím — "iOS" (click hệ thống) đầu, 11 kiểu tổng hợp + Piano,
+/// "Âm của bạn" cuối. Chạm một kiểu = chọn + nghe thử chữ → xoá → phím chức năng. Âm lượng + nhập âm
+/// tự chọn ở đây (Android: KeySoundPage, cùng bố cục). Mọi kiểu miễn phí.
+struct KeySoundStylePage: View {
+    @AppStorage("keySoundVolume", store: featureDefaults) private var keySoundVolume = 50
+    @AppStorage("keySoundStyle", store: featureDefaults) private var keySoundStyle = KeySoundStyle.defaultStyle.rawValue
+    @State private var volumeThrottle = PreviewThrottle()
+    @State private var importing = false
+    @State private var styleBeforeImport: String?
+    @State private var customDuration: Double?
+    @State private var importMessage: String?
+
+    private var current: KeySoundStyle { KeySoundStyle.resolve(keySoundStyle, customAvailable: true) }
+
+    var body: some View {
+        List {
+            Section {
+                ForEach(KeySoundStyle.menuOrder, id: \.rawValue) { st in
+                    Button { pickStyle(st.rawValue) } label: {
+                        HStack {
+                            Text(L(st.viTitle)).foregroundStyle(Color.primary)
+                            Spacer()
+                            if current == st {
+                                Image(systemName: "checkmark").foregroundStyle(Color.accentColor).font(.body.weight(.semibold))
+                            }
+                        }
+                        .contentShape(Rectangle())
+                    }
+                    .accessibilityAddTraits(current == st ? .isSelected : [])
+                }
+            } header: {
+                Text(L("Chạm một kiểu để chọn và nghe thử."))
+            } footer: {
+                Text(L("iOS: tiếng bấm bàn phím của hệ thống — theo Cài đặt → Âm thanh & Cảm ứng → Phản hồi bàn phím, không cần Toàn quyền Truy cập. Các kiểu khác là tiếng riêng của VietTelex (cần Toàn quyền Truy cập)."))
+            }
+            if current == .custom || customDuration != nil {
+                Section { customSoundRow }
+            }
+            if current.usesEngine {
+                Section {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack {
                             Text(L("Âm lượng"))
@@ -749,8 +799,11 @@ struct PhimPage: View {
                     }
                     FullAccessNotice(reason: L("Âm thanh phím"))
                 }
-            } header: { Text(L("Phản hồi khi chạm")) }
+            }
         }
+        .bottomBarScrollMargin()
+        .navigationTitle(L("Âm thanh gõ"))
+        .navigationBarTitleDisplayMode(.inline)
         .onAppear { customDuration = KeySoundImport.storedDuration() }
         .fileImporter(isPresented: $importing, allowedContentTypes: [.audio]) { result in
             handleImport(result)
@@ -794,7 +847,7 @@ struct PhimPage: View {
             return
         }
         keySoundStyle = raw
-        KeyFeedbackPreview.shared.playSound(style: raw, volume: max(keySoundVolume, 20))
+        KeyFeedbackPreview.shared.playStyle(raw, volume: max(keySoundVolume, 20))
     }
 
     private func handleImport(_ result: Result<URL, Error>) {
@@ -805,7 +858,7 @@ struct PhimPage: View {
                 customDuration = o.duration
                 keySoundStyle = KeySoundStyle.custom.rawValue
                 if o.truncated { importMessage = L("Âm dài hơn 0,3 giây nên đã được cắt ngắn.") }
-                KeyFeedbackPreview.shared.playSound(style: keySoundStyle, volume: max(keySoundVolume, 20))
+                KeyFeedbackPreview.shared.playStyle(keySoundStyle, volume: max(keySoundVolume, 20))
             } catch {
                 importMessage = error.localizedDescription
                 revertAfterFailedImport()
@@ -826,10 +879,5 @@ struct PhimPage: View {
     private func previewSound(final: Bool) {
         guard volumeThrottle.shouldFire(value: keySoundVolume, now: CACurrentMediaTime(), final: final) else { return }
         KeyFeedbackPreview.shared.playSound(style: keySoundStyle, volume: keySoundVolume)
-    }
-
-    private func previewHaptic(final: Bool) {
-        guard hapticThrottle.shouldFire(value: hapticStrength, now: CACurrentMediaTime(), final: final) else { return }
-        KeyFeedbackPreview.shared.playHaptic(strength: hapticStrength)
     }
 }

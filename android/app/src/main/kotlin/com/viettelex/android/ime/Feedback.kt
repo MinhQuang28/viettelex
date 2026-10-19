@@ -11,6 +11,11 @@ import com.viettelex.keyboard.HapticStrength
 import com.viettelex.keyboard.KeySoundCustom
 import com.viettelex.keyboard.KeySoundStyle
 import com.viettelex.keyboard.KeySoundSynth
+import com.viettelex.keyboard.PianoEvent
+import com.viettelex.keyboard.PianoMap
+import com.viettelex.keyboard.PianoPedal
+import com.viettelex.keyboard.PianoSynth
+import com.viettelex.keyboard.VoicePool
 import java.io.File
 
 /**
@@ -27,6 +32,14 @@ import java.io.File
  * noBackupFilesDir) qua SoundPool nạp sẵn, theo âm lượng thanh trượt, KHÔNG kèm tiếng hệ
  * thống; im khi máy ở Rung/Im lặng (như Gboard/AOSP LatinIME). SoundPool rảnh không tốn
  * CPU (không có luồng render liên tục như AVAudioEngine iOS) và được nhả khi ẩn bàn phím.
+ * Kiểu "Hệ thống" (keySoundStyle = system) ⇒ y như TẮT: playSoundEffect, không dựng SoundPool,
+ * không đọc ringer — 0 chi phí.
+ *
+ * Kiểu "Piano" (Phil 19/10/2026): mỗi phím một nốt ([PianoMap]); SoundPool maxStreams 16 = 8 giọng
+ * thường + 8 giọng ngân, xoay vòng [VoicePool] — bấm nhiều ngón cùng lúc (ACTION_POINTER_DOWN) mỗi
+ * ngón một nốt, giọng cùng cửa sổ 60 ms hạ 1/√n. Bộ nốt thường (22.05 kHz, 25 nốt + cách/Enter/⌫/
+ * pedal ≈ 0.99 MB PCM16) nạp lúc hiện; bộ ngân (11.025 kHz 2.5 s ≈ 1.38 MB) nạp lười lần đầu đạp
+ * pedal (Shift/Caps). Kiểu khác: đường 3 tiếng như cũ (thêm một phép so bool).
  */
 class Feedback(private val ctx: Context) {
     private val audio = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -44,6 +57,7 @@ class Feedback(private val ctx: Context) {
 
     // --- Âm phím riêng (chỉ đụng trên main, trừ nạp WAV trên worker) ---
     private var soundEnabled = false
+    private var soundStyle: String = KeySoundStyle.DEFAULT.id
     private var volumePercent = 50
     private var gain = KeySoundSynth.gain(50)
     private var pool: SoundPool? = null
@@ -60,31 +74,55 @@ class Feedback(private val ctx: Context) {
     var lastRoute: KeySoundSynth.Route? = null
         private set
 
+    // --- Piano ---
+    private var pianoMode = false
+    private val pianoIds = IntArray(128)
+    private val sustainIds = IntArray(128)
+    private val pianoExtra = IntArray(4)
+    @Volatile private var pianoLoaded = BooleanArray(PIANO_MAX_SAMPLE_IDS)
+    private var pianoPool = VoicePool(PianoSynth.VOICES)
+    private var sustainPool = VoicePool(PianoSynth.VOICES)
+    private val pianoStreams = IntArray(PianoSynth.VOICES)
+    private val sustainStreams = IntArray(PianoSynth.VOICES)
+    /** 0 = chưa, 1 = đang dựng, 2 = đã nạp. */
+    private var sustainState = 0
+    private var soundWorker: ((Runnable) -> Unit)? = null
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+    /** Pedal ngân (Shift/Caps người dùng bấm). */
+    val pedal = PianoPedal()
+    /** Test/log: giọng lần phát piano gần nhất (≥ VOICES = giọng ngân). */
+    var lastPianoVoice = -1
+        private set
+
     /**
      * Áp setting lúc bàn phím hiện. BẬT ⇒ dựng SoundPool + nạp 3 mẫu ([worker] ghi WAV cache
      * lần đầu / đọc file tự chọn); TẮT ⇒ nhả hết (0 chi phí). Đổi kiểu/file ⇒ nạp lại.
      */
     fun configureSound(enabled: Boolean, volume: Int, style: String, worker: (Runnable) -> Unit) {
         soundEnabled = enabled
+        soundStyle = style
+        pedal.reset()
         volumePercent = volume.coerceIn(0, 100)
         gain = KeySoundSynth.gain(volumePercent)
-        if (!enabled || volumePercent == 0) { releaseSound(); return }
+        if (!needsPool(enabled, volumePercent, style)) { releaseSound(); return }
         refreshRinger(force = true)
         val customFile = customFile(ctx)
         val key = KeySoundCustom.bankKey(style, customFile)
         if (pool != null && key == poolKey) return
         releaseSound()
-        val p = SoundPool.Builder().setMaxStreams(4).setAudioAttributes(
+        val piano = isPiano(style)
+        val p = SoundPool.Builder().setMaxStreams(if (piano) 2 * PianoSynth.VOICES else 4).setAudioAttributes(
             AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build()).build()
         pool = p; poolKey = key
         val fresh = BooleanArray(ids.size); loaded = fresh
+        val dir = ctx.cacheDir
+        if (piano) { configurePiano(p, dir, worker); return }
         p.setOnLoadCompleteListener { sp, sampleId, status ->
             if (sp !== pool || status != 0) return@setOnLoadCompleteListener
             for (i in ids.indices) if (ids[i] == sampleId) fresh[i] = true
         }
-        val dir = ctx.cacheDir
         worker(Runnable {
             val files = soundFiles(dir, style, customFile)
             android.os.Handler(android.os.Looper.getMainLooper()).post {
@@ -100,6 +138,43 @@ class Feedback(private val ctx: Context) {
         })
     }
 
+    /** Piano: nạp bộ nốt thường (worker ghi WAV cache lần đầu, main nạp SoundPool). */
+    private fun configurePiano(p: SoundPool, dir: File, worker: (Runnable) -> Unit) {
+        pianoMode = true
+        soundWorker = worker
+        pianoPool = VoicePool(PianoSynth.VOICES); sustainPool = VoicePool(PianoSynth.VOICES)
+        val fresh = BooleanArray(PIANO_MAX_SAMPLE_IDS); pianoLoaded = fresh
+        p.setOnLoadCompleteListener { sp, sampleId, status ->
+            if (sp === pool && status == 0 && sampleId in fresh.indices) fresh[sampleId] = true
+        }
+        worker(Runnable {
+            val notes = PianoMap.NOTES.map { it to pianoNoteFile(dir, it, sustain = false) }
+            val extras = pianoExtraFiles(dir)
+            main.post {
+                if (pool !== p) return@post
+                for ((m, f) in notes) if (f != null) pianoIds[m] = p.load(f.path, 1)
+                extras.forEachIndexed { i, f -> if (f != null) pianoExtra[i] = p.load(f.path, 1) }
+            }
+        })
+    }
+
+    /** Bộ nốt ngân: dựng lười lần đầu đạp pedal. */
+    private fun kickSustain() {
+        if (sustainState != 0) return
+        val p = pool ?: return
+        val w = soundWorker ?: return
+        sustainState = 1
+        val dir = ctx.cacheDir
+        w(Runnable {
+            val notes = PianoMap.NOTES.map { it to pianoNoteFile(dir, it, sustain = true) }
+            main.post {
+                if (pool !== p) return@post
+                for ((m, f) in notes) if (f != null) sustainIds[m] = p.load(f.path, 1)
+                sustainState = 2
+            }
+        })
+    }
+
     /** Nhả SoundPool (ẩn bàn phím, thiếu RAM, tắt setting). */
     fun releaseSound() {
         pool?.release()
@@ -107,10 +182,87 @@ class Feedback(private val ctx: Context) {
         poolKey = null
         ids.fill(0)
         loaded = BooleanArray(ids.size)
+        pianoMode = false
+        pianoIds.fill(0); sustainIds.fill(0); pianoExtra.fill(0)
+        pianoStreams.fill(0); sustainStreams.fill(0)
+        sustainState = 0
+    }
+
+    /** Phím ký tự có nhãn ([label]): Piano ⇒ nốt theo vị trí; kiểu khác ⇒ [click] như cũ. */
+    fun clickKey(label: String?, kind: Int, view: View) {
+        if (!pianoMode) { click(kind, view); return }
+        val route = KeySoundSynth.route(soundEnabled, volumePercent, ringerNormal(), soundStyle)
+        lastRoute = route
+        if (route == KeySoundSynth.Route.CUSTOM) playPiano(PianoMap.midiForKey(label), pedal.noteTyped())
+        haptic(view)
+    }
+
+    /** Người dùng bấm Shift, [result] = trạng thái SAU khi bấm. Piano ⇒ pedal/damper; kiểu khác ⇒ tiếng chức năng. */
+    fun shiftPressed(result: PianoPedal.Shift, view: View) {
+        if (!pianoMode) { click(MODIFIER, view); return }
+        val route = KeySoundSynth.route(soundEnabled, volumePercent, ringerNormal(), soundStyle)
+        lastRoute = route
+        when (pedal.shiftPressed(result)) {
+            PianoPedal.Action.PEDAL_DOWN -> if (route == KeySoundSynth.Route.CUSTOM) playPiano(PianoEvent.PEDAL, false)
+            PianoPedal.Action.DAMPER -> damper()
+            PianoPedal.Action.NONE -> {}
+        }
+        haptic(view)
+    }
+
+    /** Shift đổi không do bấm phím Shift: Caps tắt ⇒ damper. */
+    fun shiftChanged(now: PianoPedal.Shift) {
+        if (pianoMode && pedal.shiftChanged(now) == PianoPedal.Action.DAMPER) damper()
+    }
+
+    /** Piano: một sự kiện ([PianoEvent] / nốt MIDI). Chỉ lên lịch SoundPool, không cấp phát. */
+    private fun playPiano(ev: Int, sustain: Boolean) {
+        val p = pool ?: return
+        var id = 0
+        var sus = false
+        if (ev >= 0) {
+            if (ev > 127) return
+            if (sustain) {
+                if (sustainState == 2 && sustainIds[ev] != 0 && sustainIds[ev] < pianoLoaded.size && pianoLoaded[sustainIds[ev]]) {
+                    id = sustainIds[ev]; sus = true
+                } else kickSustain()
+            }
+            if (id == 0) id = pianoIds[ev]
+        } else {
+            id = pianoExtra[PianoEvent.extraIndex(ev)]
+            if (ev == PianoEvent.PEDAL) kickSustain()
+        }
+        if (id <= 0 || id >= pianoLoaded.size || !pianoLoaded[id]) return
+        val now = SystemClock.uptimeMillis() / 1000.0
+        val vp = if (sus) sustainPool else pianoPool
+        val streams = if (sus) sustainStreams else pianoStreams
+        val v = vp.allocate(now)
+        val g = gain * VoicePool.chordScale(vp.simultaneous(now))
+        for (i in 0 until vp.size) if (i != v && streams[i] != 0 && vp.isRecent(i, now)) p.setVolume(streams[i], g, g)
+        streams[v] = p.play(id, g, g, 1, 0, 1f)
+        lastPianoVoice = v + if (sus) PianoSynth.VOICES else 0
+    }
+
+    /** Tắt Caps (nhả pedal): nốt đang ngân tắt nhanh ~90 ms (3 nấc) thay vì ngân tiếp. */
+    private fun damper() {
+        val p = pool ?: return
+        val s = sustainStreams.copyOf()
+        val g = gain
+        for (id in s) if (id != 0) p.setVolume(id, g * 0.35f, g * 0.35f)
+        main.postDelayed({ if (pool === p) for (id in s) if (id != 0) p.setVolume(id, g * 0.12f, g * 0.12f) }, 40)
+        main.postDelayed({ if (pool === p) for (id in s) if (id != 0) p.stop(id) }, 90)
+        sustainStreams.fill(0)
+    }
+
+    private fun haptic(view: View) {
+        if (hapticsEnabled && !vibrate(tick = false)) {
+            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP,
+                HapticFeedbackConstants.FLAG_IGNORE_VIEW_SETTING)
+        }
     }
 
     fun click(kind: Int, view: View) {
-        val route = KeySoundSynth.route(soundEnabled, volumePercent, ringerNormal())
+        val route = KeySoundSynth.route(soundEnabled, volumePercent, ringerNormal(), soundStyle)
         lastRoute = route
         when (route) {
             KeySoundSynth.Route.SYSTEM -> audio.playSoundEffect(when (kind) {
@@ -119,7 +271,7 @@ class Feedback(private val ctx: Context) {
                 RETURN -> AudioManager.FX_KEYPRESS_RETURN
                 else -> AudioManager.FX_KEYPRESS_STANDARD
             })
-            KeySoundSynth.Route.CUSTOM -> {
+            KeySoundSynth.Route.CUSTOM -> if (pianoMode) playPiano(pianoEvent(kind), false) else {
                 val i = soundKind(kind).ordinal
                 val g = gain * kindGain[i]
                 if (loaded[i]) pool?.play(ids[i], g, g, 1, 0, 1f)
@@ -147,7 +299,7 @@ class Feedback(private val ctx: Context) {
 
     /** Ringer mode đọc qua binder — chỉ khi âm riêng bật, cache 2 s (gạt Rung/Im giữa lúc gõ vẫn kịp). */
     private fun ringerNormal(): Boolean {
-        if (soundEnabled) refreshRinger(force = false)
+        if (soundEnabled && KeySoundStyle.needsPool(soundStyle)) refreshRinger(force = false)
         return ringerNormal
     }
 
@@ -165,6 +317,47 @@ class Feedback(private val ctx: Context) {
         const val SPACE = 3
         const val RETURN = 4
         private val CUSTOM_KIND_GAIN = floatArrayOf(1f, 0.9f, 0.82f)   // = KeySoundCustom.variant
+
+        /** Kiểu đã lưu là Piano (đường nốt riêng). */
+        fun isPiano(style: String?): Boolean = KeySoundStyle.resolve(style, true) == KeySoundStyle.PIANO
+
+        /** Loại phím không mang nhãn ⇒ sự kiện piano (cách/Enter/⌫ riêng; còn lại C4 / C3). */
+        fun pianoEvent(kind: Int): Int = when (kind) {
+            LETTER -> PianoMap.FALLBACK_BASE
+            DELETE -> PianoEvent.DELETE
+            SPACE -> PianoEvent.SPACE
+            RETURN -> PianoEvent.RETURN
+            else -> PianoMap.MODIFIER_NOTE
+        }
+
+        /** Số sample id tối đa theo dõi (25 nốt + 4 âm + 25 nốt ngân < 128). */
+        const val PIANO_MAX_SAMPLE_IDS = 128
+
+        /** WAV nốt piano (cache, ghi 1 lần; tên kèm phiên bản thuật toán). */
+        fun pianoNoteFile(dir: File, midi: Int, sustain: Boolean): File? =
+            cachedWav(dir, "keysound-piano-v1-${if (sustain) "sus" else "n"}-$midi.wav",
+                if (sustain) PianoSynth.SUSTAIN_SAMPLE_RATE else PianoSynth.SAMPLE_RATE) { PianoSynth.note(midi, sustain) }
+
+        /** WAV cách / Enter / ⌫ / pedal (thứ tự = [PianoEvent.extraIndex]). */
+        fun pianoExtraFiles(dir: File): List<File?> = listOf(
+            cachedWav(dir, "keysound-piano-v1-space.wav", PianoSynth.SAMPLE_RATE) { PianoSynth.space() },
+            cachedWav(dir, "keysound-piano-v1-return.wav", PianoSynth.SAMPLE_RATE) { PianoSynth.returnChord() },
+            cachedWav(dir, "keysound-piano-v1-delete.wav", PianoSynth.SAMPLE_RATE) { PianoSynth.delete() },
+            cachedWav(dir, "keysound-piano-v1-pedal.wav", PianoSynth.SAMPLE_RATE) { PianoSynth.pedal() })
+
+        private fun cachedWav(dir: File, name: String, rate: Int, make: () -> FloatArray): File? = runCatching {
+            val f = File(dir, name)
+            if (!f.exists() || f.length() == 0L) {
+                val tmp = File(dir, "$name.tmp")
+                tmp.writeBytes(KeySoundSynth.wav(make(), rate))
+                tmp.renameTo(f)
+            }
+            f
+        }.getOrNull()
+
+        /** Có dựng SoundPool không: BẬT + âm lượng > 0 + kiểu không phải "Hệ thống". */
+        fun needsPool(enabled: Boolean, volume: Int, style: String?): Boolean =
+            enabled && volume > 0 && KeySoundStyle.needsPool(style)
 
         /** Loại phím → tiếng: chữ / xoá / còn lại (cách, Enter, shift… như stock). */
         fun soundKind(kind: Int): KeySoundSynth.Kind = when (kind) {

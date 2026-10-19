@@ -424,12 +424,18 @@ final class KeyboardViewController: UIInputViewController {
 
     /// Âm thanh phím: BẬT + Full Access ⇒ tiếng riêng (engine dựng nền), không kèm click hệ
     /// thống. TẮT hoặc thiếu Full Access ⇒ click hệ thống như cũ, không dựng engine (0 chi phí).
-    /// Âm lượng 0 % ⇒ im hẳn (không quay về click hệ thống).
-    static func customKeySoundActive(setting: Bool, fullAccess: Bool) -> Bool { setting && fullAccess }
+    /// Âm lượng 0 % ⇒ im hẳn (không quay về click hệ thống). Kiểu "iOS" (`system`) ⇒ click hệ
+    /// thống, không engine, không cần Full Access.
+    static func customKeySoundActive(setting: Bool, style: String, fullAccess: Bool) -> Bool {
+        setting && fullAccess && KeySoundStyle.needsEngine(style)
+    }
 
     private func applyKeySound(_ settings: KeyboardSettings) {
-        let on = Self.customKeySoundActive(setting: settings.keySound, fullAccess: hasFullAccess)
+        let on = Self.customKeySoundActive(setting: settings.keySound, style: settings.keySoundStyle, fullAccess: hasFullAccess)
         KeyboardView.customSoundEnabled = on
+        // Piano: nốt theo phím (resolve một lần lúc hiện, không mỗi phím); pedal về trạng thái nhả.
+        KeyboardView.pianoEnabled = on && KeySoundStyle.resolve(settings.keySoundStyle, customAvailable: true) == .piano
+        KeyboardView.pianoPedal = PianoPedal()
         KeySound.shared.setVolume(percent: settings.keySoundVolume)
         KeySound.shared.setStyle(settings.keySoundStyle)
         if on && settings.keySoundVolume > 0 { KeySound.shared.prepare() } else { KeySound.shared.shutdown() }
