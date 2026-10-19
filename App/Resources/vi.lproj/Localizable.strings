@@ -126,6 +126,10 @@
 "Missing Accessibility permission" = "Cần quyền Trợ năng";
 "Add recent app" = "Thêm ứng dụng vừa dùng";
 "…or a bundle id" = "…hoặc nhập mã ứng dụng";
+"Browse…" = "Chọn từ máy…";
+"Choose" = "Chọn";
+"Select an application to add" = "Chọn ứng dụng để thêm";
+"Could not read application bundle identifier" = "Không đọc được mã ứng dụng";
 "Clear & re-learn" = "Xoá dữ liệu đã học";
 "Filter by app name, bundle id, or mode" = "Lọc theo tên, mã ứng dụng hoặc cách gõ";
 "Empty — type a few Vietnamese words in any app and it will appear here." = "Danh sách đang trống. Hãy gõ tiếng Việt trong một ứng dụng, VietTelex sẽ thêm ứng dụng đó vào đây.";

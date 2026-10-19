@@ -11,6 +11,7 @@
 import AppKit
 import SwiftUI
 import TelexCore
+import UniformTypeIdentifiers
 
 /// Thứ tự case = thứ tự tab trên thanh tab (allCases). Mọi tab luôn hiện.
 enum SettingsTab: Hashable, CaseIterable {
@@ -519,13 +520,59 @@ final class SettingsModel: ObservableObject {
         return filtered.sorted(using: modeSortOrder)
     }
 
-    /// Add a row by hand (recent-apps picker or typed bundle id), mode = Auto.
+    /// Extracts a bundle ID from a typed or dropped .app path or URL, or returns nil if it is not a path.
+    static func extractBundleID(from pathOrID: String) -> String? {
+        let trimmed = pathOrID.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed.hasPrefix("/") || trimmed.hasSuffix(".app") || trimmed.hasPrefix("~") {
+            let expanded = (trimmed as NSString).expandingTildeInPath
+            let url = URL(fileURLWithPath: expanded)
+            if let bid = Bundle(url: url)?.bundleIdentifier
+                ?? (NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist"))?["CFBundleIdentifier"] as? String) {
+                let displayName = FileManager.default.displayName(atPath: url.path)
+                nameCache[bid] = displayName.hasSuffix(".app") ? String(displayName.dropLast(4)) : displayName
+                return bid
+            }
+        }
+        return nil
+    }
+
+    /// Add a row by hand (recent-apps picker, typed bundle id, or dragged .app path), mode = Auto.
     func addApp() {
-        let id = newModeAppID.trimmingCharacters(in: .whitespaces)
-        guard !id.isEmpty else { return }
+        let text = newModeAppID.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty else { return }
+        let id = Self.extractBundleID(from: text) ?? text
         addedApps.insert(id)
         newModeAppID = ""
         reloadModeTable()
+    }
+
+    /// Opens an NSOpenPanel for the user to pick any .app from /Applications or anywhere on disk.
+    func browseApp() {
+        let panel = NSOpenPanel()
+        panel.allowedContentTypes = [.application]
+        panel.allowsMultipleSelection = false
+        panel.canChooseDirectories = false
+        panel.canChooseFiles = true
+        panel.directoryURL = URL(fileURLWithPath: "/Applications")
+        panel.prompt = loc("Choose")
+        panel.message = loc("Select an application to add")
+
+        guard panel.runModal() == .OK, let url = panel.url else { return }
+        let bid = Bundle(url: url)?.bundleIdentifier
+            ?? (NSDictionary(contentsOf: url.appendingPathComponent("Contents/Info.plist"))?["CFBundleIdentifier"] as? String)
+        if let bid = bid, !bid.isEmpty {
+            let displayName = FileManager.default.displayName(atPath: url.path)
+            Self.nameCache[bid] = displayName.hasSuffix(".app") ? String(displayName.dropLast(4)) : displayName
+            addedApps.insert(bid)
+            newModeAppID = ""
+            reloadModeTable()
+        } else {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = loc("Could not read application bundle identifier")
+            alert.informativeText = url.lastPathComponent
+            alert.runModal()
+        }
     }
 
     /// Forget everything learned so the probe re-classifies from scratch. Keeps the
@@ -997,6 +1044,7 @@ struct ModeTableTab: View {
                     .textFieldStyle(.roundedBorder)
                 Button { model.addApp() } label: { Label(model.loc("Add"), systemImage: "plus.circle") }
                     .disabled(model.newModeAppID.trimmingCharacters(in: .whitespaces).isEmpty)
+                Button { model.browseApp() } label: { Label(model.loc("Browse…"), systemImage: "folder") }
             }
 
             HStack {
