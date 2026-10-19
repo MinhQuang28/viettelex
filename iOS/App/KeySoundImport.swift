@@ -82,8 +82,27 @@ final class KeyFeedbackPreview {
     private var sessionReady = false
     private var impact: UIImpactFeedbackGenerator?
 
-    func playSound(style raw: String, volume: Int, kind: KeySoundKind = .letter) {
-        let key = KeySoundCustom.bankKey(style: raw, customURL: KeySoundCustom.fileURL) + "/\(kind.rawValue)"
+    /// System sound ID của click bàn phím iOS (chữ / xoá / phím chức năng) — chỉ để NGHE THỬ kiểu
+    /// "iOS" trong app (playInputClick chỉ kêu trong input view của bàn phím).
+    static let systemClickIDs: [SystemSoundID] = [1104, 1155, 1156]
+
+    /// Nghe thử khi chọn kiểu: chữ → xoá → phím chức năng (KeySoundSynth.previewSequence).
+    func playStyle(_ raw: String, volume: Int) {
+        if !KeySoundStyle.needsEngine(raw) {
+            for (i, id) in Self.systemClickIDs.enumerated() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.18 * Double(i)) { AudioServicesPlaySystemSound(id) }
+            }
+            return
+        }
+        playSound(style: raw, volume: volume, kind: nil)
+    }
+
+    /// `kind` nil ⇒ chuỗi nghe thử 3 tiếng; có ⇒ một tiếng (thanh âm lượng).
+    func playSound(style raw: String, volume: Int, kind: KeySoundKind? = .letter) {
+        if !KeySoundStyle.needsEngine(raw) {   // "iOS": âm lượng theo hệ thống
+            AudioServicesPlaySystemSound(Self.systemClickIDs[kind?.rawValue ?? 0]); return
+        }
+        let key = KeySoundCustom.bankKey(style: raw, customURL: KeySoundCustom.fileURL) + "/\(kind?.rawValue ?? -1)"
         if !sessionReady {
             let s = AVAudioSession.sharedInstance()
             try? s.setCategory(.ambient, options: [.mixWithOthers])
@@ -91,9 +110,15 @@ final class KeyFeedbackPreview {
             sessionReady = true
         }
         if key != playerKey || player == nil {
-            let custom = raw == KeySoundStyle.custom.rawValue ? KeySoundCustom.load(KeySoundCustom.fileURL) : nil
-            let bank = KeySoundSynth.bank(raw, custom: custom)
-            player = try? AVAudioPlayer(data: KeySoundSynth.wav(bank.samples[kind.rawValue]))
+            if raw == KeySoundStyle.piano.rawValue {   // Piano: giai điệu ngắn / một nốt C4 (22.05 kHz)
+                let s = kind == nil ? PianoSynth.previewMelody() : PianoSynth.note(60)
+                player = try? AVAudioPlayer(data: KeySoundSynth.wav(s, sampleRate: Int(PianoSynth.sampleRate)))
+            } else {
+                let custom = raw == KeySoundStyle.custom.rawValue ? KeySoundCustom.load(KeySoundCustom.fileURL) : nil
+                let bank = KeySoundSynth.bank(raw, custom: custom)
+                let samples = kind.map { bank.samples[$0.rawValue] } ?? KeySoundSynth.previewSequence(bank.samples)
+                player = try? AVAudioPlayer(data: KeySoundSynth.wav(samples))
+            }
             player?.prepareToPlay()
             playerKey = key
         }

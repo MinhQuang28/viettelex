@@ -140,10 +140,18 @@ class KeyboardView(
     var shift = Shift.ON
         private set(v) {
             if (field == v) return
+            val old = field
             field = v
             // Đang vuốt: shift đổi tạm quanh cú vuốt — lượt gợi ý sau vuốt tự vẽ lại bar.
             if (!swiping) listener?.onShiftChanged()
+            if (old == Shift.CAPS) feedback.shiftChanged(pedalShift(v))   // Piano: Caps tắt ⇒ damper
         }
+
+    private fun pedalShift(s: Shift): com.viettelex.keyboard.PianoPedal.Shift = when (s) {
+        Shift.OFF -> com.viettelex.keyboard.PianoPedal.Shift.OFF
+        Shift.ON -> com.viettelex.keyboard.PianoPedal.Shift.ON
+        Shift.CAPS -> com.viettelex.keyboard.PianoPedal.Shift.CAPS
+    }
     private var returnLabel = "return"
     private var inputKind = InputKind.NORMAL
     private var needsGlobe = false
@@ -1298,7 +1306,7 @@ class KeyboardView(
         if (effects != null) fxMark(k)
         when (k.kind) {
             KeyKind.LETTER -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 pressDown(pid, k)
                 if (keyPreview) showBalloon(k, if (shift == Shift.OFF) k.label else k.upper)
                 val ch = (if (shift == Shift.OFF) k.label else k.upper)[0]
@@ -1330,19 +1338,19 @@ class KeyboardView(
                 if (!defer && alts.isNotEmpty()) armAlt(pid, k, x, y, shiftWas)
             }
             KeyKind.CHAR -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 pressDown(pid, k)
                 if (keyPreview) showBalloon(k, k.label)
                 commits.arm(k, textFire(k.insert))
                 armPopover(pid, k, x, y)
             }
             KeyKind.PAD -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 press(k)
                 commits.arm(k, textFire(k.insert))
             }
             KeyKind.PUNCT -> {
-                feedback.click(Feedback.LETTER, this)
+                feedback.clickKey(k.label, Feedback.LETTER, this)
                 press(k)
                 commits.arm(k, textFire(k.insert))
                 if (isVoiceComma(k)) {
@@ -1374,12 +1382,13 @@ class KeyboardView(
                 }
             }
             KeyKind.SHIFT -> {
-                feedback.click(Feedback.MODIFIER, this)
                 val now = SystemClock.uptimeMillis()
                 shiftBeforeTap = shift
                 shift = if (now - lastShiftTap < SHIFT_DOUBLE_MS) Shift.CAPS
                         else if (shift == Shift.OFF) Shift.ON else Shift.OFF
                 lastShiftTap = now
+                // Sau khi đổi: Piano cần biết Shift một-lần hay Caps (pedal); kiểu khác = tiếng chức năng.
+                feedback.shiftPressed(pedalShift(shift), this)
                 shiftPtr = pid; shiftUsedAsModifier = false
                 k.pressed = true
                 invalidate()   // mọi nhãn chữ đổi hoa/thường

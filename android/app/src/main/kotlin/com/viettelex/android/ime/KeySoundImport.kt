@@ -11,6 +11,7 @@ import android.media.MediaFormat
 import android.net.Uri
 import android.provider.OpenableColumns
 import com.viettelex.keyboard.KeySoundCustom
+import com.viettelex.keyboard.KeySoundStyle
 import com.viettelex.keyboard.KeySoundSynth
 import java.io.File
 import java.nio.ByteOrder
@@ -140,13 +141,36 @@ class KeyFeedbackPreview(ctx: Context) {
     private var track: AudioTrack? = null
     private var trackKey: String? = null
 
-    fun playSound(style: String, volume: Int) {
+    private val main = android.os.Handler(android.os.Looper.getMainLooper())
+
+    /** Nghe thử khi chọn kiểu: chữ → xoá → phím chức năng ([KeySoundSynth.previewSequence]).
+     *  "Hệ thống" ⇒ 3 tiếng playSoundEffect (âm lượng theo hệ thống). */
+    fun playStyle(style: String, volume: Int) {
+        if (!KeySoundStyle.needsPool(style)) {
+            SYSTEM_FX.forEachIndexed { i, fx -> main.postDelayed({ playSystem(fx) }, 180L * i) }
+            return
+        }
+        playSound(style, volume, sequence = true)
+    }
+
+    /** Có volume ⇒ kêu cả khi "Âm thanh khi chạm" của máy tắt (chỉ để nghe thử trong app). */
+    private fun playSystem(fx: Int) { runCatching { audio.playSoundEffect(fx, 1f) } }
+
+    fun playSound(style: String, volume: Int, sequence: Boolean = false) {
+        if (!KeySoundStyle.needsPool(style)) { playSystem(SYSTEM_FX[0]); return }
         if (runCatching { audio.ringerMode != AudioManager.RINGER_MODE_NORMAL }.getOrDefault(false)) return
         val custom = Feedback.customFile(appCtx)
-        val key = KeySoundCustom.bankKey(style, custom)
+        val key = KeySoundCustom.bankKey(style, custom) + if (sequence) "/seq" else ""
         if (key != trackKey || track == null) {
             release()
-            val samples = KeySoundSynth.bank(style, KeySoundCustom.load(custom)).second[0]
+            val piano = Feedback.isPiano(style)   // Piano: giai điệu ngắn / một nốt C4 ở 22.05 kHz
+            val rate = if (piano) com.viettelex.keyboard.PianoSynth.SAMPLE_RATE else KeySoundSynth.SAMPLE_RATE
+            val samples = if (piano) {
+                if (sequence) com.viettelex.keyboard.PianoSynth.previewMelody() else com.viettelex.keyboard.PianoSynth.note(60)
+            } else {
+                val bank = KeySoundSynth.bank(style, KeySoundCustom.load(custom)).second
+                if (sequence) KeySoundSynth.previewSequence(bank) else bank[0]
+            }
             val pcm = ShortArray(samples.size) { (samples[it].coerceIn(-1f, 1f) * 32767f).toInt().toShort() }
             track = runCatching {
                 AudioTrack.Builder()
@@ -154,7 +178,7 @@ class KeyFeedbackPreview(ctx: Context) {
                         .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
                         .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION).build())
                     .setAudioFormat(AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                        .setSampleRate(KeySoundSynth.SAMPLE_RATE).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
+                        .setSampleRate(rate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build())
                     .setTransferMode(AudioTrack.MODE_STATIC)
                     .setBufferSizeInBytes(pcm.size * 2)
                     .build().also { it.write(pcm, 0, pcm.size) }
@@ -175,5 +199,9 @@ class KeyFeedbackPreview(ctx: Context) {
     fun release() {
         runCatching { track?.release() }
         track = null; trackKey = null
+    }
+
+    private companion object {
+        val SYSTEM_FX = intArrayOf(AudioManager.FX_KEYPRESS_STANDARD, AudioManager.FX_KEYPRESS_DELETE, AudioManager.FX_KEYPRESS_SPACEBAR)
     }
 }

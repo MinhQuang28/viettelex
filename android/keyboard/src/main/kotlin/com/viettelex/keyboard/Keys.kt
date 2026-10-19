@@ -96,7 +96,7 @@ object Keys {
     const val KEY_SOUND = "keySound"
     /** Int 0…100 (%) — âm lượng âm phím riêng, mặc định 50. */
     const val KEY_SOUND_VOLUME = "keySoundVolume"
-    /** String — kiểu âm phím ([KeySoundStyle.id]): subtle|wood|mechanical|typewriter|bubble|custom, mặc định subtle. */
+    /** String — kiểu âm phím ([KeySoundStyle.id]): system|subtle|wood|mechanical|typewriter|bubble|rock|pop|water|vintage|phao|jingle|piano|custom, mặc định subtle. */
     const val KEY_SOUND_STYLE = "keySoundStyle"
     /** String — "Hiệu ứng khi bấm phím" ([KeyEffect.id], Plus): none|heart|bubble|ripple|petal|firework|flash|matrix|lightning|emojiword|blossom|combo|ink|wave|snow, mặc định none. Tên như iOS App Group. */
     const val KEY_EFFECT = "keyEffect"

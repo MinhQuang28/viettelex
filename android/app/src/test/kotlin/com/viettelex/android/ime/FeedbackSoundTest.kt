@@ -5,6 +5,7 @@ import com.viettelex.keyboard.KeySoundStyle
 import com.viettelex.keyboard.KeySoundSynth
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.nio.file.Files
@@ -16,6 +17,45 @@ class FeedbackSoundTest {
         assertEquals(KeySoundSynth.Kind.DELETE, Feedback.soundKind(Feedback.DELETE))
         for (k in listOf(Feedback.MODIFIER, Feedback.SPACE, Feedback.RETURN))
             assertEquals(KeySoundSynth.Kind.MODIFIER, Feedback.soundKind(k))
+    }
+
+    /** Kiểu "Hệ thống" (19/10/2026) không dựng SoundPool — 0 chi phí như TẮT; kiểu tổng hợp mới vẫn dựng. */
+    @Test fun systemStyleBuildsNoPool() {
+        assertFalse(Feedback.needsPool(true, 50, "system"))
+        assertFalse(Feedback.needsPool(false, 50, "subtle"))
+        assertFalse(Feedback.needsPool(true, 0, "subtle"))
+        assertTrue(Feedback.needsPool(true, 50, "subtle"))
+        for (id in listOf("rock", "pop", "water", "vintage", "custom", "loud")) assertTrue(id, Feedback.needsPool(true, 50, id))
+    }
+
+    /** Piano: chỉ kiểu piano đi đường nốt; loại phím không nhãn ⇒ sự kiện piano; kiểu khác giữ 3 tiếng. */
+    @Test fun pianoRouting() {
+        assertTrue(Feedback.isPiano("piano"))
+        for (id in listOf("subtle", "wood", "phao", "jingle", "system", "custom", "loud")) assertFalse(id, Feedback.isPiano(id))
+        assertEquals(com.viettelex.keyboard.PianoEvent.SPACE, Feedback.pianoEvent(Feedback.SPACE))
+        assertEquals(com.viettelex.keyboard.PianoEvent.RETURN, Feedback.pianoEvent(Feedback.RETURN))
+        assertEquals(com.viettelex.keyboard.PianoEvent.DELETE, Feedback.pianoEvent(Feedback.DELETE))
+        assertEquals(60, Feedback.pianoEvent(Feedback.LETTER))
+        assertEquals(48, Feedback.pianoEvent(Feedback.MODIFIER))
+        assertTrue(Feedback.needsPool(true, 50, "piano"))
+        // Kiểu 3 tiếng: đường cũ không đổi.
+        assertEquals(KeySoundSynth.Route.CUSTOM, KeySoundSynth.route(true, 50, true, "wood"))
+        assertEquals(KeySoundSynth.Kind.LETTER, Feedback.soundKind(Feedback.LETTER))
+    }
+
+    /** WAV nốt piano: tất định, đúng tần số mẫu (thường 22.05 kHz, ngân 11.025 kHz), ghi một lần. */
+    @Test fun pianoWavCache() {
+        val dir = Files.createTempDirectory("keysound").toFile()
+        try {
+            val f = Feedback.pianoNoteFile(dir, 60, sustain = false)!!
+            val (s, rate) = KeySoundSynth.parseWav(f.readBytes())!!
+            assertEquals(22_050.0, rate, 0.0)
+            assertEquals(com.viettelex.keyboard.PianoSynth.note(60).size, s.size)
+            val stamp = f.lastModified()
+            assertEquals(f, Feedback.pianoNoteFile(dir, 60, sustain = false)); assertEquals(stamp, f.lastModified())
+            assertEquals(11_025.0, KeySoundSynth.parseWav(Feedback.pianoNoteFile(dir, 60, sustain = true)!!.readBytes())!!.second, 0.0)
+            assertEquals(4, Feedback.pianoExtraFiles(dir).filterNotNull().size)
+        } finally { dir.deleteRecursively() }
     }
 
     @Test fun wavCacheWrittenOnce() {
@@ -43,6 +83,8 @@ class FeedbackSoundTest {
             val wood = Feedback.soundFiles(dir, "wood", custom)
             assertArrayEquals(KeySoundSynth.wav(KeySoundStyle.WOOD, KeySoundSynth.Kind.MODIFIER), wood[2]!!.readBytes())
             assertTrue(wood[0]!!.name.contains("-wood-"))
+            val rock = Feedback.soundFiles(dir, "vintage", custom)
+            assertArrayEquals(KeySoundSynth.wav(KeySoundStyle.VINTAGE, KeySoundSynth.Kind.LETTER), rock[0]!!.readBytes())
         } finally { dir.deleteRecursively() }
     }
 }

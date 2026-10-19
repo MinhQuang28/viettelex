@@ -23,6 +23,29 @@
 //   Máy chữ (êm): nhiễu hp 500 Hz lp 2.6 kHz τ2.8 ms (0.95) + 1050→850 Hz τ3 ms (0.35) + thân 260 Hz τ8 ms
 //     (0.55) + tiếng "tách" nhỏ trễ 11 ms (nhiễu 0.30 τ1.8 ms); mở 0.8 ms; 44 ms; outLP 3.2 kHz; đỉnh 0.85.
 //   Bong bóng: sine trượt LÊN 260→720 Hz (glide 9 ms) τ9 ms + bồi 2× (0.08); mở 3 ms; 36 ms; không nhiễu.
+//
+// Phil 19/10/2026 — thêm 4 kiểu (cùng cách tổng hợp, không file âm thanh):
+//   Đá (rock): gõ đá trầm-cứng-ngắn — 180→150 Hz τ5 ms + mode 2.35× τ2 ms (0.40) + nhiễu hp 150
+//     lp 1.6 kHz τ1.2 ms (0.60); mở 0.5 ms; 30 ms; outLP 2.2 kHz; đỉnh 0.85.
+//   Pop: "bụp" rơi cao độ 900→380 Hz (glide 4 ms) τ6 ms + nhiễu lp 2 kHz τ0.8 ms (0.15); mở 0.8 ms; 30 ms.
+//   Nước (water): giọt nước trượt LÊN 700→1300 Hz (glide 12 ms) τ10 ms + bồi 2× (0.06); mở 2 ms; 42 ms.
+//   Cổ điển (vintage): click bọc đệm — nhiễu hp 300 lp 1.5 kHz τ2 ms (0.80) + 380→340 Hz τ6 ms (0.60)
+//     + tiếng nhả phím trễ 18 ms (nhiễu 0.25 τ1.5 ms + 330 Hz 0.20); mở 1 ms; 40 ms; outLP 1.8 kHz.
+//
+//   Pháo (phao, theme Tết): 3 tiếng nổ lách tách nhỏ — nhiễu hp 300 lp 2 kHz τ2.4 ms (1.0) + trễ 13 ms
+//     (0.60 τ1.8 ms) + trễ 27 ms (0.40 τ1.4 ms) + thân 210→170 Hz τ4 ms (0.45); mở 0.4 ms; 46 ms;
+//     outLP 2.4 kHz; đỉnh 0.55 — NHỎ hơn các kiểu khác (RMS < Gõ gỗ, test chốt). Seed nhiễu khác nhau
+//     theo loại phím ⇒ chữ/xoá/chức năng nổ hơi khác nhau (tất định).
+//   Chuông (jingle, theme Giáng sinh): cặp sine 880 Hz τ12 ms + 886 Hz τ14 ms (0.55, lệch 6 Hz ⇒ "rung"
+//     kim loại) + bồi phi điều hoà 2.76× τ5 ms (0.22); mở 0.8 ms; 54 ms; đỉnh 0.62.
+//   Piano: mỗi phím một nốt — xem PianoMap / PianoSynth cuối file.
+//
+// THỨ TỰ case = chỉ số seed nhiễu (KeySoundSynth.seed) ⇒ CHỈ THÊM CUỐI, không chèn giữa (giữ mẫu cũ
+// + checksum chung với Android). Thứ tự hiển thị là `menuOrder`.
+//
+// "system" (Phil 19/10/2026): click hệ thống — iOS UIDevice.playInputClick (theo Cài đặt → Âm thanh →
+// Tiếng bấm bàn phím, KHÔNG cần Toàn quyền Truy cập), Android playSoundEffect. Không có công thức,
+// không dựng AVAudioEngine/SoundPool (0 chi phí như khi tắt "Âm thanh phím"), miễn phí.
 import Foundation
 
 enum KeySoundKind: Int, CaseIterable {
@@ -31,10 +54,28 @@ enum KeySoundKind: Int, CaseIterable {
 
 /// Kiểu âm phím (setting `keySoundStyle`). rawValue = giá trị lưu/sao lưu.
 enum KeySoundStyle: String, CaseIterable {
-    case subtle, wood, mechanical, typewriter, bubble, custom
+    // Chỉ thêm CUỐI (chỉ số case = seed nhiễu, chung với Android).
+    case subtle, wood, mechanical, typewriter, bubble, custom, system, rock, pop, water, vintage, phao, jingle, piano
 
+    /// Bật "Âm thanh phím" lần đầu ⇒ "Nhẹ nhàng" (bật công tắc phải NGHE khác đi; "iOS" = như lúc tắt).
     static let defaultStyle: KeySoundStyle = .subtle
-    static let presets: [KeySoundStyle] = [.subtle, .wood, .mechanical, .typewriter, .bubble]
+    /// Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức `baseRecipe`.
+    static let presets: [KeySoundStyle] = [.subtle, .wood, .mechanical, .typewriter, .bubble, .rock, .pop, .water, .vintage, .phao, .jingle]
+    /// Mọi kiểu dựng sẵn (3 tiếng + Piano mỗi phím một nốt).
+    static let allPresets: [KeySoundStyle] = presets + [.piano]
+    /// DANH SÁCH DUY NHẤT id hợp lệ cho trường "sound" của theme JSON (chọn theme ⇒ đặt keySoundStyle).
+    /// Không gồm "system"/"custom". Android: KeySoundStyle.PRESET_IDS — test chốt trùng nhau.
+    static let presetIDs: [String] = allPresets.map(\.rawValue)
+    /// Thứ tự trong trang "Âm thanh gõ": click hệ thống đầu, âm tự chọn cuối.
+    static let menuOrder: [KeySoundStyle] = [.system] + allPresets + [.custom]
+
+    /// true ⇒ phát qua engine riêng (cần Full Access). `system` ⇒ click hệ thống, không engine.
+    var usesEngine: Bool { self != .system }
+
+    /// Kiểu đã lưu có cần engine riêng không. Lạ ⇒ mặc định (tổng hợp) ⇒ cần; `system` ⇒ không.
+    static func needsEngine(_ raw: String?) -> Bool {
+        resolve(raw, customAvailable: true).usesEngine
+    }
 
     /// Tên hiển thị (khoá L10n tiếng Việt).
     var viTitle: String {
@@ -45,6 +86,14 @@ enum KeySoundStyle: String, CaseIterable {
         case .typewriter: return LK("Máy chữ")
         case .bubble: return LK("Bong bóng")
         case .custom: return LK("Âm của bạn")
+        case .system: return LK("iOS")
+        case .rock: return LK("Đá")
+        case .pop: return LK("Pop")
+        case .water: return LK("Nước")
+        case .vintage: return LK("Cổ điển")
+        case .phao: return LK("Pháo")
+        case .jingle: return LK("Chuông")
+        case .piano: return LK("Piano")
         }
     }
 
@@ -78,7 +127,7 @@ enum KeySoundSynth {
     /// Công thức gốc (phím chữ) của mỗi kiểu có sẵn. `custom` không có công thức.
     static func baseRecipe(_ s: KeySoundStyle) -> Recipe {
         switch s {
-        case .subtle, .custom:
+        case .subtle, .custom, .system, .piano:   // piano: nốt riêng (PianoSynth); công thức này chỉ là dự phòng
             return Recipe(tones: [t(1.0, 500, 360, tau: 0.007), t(0.24, 1050, 900, tau: 0.0025)],
                           noises: [n(0.30, lp: 1900, tau: 0.002)],
                           attack: 0.0016, duration: 0.032, outLP: 2600, peak: 0.80)
@@ -99,6 +148,32 @@ enum KeySoundSynth {
             return Recipe(tones: [t(1.0, 260, 720, glide: 0.009, tau: 0.009), t(0.08, 520, 1440, glide: 0.009, tau: 0.006)],
                           noises: [],
                           attack: 0.003, duration: 0.036, outLP: 3000, peak: 0.80)
+        case .rock:
+            return Recipe(tones: [t(1.0, 180, 150, glide: 0.004, tau: 0.005), t(0.40, 180 * 2.35, 150 * 2.35, glide: 0.004, tau: 0.002)],
+                          noises: [n(0.60, hp: 150, lp: 1600, tau: 0.0012)],
+                          attack: 0.0005, duration: 0.030, outLP: 2200, peak: 0.85)
+        case .pop:
+            return Recipe(tones: [t(1.0, 900, 380, glide: 0.004, tau: 0.006)],
+                          noises: [n(0.15, lp: 2000, tau: 0.0008)],
+                          attack: 0.0008, duration: 0.030, outLP: 3000, peak: 0.80)
+        case .water:
+            return Recipe(tones: [t(1.0, 700, 1300, glide: 0.012, tau: 0.010), t(0.06, 1400, 2600, glide: 0.012, tau: 0.006)],
+                          noises: [],
+                          attack: 0.002, duration: 0.042, outLP: 3200, peak: 0.80)
+        case .vintage:
+            return Recipe(tones: [t(0.60, 380, 340, tau: 0.006), t(0.20, 330, 330, tau: 0.004, delay: 0.018)],
+                          noises: [n(0.80, hp: 300, lp: 1500, tau: 0.002), n(0.25, hp: 300, lp: 1500, tau: 0.0015, delay: 0.018)],
+                          attack: 0.001, duration: 0.040, outLP: 1800, peak: 0.80)
+        case .phao:
+            return Recipe(tones: [t(0.45, 210, 170, glide: 0.004, tau: 0.004)],
+                          noises: [n(1.0, hp: 300, lp: 2000, tau: 0.0024), n(0.60, hp: 300, lp: 2000, tau: 0.0018, delay: 0.013),
+                                   n(0.40, hp: 300, lp: 2000, tau: 0.0014, delay: 0.027)],
+                          attack: 0.0004, duration: 0.046, outLP: 2400, peak: 0.55)
+        case .jingle:
+            return Recipe(tones: [t(1.0, 880, 880, tau: 0.012), t(0.55, 886, 886, tau: 0.014),
+                                  t(0.22, 880 * 2.76, 880 * 2.76, tau: 0.005)],
+                          noises: [],
+                          attack: 0.0008, duration: 0.054, outLP: 3600, peak: 0.62)
         }
     }
 
@@ -137,6 +212,18 @@ enum KeySoundSynth {
             return (st, KeySoundKind.allCases.map { KeySoundCustom.variant(c, $0) })
         }
         return (st, KeySoundKind.allCases.map { samples(st, $0) })
+    }
+
+    /// Bản nghe thử khi chọn kiểu: chữ → xoá → phím chức năng, cách nhau `gap` giây lặng.
+    /// Ghép thành MỘT mẫu ⇒ app phát một lần (một AVAudioPlayer/AudioTrack). Giống Kotlin.
+    static func previewSequence(_ bank: [[Float]], gap: Double = 0.16) -> [Float] {
+        let silence = [Float](repeating: 0, count: Int((gap * sampleRate).rounded()))
+        var out: [Float] = []
+        for (i, s) in bank.enumerated() {
+            if i > 0 { out += silence }
+            out += s
+        }
+        return out
     }
 
     static func render(_ r: Recipe, seed: UInt32) -> [Float] {
@@ -395,4 +482,261 @@ struct PreviewThrottle {
         if fire { lastFire = now; lastValue = value }
         return fire
     }
+}
+
+// MARK: - Piano (Phil 19/10/2026): mỗi phím một nốt, ngũ cung trưởng C D E G A — gõ lung tung vẫn
+// thành nhạc, không nghịch tai. Thuật toán + bảng Y HỆT Kotlin PianoMap/PianoSynth (test chốt chung).
+
+/// Phím → nốt (MIDI), hàm thuần theo VỊ TRÍ phím trên QWERTY.
+/// - Trái → phải trong một hàng: đi lên thang ngũ cung (5 bậc/quãng tám).
+/// - Hàng chữ dưới (z…m) bắt đầu C3, hàng giữa (a…l) C4, hàng trên (q…p) C5 ⇒ ~3 quãng tám qua 3 hàng
+///   (C3 … A6); hàng số cao thêm một quãng tám (C6 … A7).
+/// - Ký tự khác (dấu câu, ký hiệu, chữ có dấu…): bậc = mã ký tự % 10 trên nền C4 — tất định.
+/// - Cách: hợp âm trầm nhẹ C3+G3+C4; Enter: hợp âm "kết" C4+G4+C5 (chủ + năm); ⌫: nốt trầm tắt tiếng A2;
+///   phím chức năng khác (123, 🌐…): C3 nhẹ.
+enum PianoMap {
+    static let rows: [String] = ["1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm"]
+    static let rowBase: [Int] = [84, 72, 60, 48]   // C6, C5, C4, C3
+    static let scale: [Int] = [0, 2, 4, 7, 9]      // ngũ cung trưởng
+    static let fallbackBase = 60
+    static let spaceChord: [Int] = [48, 55, 60]
+    static let returnChord: [Int] = [60, 67, 72]
+    static let deleteNote = 45
+    static let modifierNote = 48
+
+    static func midi(base: Int, step: Int) -> Int { base + 12 * (step / 5) + scale[step % 5] }
+    static func midi(row: Int, col: Int) -> Int { midi(base: rowBase[row], step: col) }
+
+    /// Bảng ASCII dựng sẵn (−1 = không có trong 4 hàng) ⇒ tra mỗi phím không cấp phát.
+    private static let ascii: [Int] = {
+        var t = [Int](repeating: -1, count: 128)
+        for (r, row) in rows.enumerated() {
+            for (c, ch) in row.unicodeScalars.enumerated() { t[Int(ch.value)] = midi(row: r, col: c) }
+        }
+        return t
+    }()
+
+    /// Nốt cho một ký tự (mã Unicode). Hoa ⇒ như thường.
+    static func midi(scalar v: UInt32) -> Int {
+        var x = v
+        if x >= 65 && x <= 90 { x += 32 }   // A–Z → a–z
+        if x < 128, ascii[Int(x)] >= 0 { return ascii[Int(x)] }
+        return midi(base: fallbackBase, step: Int(x % 10))
+    }
+
+    /// Nốt cho nhãn phím ("a", "Q", "7", "," …). Rỗng ⇒ C4.
+    static func midi(forKey key: String?) -> Int {
+        guard let v = key?.unicodeScalars.first?.value else { return fallbackBase }
+        return midi(scalar: v)
+    }
+
+    /// Mọi nốt bàn phím có thể phát (dựng sẵn mỗi nốt một buffer): ngũ cung C3 … A7 = 25 nốt.
+    static let notes: [Int] = {
+        var s = Set<Int>()
+        for (r, row) in rows.enumerated() { for c in 0..<row.unicodeScalars.count { s.insert(midi(row: r, col: c)) } }
+        for st in 0..<10 { s.insert(midi(base: fallbackBase, step: st)) }
+        for m in spaceChord + returnChord + [modifierNote] { s.insert(m) }
+        return s.sorted()
+    }()
+}
+
+/// Sự kiện âm Piano (chỉ kiểu piano đi đường này; kiểu khác giữ đường 3 tiếng).
+enum PianoEvent: Equatable {
+    case note(Int), space, returnKey, delete, pedal
+}
+
+/// Tổng hợp nốt kiểu piano: cộng hoạ âm 1–5 (biên độ giảm dần, hơi phi điều hoà B = 0.00035),
+/// mở nhanh 2.5 ms, tắt dần hai tầng (âm "đầu" nhanh + "dư âm" chậm như dây đàn thật), hoạ âm cao
+/// tắt nhanh hơn, nốt trầm ngân lâu hơn. Mono, chuẩn hoá đỉnh mỗi nốt (to đều mọi cao độ).
+/// - Thường: 22.05 kHz, 0.8 s (dư âm τ ≈ 0.42 s ⇒ nghe ~0.6–0.9 s).
+/// - Ngân (pedal Shift/Caps): 11.025 kHz, 2.5 s (τ ≈ 1 s) — chỉ dựng khi pedal được dùng lần đầu.
+enum PianoSynth {
+    static let sampleRate = 22_050.0
+    static let sustainSampleRate = 11_025.0
+    static let noteDuration = 0.8
+    static let sustainDuration = 2.5
+    static let mutedDuration = 0.15
+    static let pedalDuration = 0.6
+    static let notePeak = 0.34
+    static let chordPeak = 0.30
+    static let pedalPeak = 0.30
+    static let inharmonicity = 0.00035
+    static let partialAmps: [Double] = [1.0, 0.45, 0.28, 0.16, 0.09]
+    /// Số giọng (polyphony) mỗi pool: bấm nhiều phím cùng lúc ⇒ hợp âm.
+    static let voices = 8
+
+    enum Kind { case normal, sustain, muted }
+
+    static func freq(_ m: Int) -> Double { 440 * pow(2, Double(m - 69) / 12) }
+
+    static func samples(_ midis: [Int], kind: Kind, peak: Double) -> [Float] {
+        let sr = kind == .sustain ? sustainSampleRate : sampleRate
+        let dur = kind == .sustain ? sustainDuration : (kind == .muted ? mutedDuration : noteDuration)
+        let n = Int((dur * sr).rounded())
+        var out = [Double](repeating: 0, count: n)
+        for m in midis {
+            let f = freq(m)
+            let s = min(1.6, max(0.5, pow(262 / f, 0.3)))
+            let t1: Double, t2: Double
+            switch kind {
+            case .normal: t1 = 0.10 * s; t2 = 0.42 * s
+            case .sustain: t1 = 0.22 * s; t2 = 1.0 * s
+            case .muted: t1 = 0.025; t2 = 0.05
+            }
+            for k in 1...partialAmps.count {
+                let kd = Double(k)
+                let fk = kd * f * (1 + inharmonicity * kd * kd).squareRoot()
+                if fk >= 0.45 * sr { break }
+                let a = partialAmps[k - 1] * exp(-(kd - 1) * f / 4000)
+                let d1 = exp(-1 / (sr * t1 / kd.squareRoot()))
+                let d2 = exp(-1 / (sr * t2 / kd.squareRoot()))
+                let w = 2 * Double.pi * fk / sr
+                var e1 = 0.65, e2 = 0.35
+                for i in 0..<n {
+                    out[i] += a * (e1 + e2) * sin(w * Double(i))
+                    e1 *= d1; e2 *= d2
+                }
+            }
+        }
+        return finish(out, sampleRate: sr, attack: 0.0025, release: kind == .sustain ? 0.2 : 0.06, peak: peak)
+    }
+
+    /// Mở/đóng raised-cosine + chuẩn hoá đỉnh.
+    static func finish(_ x: [Double], sampleRate sr: Double, attack: Double, release: Double, peak: Double) -> [Float] {
+        var out = x
+        let n = out.count
+        let ai = Int(attack * sr), rel = min(n, Int(release * sr))
+        var pk = 0.0
+        for i in 0..<n {
+            var v = out[i]
+            if i < ai { v *= 0.5 - 0.5 * cos(Double.pi * Double(i) / Double(ai)) }
+            let fe = n - 1 - i
+            if fe < rel { v *= 0.5 - 0.5 * cos(Double.pi * Double(fe) / Double(rel)) }
+            out[i] = v
+            pk = max(pk, abs(v))
+        }
+        let g = pk > 0 ? peak / pk : 0
+        return out.map { Float($0 * g) }
+    }
+
+    static func note(_ m: Int, sustain: Bool = false) -> [Float] { samples([m], kind: sustain ? .sustain : .normal, peak: notePeak) }
+    static func space() -> [Float] { samples(PianoMap.spaceChord, kind: .normal, peak: chordPeak) }
+    static func returnChord() -> [Float] { samples(PianoMap.returnChord, kind: .normal, peak: chordPeak) }
+    static func delete() -> [Float] { samples([PianoMap.deleteNote], kind: .muted, peak: notePeak) }
+
+    /// Tiếng "đạp pedal" (bấm Shift/Caps): tiếng thịch trầm tắt nhanh (55→75 Hz trượt xuống) + ánh
+    /// cộng hưởng mờ của dây C4 G4 C5 G5 dâng lên chậm rồi tắt — không nhiễu chói.
+    static func pedal() -> [Float] {
+        let sr = sampleRate
+        let n = Int((pedalDuration * sr).rounded())
+        var out = [Double](repeating: 0, count: n)
+        var phase = 0.0
+        for i in 0..<n {
+            let t = Double(i) / sr
+            phase += 2 * Double.pi * (55 + 20 * exp(-t / 0.02)) / sr
+            out[i] += sin(phase) * exp(-t / 0.045)
+        }
+        for m in [60, 67, 72, 79] {
+            let w = 2 * Double.pi * freq(m) / sr
+            for i in 0..<n {
+                let t = Double(i) / sr
+                out[i] += 0.06 * sin(w * Double(i)) * (1 - exp(-t / 0.12)) * exp(-t / 0.35)
+            }
+        }
+        return finish(out, sampleRate: sr, attack: 0.003, release: 0.06, peak: pedalPeak)
+    }
+
+    /// Nghe thử trong app: C4 E4 G4 C5 nối nhau (cách 0.16 s, ngân chồng) — 22.05 kHz.
+    static func previewMelody() -> [Float] {
+        let step = Int((0.16 * sampleRate).rounded())
+        let notes = [60, 64, 67, 72].map { note($0) }
+        var out = [Float](repeating: 0, count: step * (notes.count - 1) + notes[0].count)
+        for (i, x) in notes.enumerated() {
+            for (j, v) in x.enumerated() { out[i * step + j] += v * 0.8 }
+        }
+        return out
+    }
+
+    /// Bộ nhớ (byte, Float32) của bộ nốt dựng sẵn lúc hiện bàn phím (25 nốt + cách + Enter + ⌫ + pedal).
+    static var normalBankBytes: Int {
+        let note = Int((noteDuration * sampleRate).rounded())
+        let muted = Int((mutedDuration * sampleRate).rounded())
+        let ped = Int((pedalDuration * sampleRate).rounded())
+        return 4 * (PianoMap.notes.count * note + 2 * note + muted + ped)
+    }
+
+    /// Bộ nhớ bộ nốt ngân (dựng lười khi pedal dùng lần đầu).
+    static var sustainBankBytes: Int {
+        4 * PianoMap.notes.count * Int((sustainDuration * sustainSampleRate).rounded())
+    }
+}
+
+/// Pedal ngân (Shift / Caps Lock) — máy trạng thái thuần.
+/// - Bấm Shift ra một-lần ⇒ pedal xuống (tiếng pedal), nốt KẾ TIẾP ngân rồi nhả.
+/// - Caps Lock ⇒ pedal giữ; tắt Caps (bấm hoặc tự tắt) ⇒ "giảm âm" (damper) các nốt đang ngân.
+/// - Shift TỰ bật đầu câu KHÔNG phải pedal (chỉ phím Shift người dùng bấm mới tính).
+struct PianoPedal {
+    enum State: Equatable { case off, once, caps }
+    enum Shift: Equatable { case off, on, caps }
+    enum Action: Equatable { case none, pedalDown, damper }
+    private(set) var state: State = .off
+
+    var isDown: Bool { state != .off }
+
+    /// Người dùng bấm phím Shift; `result` = trạng thái Shift SAU khi bấm.
+    mutating func shiftPressed(_ result: Shift) -> Action {
+        switch result {
+        case .on: state = .once; return .pedalDown
+        case .caps: state = .caps; return .pedalDown
+        case .off:
+            let was = state
+            state = .off
+            return was == .caps ? .damper : .none
+        }
+    }
+
+    /// Gõ một nốt: true ⇒ nốt này ngân. Pedal một-lần nhả sau nốt.
+    mutating func noteTyped() -> Bool {
+        let s = state != .off
+        if state == .once { state = .off }
+        return s
+    }
+
+    /// Shift đổi KHÔNG do bấm (rời plane, đổi ô…): Caps tắt ⇒ damper.
+    mutating func shiftChanged(_ now: Shift) -> Action {
+        if state == .caps && now != .caps { state = .off; return .damper }
+        return .none
+    }
+}
+
+/// Pool giọng xoay vòng (round-robin) — mỗi lần bấm lấy giọng kế tiếp, không cấp phát. Các giọng bắt
+/// đầu trong cùng `window` (bấm nhiều phím cùng lúc) được hạ âm lượng 1/√n để hợp âm không vỡ tiếng.
+struct VoicePool {
+    let size: Int
+    private(set) var next = 0
+    private var starts: [Double]
+    static let chordWindow = 0.06
+
+    init(size: Int) {
+        self.size = size
+        starts = [Double](repeating: -Double.infinity, count: size)
+    }
+
+    mutating func allocate(now: Double) -> Int {
+        let v = next
+        next = (next + 1) % size
+        starts[v] = now
+        return v
+    }
+
+    func isRecent(_ v: Int, now: Double) -> Bool { now - starts[v] <= Self.chordWindow }
+
+    /// Số giọng vừa bắt đầu trong cửa sổ hợp âm.
+    func simultaneous(now: Double) -> Int {
+        var c = 0
+        for v in 0..<size where isRecent(v, now: now) { c += 1 }
+        return c
+    }
+
+    static func chordScale(_ n: Int) -> Float { 1 / Float(max(1, n)).squareRoot() }
 }

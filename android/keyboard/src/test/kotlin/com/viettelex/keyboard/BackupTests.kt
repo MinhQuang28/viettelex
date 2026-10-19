@@ -55,6 +55,16 @@ class BackupTests {
         assertEquals(MiniJson.parse(fixture("backup-android-v1")), MiniJson.parse(BackupCodec.encode(androidPayload)))
     }
 
+    /** Kiểu âm phím (19/10/2026): id mới qua sao lưu; id lạ bị bỏ (máy giữ giá trị, đọc lạ ⇒ mặc định). */
+    @Test fun keySoundStyleWhitelist() {
+        fun style(id: String) = BackupCodec.decode("""{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"ios","settings":{"keySoundStyle":"$id"}}""")
+            .settings?.get(Keys.KEY_SOUND_STYLE)
+        for (id in listOf("system", "subtle", "rock", "pop", "water", "vintage", "phao", "jingle", "piano", "custom"))
+            assertEquals(id, style(id), id)
+        assertNull(style("loud"))
+        assertNull(style("theme"))   // "Theo giao diện" đã bỏ — không vào whitelist
+    }
+
     @Test fun readsAndroidFixture() = assertEquals(androidPayload, BackupCodec.decode(fixture("backup-android-v1")))
 
     /** File iOS ghi đọc được trên Android (kể cả từ đã học, key tri có \u0001, chuỗi có "\n). */

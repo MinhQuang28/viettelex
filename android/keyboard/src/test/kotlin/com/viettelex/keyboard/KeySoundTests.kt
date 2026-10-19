@@ -27,6 +27,8 @@ class KeySoundTests {
         assertEquals("wood", s.keySoundStyle)
         assertEquals(0, KeyboardSettings.load { if (it == Keys.KEY_SOUND_VOLUME) -3 else null }.keySoundVolume)
         assertEquals("subtle", KeyboardSettings.load { if (it == Keys.KEY_SOUND_STYLE) "loud" else null }.keySoundStyle)
+        assertEquals("system", KeyboardSettings.load { if (it == Keys.KEY_SOUND_STYLE) "system" else null }.keySoundStyle)
+        assertEquals("pop", KeyboardSettings.load { if (it == Keys.KEY_SOUND_STYLE) "pop" else null }.keySoundStyle)
     }
 
     /** TẮT ⇒ tiếng hệ thống; BẬT ⇒ tiếng riêng (không kèm hệ thống); Rung/Im lặng hoặc 0 % ⇒ im. */
@@ -36,6 +38,47 @@ class KeySoundTests {
         assertEquals(KeySoundSynth.Route.CUSTOM, KeySoundSynth.route(true, 50, true))
         assertEquals(KeySoundSynth.Route.SILENT, KeySoundSynth.route(true, 50, false))
         assertEquals(KeySoundSynth.Route.SILENT, KeySoundSynth.route(true, 0, true))
+        // Kiểu "Hệ thống" (19/10/2026) ⇒ như TẮT: playSoundEffect (hệ thống tự theo Rung/Im lặng).
+        assertEquals(KeySoundSynth.Route.SYSTEM, KeySoundSynth.route(true, 50, true, "system"))
+        assertEquals(KeySoundSynth.Route.SYSTEM, KeySoundSynth.route(true, 0, false, "system"))
+        assertEquals(KeySoundSynth.Route.CUSTOM, KeySoundSynth.route(true, 50, true, "rock"))
+        assertEquals(KeySoundSynth.Route.CUSTOM, KeySoundSynth.route(true, 50, true, "loud"))   // lạ ⇒ mặc định
+    }
+
+    /** Trang "Âm thanh gõ": "Hệ thống" đầu, "Âm của bạn" cuối, mỗi kiểu đúng một lần; chỉ "Hệ thống" không SoundPool. */
+    @Test fun menuOrderAndSystemStyle() {
+        assertEquals(KeySoundStyle.SYSTEM, KeySoundStyle.MENU_ORDER.first())
+        assertEquals(KeySoundStyle.CUSTOM, KeySoundStyle.MENU_ORDER.last())
+        assertEquals(KeySoundStyle.entries.toSet(), KeySoundStyle.MENU_ORDER.toSet())
+        assertEquals(KeySoundStyle.entries.size, KeySoundStyle.MENU_ORDER.size)
+        assertEquals("bật công tắc ⇒ Nhẹ nhàng", KeySoundStyle.SUBTLE, KeySoundStyle.DEFAULT)
+        for (st in KeySoundStyle.entries) assertEquals("$st", st != KeySoundStyle.SYSTEM, st.usesPool)
+        assertFalse(KeySoundStyle.needsPool("system"))
+        assertTrue(KeySoundStyle.needsPool("water"))
+        assertTrue(KeySoundStyle.needsPool(null))
+        assertTrue(KeySoundStyle.needsPool("xyz"))
+        assertFalse(KeySoundStyle.SYSTEM in KeySoundStyle.PRESETS)
+        assertFalse(KeySoundStyle.CUSTOM in KeySoundStyle.PRESETS)
+        // ordinal = seed nhiễu: kiểu cũ giữ vị trí; id + thứ tự Y HỆT iOS allCases.
+        assertEquals(listOf("subtle", "wood", "mechanical", "typewriter", "bubble", "custom", "system", "rock", "pop", "water", "vintage",
+            "phao", "jingle", "piano"),
+            KeySoundStyle.entries.map { it.id })
+        for (id in listOf("system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano")) assertTrue(id, id in KeySoundStyle.IDS)
+        for (st in KeySoundStyle.entries) assertNotNull("$st thiếu bản EN", L10nTable.EN[st.viTitle])
+        assertNotNull(L10nTable.EN["Âm thanh gõ"])
+    }
+
+    /** Nghe thử khi chọn kiểu: chữ + lặng + xoá + lặng + chức năng (giống iOS testPreviewSequence). */
+    @Test fun previewSequence() {
+        val bank = KeySoundSynth.Kind.entries.map { KeySoundSynth.samples(KeySoundStyle.ROCK, it) }
+        val gap = Math.round(0.16 * KeySoundSynth.SAMPLE_RATE).toInt()
+        val seq = KeySoundSynth.previewSequence(bank)
+        assertEquals(bank.sumOf { it.size } + 2 * gap, seq.size)
+        assertArrayEquals(bank[0], seq.copyOfRange(0, bank[0].size), 0f)
+        val d0 = bank[0].size + gap
+        assertArrayEquals(bank[1], seq.copyOfRange(d0, d0 + bank[1].size), 0f)
+        assertTrue(seq.copyOfRange(bank[0].size, d0).all { it == 0f })
+        assertArrayEquals(bank[2], seq.copyOfRange(seq.size - bank[2].size, seq.size), 0f)
     }
 
     @Test fun gainCurve() {
@@ -79,11 +122,49 @@ class KeySoundTests {
     /** Checksum chung với iOS (KeySoundTests.swift testCrossPlatformChecksums). */
     @Test fun crossPlatformChecksums() {
         val golden = mapOf(KeySoundStyle.SUBTLE to 169.1699, KeySoundStyle.WOOD to 192.4240,
-            KeySoundStyle.MECHANICAL to 239.0849, KeySoundStyle.TYPEWRITER to 139.7659, KeySoundStyle.BUBBLE to 233.6785)
+            KeySoundStyle.MECHANICAL to 239.0849, KeySoundStyle.TYPEWRITER to 139.7659, KeySoundStyle.BUBBLE to 233.6785,
+            KeySoundStyle.ROCK to 128.7247, KeySoundStyle.POP to 154.4214, KeySoundStyle.WATER to 246.5762, KeySoundStyle.VINTAGE to 139.9505,
+            KeySoundStyle.PHAO to 61.5246, KeySoundStyle.JINGLE to 206.7064)
         for ((st, want) in golden) {
             val s = KeySoundSynth.samples(st, KeySoundSynth.Kind.LETTER).sumOf { abs(it).toDouble() }
             assertEquals("$st", want, s, 0.01)
         }
+    }
+
+    /** 4 kiểu thêm 19/10/2026: chốt cả xoá + phím chức năng (iOS testCrossPlatformChecksumsNewKinds). */
+    @Test fun crossPlatformChecksumsNewKinds() {
+        val golden = listOf(Triple(KeySoundStyle.ROCK, 125.7988, 176.4305), Triple(KeySoundStyle.POP, 153.6654, 183.0577),
+            Triple(KeySoundStyle.WATER, 236.6294, 280.8465), Triple(KeySoundStyle.VINTAGE, 167.8816, 218.2744),
+            Triple(KeySoundStyle.PHAO, 69.1895, 93.5815), Triple(KeySoundStyle.JINGLE, 212.6919, 254.5561))
+        for ((st, del, mod) in golden) {
+            assertEquals("$st", del, KeySoundSynth.samples(st, KeySoundSynth.Kind.DELETE).sumOf { abs(it).toDouble() }, 0.01)
+            assertEquals("$st", mod, KeySoundSynth.samples(st, KeySoundSynth.Kind.MODIFIER).sumOf { abs(it).toDouble() }, 0.01)
+        }
+    }
+
+    /** Pháo (Tết) NHỎ hơn: đỉnh + RMS dưới "Gõ gỗ" cả 3 loại phím; Chuông không to hơn (iOS testPhaoQuietJingleModerate). */
+    @Test fun phaoQuietJingleModerate() {
+        for (k in KeySoundSynth.Kind.entries) {
+            val wood = KeySoundSynth.samples(KeySoundStyle.WOOD, k)
+            val phao = KeySoundSynth.samples(KeySoundStyle.PHAO, k)
+            val bell = KeySoundSynth.samples(KeySoundStyle.JINGLE, k)
+            assertTrue("$k", KeySoundSynth.rms(phao) < KeySoundSynth.rms(wood))
+            assertTrue("$k", phao.maxOf { abs(it) } < wood.maxOf { abs(it) })
+            assertTrue("$k", KeySoundSynth.rms(bell) <= KeySoundSynth.rms(wood))
+            assertTrue("$k", bell.maxOf { abs(it) } <= wood.maxOf { abs(it) })
+        }
+        assertFalse(KeySoundSynth.samples(KeySoundStyle.PHAO, KeySoundSynth.Kind.LETTER)
+            .contentEquals(KeySoundSynth.samples(KeySoundStyle.PHAO, KeySoundSynth.Kind.DELETE)))
+    }
+
+    /** Danh sách id DUY NHẤT cho "sound" của theme JSON (trùng iOS presetIDs); "theme" (đã bỏ) ⇒ mặc định. */
+    @Test fun presetIdsForThemeJson() {
+        assertEquals(listOf("subtle", "wood", "mechanical", "typewriter", "bubble", "rock", "pop", "water", "vintage",
+            "phao", "jingle", "piano"), KeySoundStyle.PRESET_IDS)
+        for (bad in listOf("system", "custom", "theme")) assertFalse(bad, bad in KeySoundStyle.PRESET_IDS)
+        assertEquals(KeySoundStyle.SUBTLE, KeySoundStyle.resolve("theme", true))
+        assertEquals("subtle", KeyboardSettings.load { if (it == Keys.KEY_SOUND_STYLE) "theme" else null }.keySoundStyle)
+        assertEquals("piano", KeyboardSettings.load { if (it == Keys.KEY_SOUND_STYLE) "piano" else null }.keySoundStyle)
     }
 
     @Test fun styleResolveAndBankFallback() {
@@ -92,6 +173,8 @@ class KeySoundTests {
         assertEquals(KeySoundStyle.WOOD, KeySoundStyle.resolve("wood", false))
         assertEquals(KeySoundStyle.SUBTLE, KeySoundStyle.resolve("custom", false))
         assertEquals(KeySoundStyle.CUSTOM, KeySoundStyle.resolve("custom", true))
+        assertEquals(KeySoundStyle.SYSTEM, KeySoundStyle.resolve("system", false))
+        assertEquals(KeySoundStyle.VINTAGE, KeySoundStyle.resolve("vintage", false))
         val miss = KeySoundSynth.bank("custom", null)
         assertEquals(KeySoundStyle.SUBTLE, miss.first)
         assertArrayEquals(KeySoundSynth.samples(KeySoundStyle.SUBTLE, KeySoundSynth.Kind.LETTER), miss.second[0], 0f)
