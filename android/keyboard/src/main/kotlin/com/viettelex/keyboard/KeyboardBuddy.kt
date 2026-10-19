@@ -930,6 +930,34 @@ sealed class BuddyArt {
 /** Bộ khung hình (tên ảnh) — mỗi bậc nhảy một chuỗi khung chạy hết trong một vòng. */
 class BuddySprites(val sleep: String, val rest: String, val dance: List<List<String>>, val cheer: List<String>) {
     companion object {
+        /** Khung lật gương = ô + MIRROR (nhấc chân trái ↔ chân phải) — = iOS BuddySprites.mirror. */
+        const val MIRROR = 100
+        fun cell(frame: Int) = frame % MIRROR
+        fun isMirrored(frame: Int) = frame >= MIRROR
+        private val GENTLE = intArrayOf(0, 1, 0, 1 + MIRROR)
+        /** Lắc hông: qua lại giữa khung 5 và 6 (ảnh thứ 6 / 7) vài lần. */
+        private val SWAY = intArrayOf(0, 1, 0, 1 + MIRROR, 5, 6, 5, 6)
+        /** = iOS turnOrder: thứ tự ảnh khi xoay trọn vòng; cô gái vẽ khác thứ tự. */
+        fun turnOrder(c: BuddyCharacter): IntArray =
+            if (c == BuddyCharacter.GIRL) intArrayOf(6, 3, 4, 2, 5) else intArrayOf(2, 3, 4, 5, 6)
+        /** Bậc cao: nhảy, xoay trọn vòng trái, rồi trọn vòng phải (bản lật gương), rồi lắc hông. */
+        private val TURNS = BuddyCharacter.entries.associateWith { c ->
+            val o = turnOrder(c)
+            intArrayOf(0, 1, 0, 1 + MIRROR) + o + intArrayOf(0) + o.map { it + MIRROR }.toIntArray() +
+                intArrayOf(0, 5, 6, 5, 6, 0)
+        }
+        val CHEER = intArrayOf(0, 1, 6, 1 + MIRROR, 0)
+        val REACT = intArrayOf(0, 1, 6, 6 + MIRROR)
+        fun columns(c: BuddyCharacter) = 4
+        fun rows(c: BuddyCharacter) = 2
+        fun rest(c: BuddyCharacter) = 0
+        fun sleep(c: BuddyCharacter) = 7
+        fun dance(c: BuddyCharacter, tier: Int): IntArray = if (tier >= 2) TURNS.getValue(c) else if (tier == 1) SWAY else GENTLE
+        /** Vòng dài theo số khung (nhịp mỗi khung như bộ cũ: 10 khung bậc cao, 4 khung bậc thấp). */
+        fun duration(c: BuddyCharacter, tier: Int) =
+            BuddyDance.loopLength(tier) * dance(c, tier).size / (if (tier >= 2) 10.0 else 4.0)
+
+
         fun frameIndex(p: Double, count: Int): Int {
             if (count <= 0) return 0
             val pp = p - floor(p)

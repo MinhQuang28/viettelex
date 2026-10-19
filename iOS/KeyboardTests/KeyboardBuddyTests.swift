@@ -189,6 +189,87 @@ final class KeyboardBuddyTests: XCTestCase {
 
     // MARK: Hình (dữ liệu)
 
+    /// Phil 20/10: lật gương khung có sẵn để gấp đôi dáng (nhấc chân trái → chân phải).
+    func testMirroredFramesDoublePoses() {
+        let turn = BuddySprites.dance(.boy, 2)
+        XCTAssertTrue(turn.contains(1) && turn.contains(1 + BuddySprites.mirror), "bước trái + bước phải")
+        for f in 2...6 { XCTAssertTrue(turn.contains(f + BuddySprites.mirror), "khung \(f) có bản lật") }
+        XCTAssertTrue(BuddySprites.dance(.girl, 0).contains(where: BuddySprites.isMirrored))
+        XCTAssertTrue(BuddySprites.cheer.contains(where: BuddySprites.isMirrored))
+        for seq in [turn, BuddySprites.dance(.boy, 0), BuddySprites.cheer, BuddySprites.react] {
+            for f in seq { XCTAssertLessThan(BuddySprites.cell(f), 7, "không lật / dùng khung ngủ khi nhảy") }
+        }
+        XCTAssertEqual(BuddySprites.cell(103), 3)
+        // Xoay trọn vòng trái rồi phải bằng ảnh (không rotate): đủ 5 dáng quay + bản lật, cô gái theo thứ tự riêng.
+        for c in BuddyCharacter.allCases where c != .off {
+            let d = BuddySprites.dance(c, 3), o = BuddySprites.turnOrder(c)
+            XCTAssertEqual(Set(o), [2, 3, 4, 5, 6])
+            let s = d.firstIndex(of: o[0])!
+            XCTAssertEqual(Array(d[s..<s + 5]), o, "\(c) vòng trái")
+            XCTAssertEqual(Array(d[s + 6..<s + 11]), o.map { $0 + BuddySprites.mirror }, "\(c) vòng phải")
+        }
+        XCTAssertEqual(BuddySprites.turnOrder(.girl), [6, 3, 4, 2, 5])
+        // Lắc hông: 5 ↔ 6 liền nhau ít nhất hai lượt (gõ vừa và nhanh).
+        for tier in [1, 2, 3] {
+            let d = BuddySprites.dance(.cat, tier).map(BuddySprites.cell)
+            let swings = zip(d, d.dropFirst()).filter { Set([$0, $1]) == [5, 6] }.count
+            XCTAssertGreaterThanOrEqual(swings, 3, "bậc \(tier)")
+        }
+        XCTAssertFalse(BuddySprites.isMirrored(6))
+        // Nhịp mỗi khung giữ như bộ 10 khung cũ.
+        XCTAssertEqual(BuddySprites.duration(.boy, 2) / Double(turn.count),
+                       BuddyDance.loopLength(2) / 10, accuracy: 1e-9)
+    }
+
+    func testGirlUsesSameEightFramesAsBoy() {
+        for tier in 0..<BuddyTempo.tiers {
+            XCTAssertEqual(BuddySprites.dance(.girl, tier).count, BuddySprites.dance(.boy, tier).count)
+            XCTAssertEqual(BuddySprites.duration(.girl, tier), BuddySprites.duration(.boy, tier))
+        }
+        XCTAssertEqual(BuddySprites.columns(.girl), 4)
+        XCTAssertEqual(BuddySprites.rows(.girl), 2)
+        XCTAssertEqual(BuddySprites.rest(.girl), 0)
+        XCTAssertEqual(BuddySprites.sleep(.girl), 7)
+    }
+
+    @MainActor func testSpriteLifecycle() throws {
+      for character in BuddyCharacter.allCases where character != .off {
+        let v = BuddyView(character: character, bar: 0x222222, lowPower: false)
+        v.frame = CGRect(x: 0, y: 0, width: 50, height: 44)
+        v.layoutIfNeeded()
+        let sprite = try XCTUnwrap(v.layer.sublayers?.first)
+        XCTAssertNotNil(sprite.contents, "Sprite atlas must be bundled in app, extension and tests")
+        XCTAssertTrue(v.bounds.contains(sprite.frame))
+        v.apply(.dancing(3), now: 0)
+        XCTAssertNotNil(sprite.animation(forKey: "sprite"))
+        v.apply(.asleep(zzz: false), now: 4)
+        XCTAssertNil(sprite.animationKeys())
+        XCTAssertEqual(sprite.contentsRect, CGRect(x: 0.75, y: 0.5, width: 0.25, height: 0.5))
+        v.lowPower = true
+        v.apply(.dancing(3), now: 5)
+        XCTAssertNil(sprite.animationKeys())
+        v.halt()
+      }
+    }
+
+    @MainActor func testGirlSleepsImmediatelyLikeBoy() throws {
+        let v = BuddyView(character: .girl, bar: 0x222222, lowPower: false)
+        v.frame = CGRect(x: 0, y: 0, width: 44, height: 44)
+        v.layoutIfNeeded()
+        let sprite = try XCTUnwrap(v.layer.sublayers?.first)
+        v.apply(.awake, now: 0)
+        v.apply(.asleep(zzz: true), now: 3)
+        XCTAssertNil(sprite.animationKeys())
+        XCTAssertEqual(sprite.contentsRect, CGRect(x: 0.75, y: 0.5, width: 0.25, height: 0.5))
+        v.apply(.dancing(0), now: 3.2)
+        XCTAssertEqual(sprite.animation(forKey: "sprite")?.repeatCount, .infinity)
+        v.lowPower = true
+        v.apply(.awake, now: 4)
+        v.apply(.asleep(zzz: true), now: 7)
+        XCTAssertNil(sprite.animationKeys())
+        v.halt()
+    }
+
     func testSVGParse() {
         XCTAssertEqual(BuddySVG.parse("M1 2 l3 4 h5 V-6 q1 1 2 2 Z"),
                        [.move(1, 2), .line(4, 6), .line(9, 6), .line(9, -6), .quad(10, -5, 11, -4), .close])
@@ -224,7 +305,8 @@ final class KeyboardBuddyTests: XCTestCase {
     private final class Clock { var t = 100.0 }
 
     @MainActor private func makeView(_ c: BuddyCharacter, low: Bool = false, clock: Clock) -> BuddyView {
-        let v = BuddyView(character: c, bar: BuddyHalo.systemLight, lowPower: low)
+        // Exercise the seasonal vector fallback; atlas lifecycle is tested separately above.
+        let v = BuddyView(character: c, bar: BuddyHalo.systemLight, lowPower: low, season: .christmas)
         v.clock = { clock.t }
         v.frame = CGRect(x: 0, y: 0, width: KeyboardView.buddyZoneWidth, height: 40)
         v.layoutIfNeeded()
@@ -395,7 +477,7 @@ final class KeyboardBuddyTests: XCTestCase {
         }
     }
 
-    /// Ô nhân vật không bao giờ chồng chip gợi ý / ⌄ / 📋 / 😊 và không lấn xuống hàng phím — điện thoại dọc,
+    /// Ô nhân vật không bao giờ chồng chip gợi ý / ⌄ / 📋 / 😊, chỉ tràn xuống hàng phím đầu — điện thoại dọc,
     /// ngang, iPad.
     @MainActor func testLayoutNeverOverlapsChipsOrKeys() throws {
         let sizes: [(CGFloat, CGFloat)] = [(320, 260), (375, 260), (390, 300), (430, 300), (667, 200), (844, 200),
@@ -413,17 +495,29 @@ final class KeyboardBuddyTests: XCTestCase {
                     XCTAssertFalse(f.intersects(s.chevron), "\(w): đè ⌄")
                     if let c = s.clip { XCTAssertFalse(f.intersects(c), "\(w): đè 📋") }
                     if let e = kb.debugEmojiBarButton { XCTAssertFalse(f.intersects(e.frame), "\(w): đè 😊") }
-                    XCTAssertLessThanOrEqual(f.maxY, kb.keyAreaFrame.minY + 0.5, "\(w)×\(h): lấn hàng phím")
+                    // Được tràn xuống hàng phím đầu (không nhận chạm), nhưng không quá ~2/3 strip.
+                    let strip = f.height / (1 + KeyboardView.buddyOverlapRatio)
+                    XCTAssertLessThanOrEqual(f.maxY - kb.keyAreaFrame.minY, 0.7 * strip, "\(w)×\(h): tràn quá sâu")
                     XCTAssertTrue(b.clipsToBounds, "nhân vật không vẽ ra ngoài ô")
                     // Nhân vật cao gần bằng thanh (~30–44 pt), nằm trọn trong ô.
-                    XCTAssertTrue(b.bounds.contains(b.figureFrame.insetBy(dx: 0.5, dy: 0.5)), "\(w): \(b.figureFrame)")
+                    // Dọc nằm trọn trong ô (ngang: lề trong suốt của ô ảnh được cắt bởi clipsToBounds).
+                    XCTAssertGreaterThanOrEqual(b.figureFrame.minY, -0.5, "\(w): \(b.figureFrame)")
+                    XCTAssertLessThanOrEqual(b.figureFrame.maxY, b.bounds.maxY + 0.5, "\(w): \(b.figureFrame)")
+                    XCTAssertEqual(b.figureFrame.midX, b.bounds.midX, accuracy: 0.5)
                     XCTAssertGreaterThanOrEqual(b.figureFrame.height, min(26, b.bounds.height - 2), "\(w): nhân vật quá nhỏ")
                 }
             }
         }
         // Hàm thuần.
         XCTAssertEqual(KeyboardView.buddyFrame(width: 390, strip: 40),
-                       CGRect(x: 390 - KeyboardView.stripZoneWidth - 34, y: 0, width: 34, height: 40))
+                       CGRect(x: 390 - KeyboardView.stripZoneWidth - 34, y: 0, width: 34, height: 66))
+        // Nhân vật to hơn strip: tràn xuống hàng phím (Phil 20/10: "bé quá", cho đè lên phím dưới).
+        let tall = BuddyView(character: .boy, bar: BuddyHalo.systemLight, lowPower: true)
+        tall.frame = KeyboardView.buddyFrame(width: 390, strip: 40)
+        tall.layoutIfNeeded()
+        XCTAssertGreaterThan(tall.figureFrame.height, 40, "nhân vật phải cao hơn thanh gợi ý")
+        XCTAssertEqual(tall.figureFrame.minY, 0, accuracy: 0.5, "đầu chạm trần thanh gợi ý")
+        XCTAssertFalse(tall.isUserInteractionEnabled, "phần tràn không được chặn chạm phím")
         XCTAssertEqual(KeyboardView.emojiBarFrame(width: 390, strip: 36, collapsed: false, clip: false, buddy: 34).maxX,
                        390 - KeyboardView.stripZoneWidth - 34)
     }
@@ -704,7 +798,8 @@ final class KeyboardBuddyTests: XCTestCase {
         v.frame = plain.frame
         v.layoutIfNeeded()
         XCTAssertGreaterThan(v.outfitPieceCount, 0)
-        XCTAssertEqual(v.layerCount, plain.layerCount + v.outfitPieceCount)
+        // Both are seasonal vector views; neither adds animation for its costume.
+        XCTAssertEqual(v.layerCount, plain.layerCount)
         XCTAssertEqual(v.runningAnimationCount, 0)
     }
 

@@ -1,0 +1,13 @@
+# Boy v2 transparent candidate
+
+Generated with built-in imagegen, new generation without image references, 2026-10-19.
+
+File: `boy-v2-alpha.png`, 1536 × 1024, 4 × 2 atlas, cells 384 × 512.
+
+Verified with sips: `hasAlpha: yes`. Pillow read-only inspection: RGBA; alpha extrema (0,254), 1,144,583 fully transparent pixels; top-left pixel (5,3,3,0). The image preview may show hidden dark RGB values but background pixels have actual zero alpha. No programmatic image edits performed.
+
+Frames: front rest; front dance; left three-quarter; left profile; back; right profile; right three-quarter; curled asleep. Pose direction is correct. Upright poses have little vertical padding; runtime downscale/cell extraction should preserve full cells. Figure is taller/slimmer than the intended four-head proportion. Inspect on actual keyboard before choosing final rendition.
+
+Generated original: `/Users/ptrinh/.codex/generated_images/01a15438-0367-7c70-855a-7a4152018124/exec-9865e229-b262-4277-9617-648752afda35.png`.
+
+Prompt: Create a production sprite sheet for a mobile keyboard companion. Actual transparent PNG alpha background, fully transparent pixels outside character; NEVER paint checkerboard or solid white background. This is a cutout character atlas, no background artwork. Subject: the SAME cute handsome adult anime young man in every frame, tousled short black hair, warm brown eyes, white crew-neck T-shirt, navy blue OPEN sleeveless vest, light blue relaxed slim jeans and white low-top sneakers. Cheerful attractive face, slim long legs, compact polished anime body proportions about4 heads tall, crisp dark outline, restrained clean cel shading, large clear color shapes readable at44pt high. Canvas1536x1024, EXACT4 columns by2 rows, each cell384x512. NO grid lines or text. Each character must remain at least32px away from all four cell boundaries, same upright head size and baseline. Eight frames in row-major order: top-left front standing relaxed with hands loosely at sides; top-second happy front dance with elbows bent close to body and one knee raised; top-third LEFT three-quarter standing with NOSE POINTING LEFT; top-fourth pure LEFT PROFILE with NOSE POINTING LEFT. Bottom-first back standing; bottom-second RIGHT PROFILE with NOSE POINTING RIGHT; bottom-third RIGHT three-quarter with NOSE POINTING RIGHT; bottom-fourth curled asleep on side with knees tucked and head resting on hands. Every single pose full body and fully inside own cell, hair and shoes never cropped. No lettering, no labels, no props, no shadows, no floor, no sparkles, no platform, no backdrop. Deliver real transparent background with alpha0, never a painted checker pattern.

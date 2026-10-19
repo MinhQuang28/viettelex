@@ -3,6 +3,9 @@ package com.viettelex.android.ime
 import android.annotation.SuppressLint
 import android.content.Context
 import android.graphics.Canvas
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
+import android.graphics.Rect
 import android.graphics.Paint
 import android.graphics.Path
 import android.graphics.RectF
@@ -23,6 +26,7 @@ import com.viettelex.keyboard.BuddyReaction
 import com.viettelex.keyboard.BuddyRig
 import com.viettelex.keyboard.BuddySVG
 import com.viettelex.keyboard.BuddySeason
+import com.viettelex.keyboard.BuddySprites
 import com.viettelex.keyboard.BuddyWords
 import com.viettelex.keyboard.Shape
 import com.viettelex.keyboard.Show
@@ -47,6 +51,34 @@ class BuddyView(
     val season: BuddySeason? = null,
     private val framing: BuddyFraming = BuddyFraming.BAR,
 ) : View(context) {
+    private object SpriteAssets {
+        private val cache = object : android.util.LruCache<String, Bitmap>(3_145_728) {
+            override fun sizeOf(key: String, value: Bitmap): Int = value.allocationByteCount
+        }
+
+        @Synchronized fun load(context: Context, character: BuddyCharacter): Bitmap? {
+            if (character == BuddyCharacter.OFF) return null
+            val name = "buddy-${character.id}-v2.png"
+            cache.get(name)?.let { return it }
+            return try {
+                val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                context.assets.open(name).use { BitmapFactory.decodeStream(it, null, options) }
+                options.inJustDecodeBounds = false
+                options.inScaled = false
+                val maxEdge = 512
+                while (max(options.outWidth, options.outHeight) / options.inSampleSize > maxEdge) {
+                    options.inSampleSize *= 2
+                }
+                context.assets.open(name).use {
+                    BitmapFactory.decodeStream(it, null, options)
+                }.also { if (it != null) cache.put(name, it) }
+            } catch (_: java.io.IOException) { null } // Keep vector fallback for missing assets.
+        }
+    }
+    private var spriteAtlas = if (season == null) SpriteAssets.load(context, character) else null
+    private val spriteSource = Rect()
+    private val spriteTarget = RectF()
+    private val spritePaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG)
     val rig: BuddyRig = BuddyRig.rig(character) ?: BuddyRig.CAT
     val driver = BuddyDriver(rig, lowPower)
     private val outfit = BuddyOutfit.make(season, character)
@@ -107,7 +139,7 @@ class BuddyView(
     /** Ô nhân vật đang hiện (bar mở) — root đặt; ẩn ⇒ không vẽ gì. */
     var shownInSlot = true
         set(v) { if (field != v) { field = v; invalidate() } }
-    var maxFigureDp = 44f
+    var maxFigureDp = 200f
         set(v) { field = v; invalidate() }
     /** Đồng hồ (giây) — test thay. */
     var clock: () -> Double = { SystemClock.uptimeMillis() / 1000.0 }
@@ -183,7 +215,13 @@ class BuddyView(
     override fun onDetachedFromWindow() { halt(); super.onDetachedFromWindow() }
 
     /** Có cần khung kế không — = driver (ngủ yên / đứng yên = false). */
-    fun animating(t: Double = clock()): Boolean = driver.animating(t) || fxActive(t)
+    fun animating(t: Double = clock()): Boolean {
+        if (spriteAtlas != null) return !driver.lowPower && when (driver.shown) {
+            is BuddyPhase.Dancing, BuddyPhase.Cheering, is BuddyPhase.React -> true
+            else -> false
+        }
+        return driver.animating(t) || fxActive(t)
+    }
 
     private fun fxActive(t: Double): Boolean = driver.shown is BuddyPhase.React && !driver.lowPower
 
@@ -194,6 +232,12 @@ class BuddyView(
         driver.update(t)
         tickAt = Double.NaN
         if (!shownInSlot || width <= 0 || height <= 0) { schedule(t); return }
+        spriteAtlas?.let {
+            drawSprite(c, it, t)
+            drawFX(c, t)
+            if (animating(t)) postInvalidateDelayed(if (character == BuddyCharacter.GIRL) 50L else 80L) else schedule(t)
+            return
+        }
         val vp = rig.viewport(framing)
         val hDp = min(height / density - 1f, maxFigureDp)
         val s = max(0.001f, min(hDp * density / vp.h.toFloat(), width / vp.w.toFloat()))
@@ -207,6 +251,50 @@ class BuddyView(
         c.restore()
         drawFX(c, t)
         if (animating(t)) postInvalidateOnAnimation() else schedule(t)
+    }
+
+    private fun drawSprite(c: Canvas, atlas: Bitmap, t: Double) {
+        c.clipRect(0f, 0f, width.toFloat(), height.toFloat())   // ô ảnh rộng hơn view: cắt lề trong suốt
+        val phase = driver.shown
+        val elapsed = t - driver.phaseStart
+        val frame = when (phase) {
+            is BuddyPhase.Asleep -> BuddySprites.sleep(character)
+            is BuddyPhase.Dancing -> {
+                val frames = BuddySprites.dance(character, phase.tier)
+                frames[BuddySprites.frameIndex(elapsed / BuddySprites.duration(character, phase.tier), frames.size)]
+            }
+            BuddyPhase.Cheering -> {
+                val frames = BuddySprites.CHEER
+                frames[BuddySprites.frameIndex(elapsed / com.viettelex.keyboard.BuddyBrain.CHEER, frames.size)]
+            }
+            is BuddyPhase.React -> {
+                val frames = BuddySprites.REACT
+                frames[BuddySprites.frameIndex(elapsed / phase.reaction.duration, frames.size)]
+            }
+            else -> BuddySprites.rest(character)
+        }
+        // Reuse source/destination rectangles; no per-frame bitmap or path allocation.
+        val columns = BuddySprites.columns(character)
+        val rows = BuddySprites.rows(character)
+        val cell = BuddySprites.cell(frame)
+        val col = cell % columns; val row = cell / columns
+        spriteSource.set(col * atlas.width / columns, row * atlas.height / rows,
+            (col + 1) * atlas.width / columns, (row + 1) * atlas.height / rows)
+        val aspect = atlas.width.toFloat() / atlas.height * rows / columns
+        // Cao trọn ô (chạm trần strip); ô ảnh rộng hơn view thì lề trong suốt hai bên bị cắt.
+        val h = min(height.toFloat(), maxFigureDp * density).coerceAtLeast(0f)
+        val w = h * aspect
+        spriteTarget.set((width - w) / 2f, height - h, (width + w) / 2f, height.toFloat())
+        // Khung lật gương: scale.x = −1 quanh tâm nhân vật (chân trái ↔ chân phải), không cấp phát.
+        val sx = if (BuddySprites.isMirrored(frame)) -1f else 1f
+        if (sx == 1f) {
+            c.drawBitmap(atlas, spriteSource, spriteTarget, spritePaint)
+        } else {
+            val save = c.save()
+            c.scale(sx, 1f, spriteTarget.centerX(), spriteTarget.centerY())
+            c.drawBitmap(atlas, spriteSource, spriteTarget, spritePaint)
+            c.restoreToCount(save)
+        }
     }
 
     private fun drawRig(c: Canvas, p: BuddyPose, t: Double) {

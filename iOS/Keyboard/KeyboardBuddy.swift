@@ -769,6 +769,34 @@ enum BuddyArt {
 
 /// Bộ khung hình (tên ảnh) — mỗi bậc nhảy một chuỗi khung chạy hết trong một vòng (`BuddyDance.loopLength`).
 struct BuddySprites {
+    // Every companion uses the same 4 × 2 atlas and eight-pose state mapping.
+    static func columns(_ c: BuddyCharacter) -> Int { 4 }
+    static func rows(_ c: BuddyCharacter) -> Int { 2 }
+    static func rest(_ c: BuddyCharacter) -> Int { 0 }
+    static func sleep(_ c: BuddyCharacter) -> Int { 7 }
+    /// Khung lật gương = ô + `mirror` (nhấc chân trái ↔ chân phải): gấp đôi số dáng, không thêm ảnh.
+    static let mirror = 100
+    @inline(__always) static func cell(_ frame: Int) -> Int { frame % mirror }
+    @inline(__always) static func isMirrored(_ frame: Int) -> Bool { frame >= mirror }
+    private static let gentle = [0, 1, 0, 1 + mirror]
+    /// Lắc hông: qua lại giữa khung 5 và 6 (ảnh thứ 6 / 7) vài lần.
+    private static let sway = [0, 1, 0, 1 + mirror, 5, 6, 5, 6]
+    /// Thứ tự ảnh khi xoay trọn một vòng (từ chính diện, quay sang trái). Mèo / gà / chàng trai: 2…6 theo
+    /// thứ tự; cô gái vẽ khác thứ tự (6 ¾ trước, 3 nghiêng, 4 lưng, 2 ¾ lưng, 5 nghiêng bên kia).
+    static func turnOrder(_ c: BuddyCharacter) -> [Int] { c == .girl ? [6, 3, 4, 2, 5] : [2, 3, 4, 5, 6] }
+    /// Bậc cao: nhảy, xoay trọn vòng trái, rồi trọn vòng phải (bản lật gương), rồi lắc hông.
+    private static func turn(_ c: BuddyCharacter) -> [Int] {
+        let o = turnOrder(c)
+        return [0, 1, 0, 1 + mirror] + o + [0] + o.map { $0 + mirror } + [0, 5, 6, 5, 6, 0]
+    }
+    static let cheer = [0, 1, 6, 1 + mirror, 0]
+    static let react = [0, 1, 6, 6 + mirror]
+    static func dance(_ c: BuddyCharacter, _ tier: Int) -> [Int] { tier >= 2 ? turn(c) : tier == 1 ? sway : gentle }
+    /// Vòng dài theo số khung (giữ nhịp mỗi khung như bộ cũ: 10 khung ở bậc cao, 4 khung ở bậc thấp).
+    static func duration(_ c: BuddyCharacter, _ tier: Int) -> Double {
+        BuddyDance.loopLength(tier) * Double(dance(c, tier).count) / (tier >= 2 ? 10 : 4)
+    }
+
     var sleep: String
     var rest: String
     var dance: [[String]]

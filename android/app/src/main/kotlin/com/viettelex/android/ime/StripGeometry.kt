@@ -58,8 +58,15 @@ object StripGeometry {
     /** Ô "Bạn đồng hành" (dp) ngay TRÁI ⌄ — 😊 / 📋 dời sang trái đúng bấy nhiêu. = iOS KeyboardView.buddyZoneWidth. */
     const val BUDDY_W = 34f
 
-    /** Mép trái / phải ô nhân vật (dp) khi bar mở: sát trái zone ⌄, cao trọn strip (không lấn phím). */
+    /** Mép trái / phải ô nhân vật (dp) khi bar mở: sát trái zone ⌄. */
     fun buddyLeft(width: Float, zoneW: Float): Float = width - zoneW - BUDDY_W
+
+    /** Phần nhân vật tràn xuống hàng phím đầu (theo tỉ lệ strip) — = iOS KeyboardView.buddyOverlapRatio. Chỉ là
+     *  hình (BuddyView không nhận chạm) nên phím bên dưới vẫn bấm bình thường. */
+    const val BUDDY_OVERLAP = 0.65f
+
+    /** Chiều cao ô nhân vật (px) cho strip cao [strip] px: strip + phần tràn. */
+    fun buddyHeight(strip: Int): Int = Math.round(strip * (1 + BUDDY_OVERLAP))
 
     /** Mép phải vùng slot (dp): trừ zone ⌄, ô 😊 ([emojiButton]) và ô 📋 (chỉ khi có nút và [toolsShown]). */
     fun barRight(width: Float, zoneW: Float, clipW: Float, clipButton: Boolean, toolsShown: Boolean,

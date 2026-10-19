@@ -81,6 +81,7 @@
 		28C579703223D53D46A60F0D /* swipe-paths-en.txt in Resources */ = {isa = PBXBuildFile; fileRef = 38966B5E3DF4C19B07287B0C /* swipe-paths-en.txt */; };
 		28F59AFC0EA801B2565A2A41 /* FeaturePages.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1CD424A6A736C971B3F87998 /* FeaturePages.swift */; };
 		2A7289C8E1E1291CF3F0E332 /* SwipeShortcutTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7A239D979FCA572C550C6E31 /* SwipeShortcutTests.swift */; };
+		2AAB660716F8511DAA1EA753 /* buddy-chick-v2.png in Resources */ = {isa = PBXBuildFile; fileRef = 3709709ACAA431BAEAEDA597 /* buddy-chick-v2.png */; };
 		2ADC518FE5C55961C93038B7 /* swipe-lang-sentences.txt in Resources */ = {isa = PBXBuildFile; fileRef = CFEF10E3C02C542D5C49792E /* swipe-lang-sentences.txt */; };
 		2B019DB27C4B5571D08103E7 /* LegacyUserLangModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B77A866D636FA255421EC2DA /* LegacyUserLangModel.swift */; };
 		2B0B920D87566C26DAABB175 /* SwipePracticeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D0C7CC44A57FCB3E41047D7 /* SwipePracticeTests.swift */; };
@@ -112,6 +113,7 @@
 		38D6A3D8152008AC568C606E /* ClipboardPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42E3B1AEEBA29C8D4693932 /* ClipboardPanel.swift */; };
 		391082DF75889B3977A67837 /* EmojiData.swift in Sources */ = {isa = PBXBuildFile; fileRef = FE050ECA55A95B273F9E18A0 /* EmojiData.swift */; };
 		3918D6C9CF7ED09C9D68DBEB /* MathResults.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1859475A5F95F02805768CA /* MathResults.swift */; };
+		399ACBBB25EBADB0EB138EBE /* buddy-girl-v2.png in Resources */ = {isa = PBXBuildFile; fileRef = 195CBD6A539777991FFCD89C /* buddy-girl-v2.png */; };
 		3ADA98F967283A5E9D998695 /* theme-json-cases.txt in Resources */ = {isa = PBXBuildFile; fileRef = 1694350BF74AC5F613846DD6 /* theme-json-cases.txt */; };
 		3B923BBCC59407884A0A8C09 /* KeyboardBuddy.swift in Sources */ = {isa = PBXBuildFile; fileRef = FEA9907DB3D540310F5E7DC9 /* KeyboardBuddy.swift */; };
 		3D60F41E59C5877D893E1088 /* SpaceFlick.swift in Sources */ = {isa = PBXBuildFile; fileRef = D36D03DA09827B3E666C0C94 /* SpaceFlick.swift */; };
@@ -121,6 +123,7 @@
 		3DF29BA20F7820D6BAB307EC /* KeyboardThemeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A087DB1153D19136851D711B /* KeyboardThemeTests.swift */; };
 		3E96D77C5495AF76D505EA0F /* SpaceLogoEN@3x.png in Resources */ = {isa = PBXBuildFile; fileRef = 0C290F16D4A2A71703AFCDE2 /* SpaceLogoEN@3x.png */; };
 		3F0366EF5CE5E712413ECA83 /* KeyboardHeightTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DBDDC2765D27AF7C83556EE /* KeyboardHeightTests.swift */; };
+		3F11A3036A6423CEE101AA3A /* buddy-boy-v2.png in Resources */ = {isa = PBXBuildFile; fileRef = BBDFD4831F701CE3922C7ACB /* buddy-boy-v2.png */; };
 		3F1292ACF1A9EB3E13E3E0F6 /* L10n.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2BDB49FABB2F78D2A96902FA /* L10n.swift */; };
 		3FDC40DF237F16A813EF1EA4 /* KeyEffectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 580B8F2122EE28753CB78353 /* KeyEffectTests.swift */; };
 		4059F85D6472E1CC2601D5DF /* ReEditWordTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75A9F065C3D6400280AE99D7 /* ReEditWordTests.swift */; };
@@ -142,6 +145,7 @@
 		47D0834606BB8E66AB2213D1 /* ScrollEdgeEffectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = CBD24780DBDAEB07E6645C3E /* ScrollEdgeEffectTests.swift */; };
 		47E7F5A4D1C2F4DB41A97D74 /* SwipeVocabTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 32954DB2D38C5B9675E4964D /* SwipeVocabTests.swift */; };
 		4934EAD525E4B9A0DFBE254F /* vnlm.bin in Resources */ = {isa = PBXBuildFile; fileRef = 6C7EDE7A95356B8F9043D32F /* vnlm.bin */; };
+		496986778385E9E06B65D0C1 /* buddy-cat-v2.png in Resources */ = {isa = PBXBuildFile; fileRef = 2F849B6D66CDB74FA974513D /* buddy-cat-v2.png */; };
 		4A1DAD15F27FA4005C5D4058 /* TranslatePrefs.swift in Sources */ = {isa = PBXBuildFile; fileRef = 79FD55F59F8275BCD7B566DD /* TranslatePrefs.swift */; };
 		4AB730B9742118C7208D887A /* DomainPopup.swift in Sources */ = {isa = PBXBuildFile; fileRef = 95F2B6D4AD796E9D33B623BA /* DomainPopup.swift */; };
 		4C0088B0166B00B8536D2B75 /* swipe-paths.txt in Resources */ = {isa = PBXBuildFile; fileRef = E7BF9D54E0DFCE9D7395F598 /* swipe-paths.txt */; };
@@ -1442,6 +1446,10 @@
 				14AD6AB390189A6785E57A46 /* backup-legacy-keystyle.json in Resources */,
 				0BA146A5605A6C79C1FD23BC /* backup-too-new.json in Resources */,
 				0D74B9E1C49AB9872006D893 /* bigram-heldout.txt in Resources */,
+				3F11A3036A6423CEE101AA3A /* buddy-boy-v2.png in Resources */,
+				496986778385E9E06B65D0C1 /* buddy-cat-v2.png in Resources */,
+				2AAB660716F8511DAA1EA753 /* buddy-chick-v2.png in Resources */,
+				399ACBBB25EBADB0EB138EBE /* buddy-girl-v2.png in Resources */,
 				467594276DC8BAEF5AC22F0E /* chat-cases.txt in Resources */,
 				20F63EA1CEB8F35CCDFB7724 /* emoji.bin in Resources */,
 				5F2C618E98766EB94AA1D538 /* enlexicon.bin in Resources */,

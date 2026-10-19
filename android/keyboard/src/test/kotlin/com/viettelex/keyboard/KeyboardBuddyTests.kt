@@ -151,6 +151,47 @@ class KeyboardBuddyTests {
         assertEquals(listOf("0.0000", "13803.1358", "12756.7491", "15286.2573", "12025.5890"), sums)
     }
 
+    /** = iOS testMirroredFramesDoublePoses: lật gương khung có sẵn để gấp đôi dáng. */
+    @Test fun mirroredFramesDoublePoses() {
+        val m = BuddySprites.MIRROR
+        val turn = BuddySprites.dance(BuddyCharacter.BOY, 2).toList()
+        assertTrue(1 in turn && 1 + m in turn)
+        for (f in 2..6) assertTrue("khung $f có bản lật", f + m in turn)
+        assertTrue(BuddySprites.dance(BuddyCharacter.GIRL, 0).any { BuddySprites.isMirrored(it) })
+        assertTrue(BuddySprites.CHEER.any { BuddySprites.isMirrored(it) })
+        for (seq in listOf(turn, BuddySprites.dance(BuddyCharacter.BOY, 0).toList(),
+                BuddySprites.CHEER.toList(), BuddySprites.REACT.toList()))
+            for (f in seq) assertTrue(BuddySprites.cell(f) < 7)
+        assertEquals(3, BuddySprites.cell(103)); assertFalse(BuddySprites.isMirrored(6))
+        for (c in BuddyCharacter.entries.filter { it != BuddyCharacter.OFF }) {
+            val d = BuddySprites.dance(c, 3).toList(); val o = BuddySprites.turnOrder(c).toList()
+            assertEquals(setOf(2, 3, 4, 5, 6), o.toSet())
+            val s = d.indexOf(o[0])
+            assertEquals("$c vòng trái", o, d.subList(s, s + 5))
+            assertEquals("$c vòng phải", o.map { it + m }, d.subList(s + 6, s + 11))
+        }
+        assertEquals(listOf(6, 3, 4, 2, 5), BuddySprites.turnOrder(BuddyCharacter.GIRL).toList())
+        for (tier in 1..3) {
+            val d = BuddySprites.dance(BuddyCharacter.CAT, tier).map { BuddySprites.cell(it) }
+            val swings = d.zipWithNext().count { setOf(it.first, it.second) == setOf(5, 6) }
+            assertTrue("bậc $tier lắc hông", swings >= 3)
+        }
+        assertEquals(BuddyDance.loopLength(2) / 10, BuddySprites.duration(BuddyCharacter.BOY, 2) / turn.size, 1e-9)
+    }
+
+    @Test fun girlUsesSameEightFramesAsBoy() {
+        for (tier in 0 until BuddyTempo.TIERS) {
+            assertEquals(BuddySprites.dance(BuddyCharacter.BOY, tier).size,
+                BuddySprites.dance(BuddyCharacter.GIRL, tier).size)
+            assertEquals(BuddySprites.duration(BuddyCharacter.BOY, tier),
+                BuddySprites.duration(BuddyCharacter.GIRL, tier), 0.0)
+        }
+        assertEquals(4, BuddySprites.columns(BuddyCharacter.GIRL))
+        assertEquals(2, BuddySprites.rows(BuddyCharacter.GIRL))
+        assertEquals(0, BuddySprites.rest(BuddyCharacter.GIRL))
+        assertEquals(7, BuddySprites.sleep(BuddyCharacter.GIRL))
+    }
+
     @Test fun everyRigComplete() {
         for (c in BuddyCharacter.entries.filter { it != BuddyCharacter.OFF }) {
             val r = BuddyRig.rig(c)!!

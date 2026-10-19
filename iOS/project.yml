@@ -272,6 +272,8 @@ targets:
         buildPhase: resources
       - path: Keyboard/Resources/futoswipe.bin
         buildPhase: resources
+      - path: Keyboard/Resources/Buddies
+        buildPhase: resources
     settings:
       base:
         GENERATE_INFOPLIST_FILE: YES

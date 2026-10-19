@@ -8,6 +8,7 @@
 // Hiệu ứng phản ứng (tim, nước mắt, mưa, chữ bay, bong bóng chửi, "!") = pool layer dựng lười lần đầu,
 // tối đa BuddyFX.maxParticles hạt, nằm trong ô (clipsToBounds).
 import UIKit
+import ImageIO
 
 final class BuddyView: UIView {
     let character: BuddyCharacter
@@ -17,8 +18,8 @@ final class BuddyView: UIView {
     let season: BuddySeason?
     /// Chế độ nguồn điện thấp: chỉ dáng tĩnh.
     var lowPower: Bool { didSet { if lowPower != oldValue { forceApply() } } }
-    /// Chiều cao nhân vật tối đa (pt) — thanh gợi ý ~ cao strip; xem trước to hơn.
-    var maxFigureHeight: CGFloat = 44 { didSet { if maxFigureHeight != oldValue { builtFor = .zero; setNeedsLayout() } } }
+    /// Chiều cao nhân vật tối đa (pt) — thanh gợi ý: cao trọn ô (chạm trần strip, tràn xuống hàng phím).
+    var maxFigureHeight: CGFloat = 200 { didSet { if maxFigureHeight != oldValue { builtFor = .zero; setNeedsLayout() } } }
     /// Đồng hồ (giây) — test thay bằng giờ giả.
     var clock: () -> Double = { CACurrentMediaTime() }
 
@@ -29,6 +30,37 @@ final class BuddyView: UIView {
     private let outfit: BuddyOutfit
 
     private let stage = CALayer()      // khung nhân vật (cắt theo bounds view)
+    private let sprite = CALayer()
+    private var spriteAtlas: CGImage?
+    // Keep at most 3 MiB cached; visible previews retain only their own image.
+    private static let atlasCache: NSCache<NSString, CGImage> = {
+        let cache = NSCache<NSString, CGImage>()
+        cache.totalCostLimit = 3_145_728
+        return cache
+    }()
+
+    private static func atlas(_ character: BuddyCharacter) -> CGImage? {
+        guard character != .off else { return nil }
+        let name = "buddy-\(character.rawValue)-v2"
+        if let image = atlasCache.object(forKey: name as NSString) { return image }
+        guard let url = VTBundleResource.url(name, "png", anchor: BuddyView.self),
+              let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceThumbnailMaxPixelSize: 512,
+            kCGImageSourceShouldCacheImmediately: true
+        ] as CFDictionary) else { return nil }
+        atlasCache.setObject(image, forKey: name as NSString, cost: image.bytesPerRow * image.height)
+        return image
+    }
+
+    private func spriteRect(_ frame: Int) -> CGRect {
+        let index = BuddySprites.cell(frame)
+        let columns = BuddySprites.columns(character)
+        let rows = BuddySprites.rows(character)
+        return CGRect(x: Double(index % columns) / Double(columns), y: Double(index / columns) / Double(rows),
+                      width: 1 / Double(columns), height: 1 / Double(rows))
+    }
     private let step = CALayer(), hop = CALayer(), tilt = CALayer(), spin = CALayer()
     private var parts: [BuddyPart: CALayer] = [:]
     /// Quầng: bản sao cây bộ phận (cùng điểm xoay, cùng hoạt ảnh) nằm DƯỚI mọi bộ phận — viền sáng/tối quanh cả dáng.
@@ -72,7 +104,20 @@ final class BuddyView: UIView {
         super.init(frame: .zero)
         isUserInteractionEnabled = false
         isAccessibilityElement = false
-        clipsToBounds = true          // không bao giờ vẽ ra ngoài ô (không đè phím / chữ gợi ý)
+        clipsToBounds = true          // không vẽ ra ngoài ô (ô đã gồm phần tràn xuống hàng phím đầu)
+        // Seasonal costumes still use the existing vector rig until matching seasonal art is available.
+        if season == nil, let atlas = Self.atlas(character) {
+            spriteAtlas = atlas
+            sprite.contents = atlas
+            sprite.contentsRect = spriteRect(BuddySprites.sleep(character))
+            sprite.magnificationFilter = .linear
+            sprite.minificationFilter = .linear
+            layer.addSublayer(sprite)
+            prop.isHidden = true
+            prop.fillColor = Self.cg(BuddyFX.heartColor)
+            layer.addSublayer(prop)
+            return
+        }
         layer.addSublayer(stage)
         stage.addSublayer(step); step.addSublayer(hop); hop.addSublayer(tilt); tilt.addSublayer(spin)
         stage.addSublayer(sleepGroup)
@@ -205,6 +250,7 @@ final class BuddyView: UIView {
     /// Ẩn bàn phím / gỡ: dừng hẹn giờ + gỡ hoạt ảnh.
     func halt() {
         timer?.invalidate(); timer = nil
+        sprite.removeAllAnimations()
         removeAllAnimations()
     }
 
@@ -240,6 +286,10 @@ final class BuddyView: UIView {
         CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         if isReact(prev) { stopFX() }
+        if spriteAtlas != nil {
+            applySprite(v)
+            return
+        }
         switch v {
         case .asleep(let zzz):
             removeRigAnimations()
@@ -280,6 +330,47 @@ final class BuddyView: UIView {
             addBlend(from: old ?? .rest, to: BuddyDance.react(r, rig.style, f: 0))
             startFX(r)
         }
+    }
+
+    private func applySprite(_ phase: BuddyPhase) {
+        sprite.removeAllAnimations()
+        var frames: [Int] = []
+        var duration = 1.0
+        var repeats = false
+        switch phase {
+        case .asleep:
+            sprite.contentsRect = spriteRect(BuddySprites.sleep(character))
+        case .awake: sprite.contentsRect = spriteRect(BuddySprites.rest(character))
+        case .dancing(let tier):
+            frames = BuddySprites.dance(character, tier)
+            duration = BuddySprites.duration(character, tier)
+            repeats = true
+        case .cheering:
+            frames = BuddySprites.cheer; duration = BuddyBrain.cheer
+        case .react(let reaction):
+            shownSerial = brain.reactSerial
+            frames = BuddySprites.react; duration = reaction.duration
+            startFX(reaction)
+        }
+        guard !frames.isEmpty else { return }
+        sprite.contentsRect = spriteRect(BuddySprites.rest(character))
+        let animation = CAKeyframeAnimation(keyPath: "contentsRect")
+        animation.values = (frames + [repeats ? frames[0] : frames[frames.count - 1]]).map { NSValue(cgRect: spriteRect($0)) }
+        animation.keyTimes = (0...frames.count).map { NSNumber(value: Double($0) / Double(frames.count)) }
+        animation.calculationMode = .discrete
+        animation.duration = duration
+        animation.repeatCount = repeats ? .infinity : 0
+        sprite.add(animation, forKey: "sprite")
+        // Khung lật gương: scale.x = −1 quanh tâm sprite, cùng nhịp rời rạc với contentsRect.
+        let seq = frames + [repeats ? frames[0] : frames[frames.count - 1]]
+        guard seq.contains(where: BuddySprites.isMirrored) else { return }
+        let flip = CAKeyframeAnimation(keyPath: "transform.scale.x")
+        flip.values = seq.map { BuddySprites.isMirrored($0) ? -1.0 : 1.0 }
+        flip.keyTimes = animation.keyTimes
+        flip.calculationMode = .discrete
+        flip.duration = duration
+        flip.repeatCount = animation.repeatCount
+        sprite.add(flip, forKey: "flip")
     }
 
     /// Dáng đang hiện (để nối mượt); nil = đang ngủ.
@@ -411,6 +502,7 @@ final class BuddyView: UIView {
     }
 
     private func removeAllAnimations() {
+        sprite.removeAllAnimations()
         removeRigAnimations()
         stopZzz()
         stopFX()
@@ -604,6 +696,23 @@ final class BuddyView: UIView {
 
     /// Dựng path theo cỡ view (chỉ khi cỡ đổi). Nhân vật đứng đáy ô, giữa ngang.
     private func build() {
+        if let atlas = spriteAtlas {
+            let rows = BuddySprites.rows(character)
+            let columns = BuddySprites.columns(character)
+            let aspect = CGFloat(atlas.width) / CGFloat(atlas.height) * CGFloat(rows) / CGFloat(columns)
+            // Cao trọn ô (chạm trần strip); ô ảnh rộng hơn ô nhân vật thì cắt lề trong suốt hai bên (clipsToBounds).
+            let h = min(bounds.height, maxFigureHeight)
+            CATransaction.begin(); CATransaction.setDisableActions(true)
+            sprite.frame = CGRect(x: (bounds.width - h * aspect) / 2, y: bounds.height - h,
+                                  width: h * aspect, height: h)
+            let heartSize = h * 0.18
+            prop.frame = CGRect(x: bounds.midX - heartSize / 2, y: sprite.frame.minY + h * 0.45,
+                                width: heartSize, height: heartSize)
+            prop.path = Self.svg(BuddyFX.heartPath(cx: Double(heartSize / 2), cy: Double(heartSize / 2),
+                                                 k: Double(heartSize / 2)), origin: (0, 0), scale: 1)
+            CATransaction.commit()
+            return
+        }
         let vp = rig.viewport(framing)
         let h = min(bounds.height - 1, maxFigureHeight)
         let s = min(h / CGFloat(vp.h), bounds.width / CGFloat(vp.w))
@@ -765,7 +874,7 @@ final class BuddyView: UIView {
     }
     var hasPendingTimer: Bool { timer != nil }
     /// Khung nhân vật trong view (pt).
-    var figureFrame: CGRect { stage.frame }
+    var figureFrame: CGRect { spriteAtlas != nil ? sprite.frame : stage.frame }
     /// Hạt hiệu ứng đã dựng (pool) + "biển" đang hiện.
     var fxParticles: [CALayer] { fxShapes as [CALayer] + fxTexts }
     var fxBadgeFrame: CGRect? { badge.flatMap { $0.isHidden && badgeText?.isHidden != false ? nil : $0.frame } }
@@ -781,6 +890,13 @@ final class BuddyView: UIView {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
         removeAllAnimations()
+        if spriteAtlas != nil {
+            sprite.contentsRect = spriteRect(pose == nil
+                ? BuddySprites.sleep(character)
+                : (dance ? 1 : BuddySprites.rest(character)))
+            prop.isHidden = !heart
+            return
+        }
         prop.isHidden = !heart
         flush.isHidden = !angry; brows.isHidden = !angry
         guard let pose else { showSleep(true); for z in zLayers { z.opacity = 1 }; return }

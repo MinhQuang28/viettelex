@@ -149,4 +149,10 @@ class StripGeometryTest {
                 barR + StripGeometry.BUDDY_W, 0.001f)
         }
     }
+
+    /** Phil 20/10: nhân vật "bé quá" — ô cao hơn strip, tràn xuống hàng phím đầu (= iOS buddyFrame). */
+    @Test fun buddyOverflowsIntoFirstKeyRow() {
+        org.junit.Assert.assertEquals(66, StripGeometry.buddyHeight(40))
+        org.junit.Assert.assertTrue(StripGeometry.buddyHeight(40) - 40 <= 0.7 * 40)
+    }
 }

@@ -6065,9 +6065,14 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     static let buddyZoneWidth: CGFloat = 34
     private var buddyZone: CGFloat { buddy == nil ? 0 : Self.buddyZoneWidth }
 
-    /// Khung ô nhân vật khi bar mở — THUẦN để test: cao trọn strip (không lấn hàng phím), sát trái ⌄.
+    /// Phần nhân vật tràn xuống hàng phím đầu (theo tỉ lệ strip) — chỉ là hình, không nhận chạm
+    /// (BuddyView.isUserInteractionEnabled = false) nên phím bên dưới vẫn bấm bình thường.
+    static let buddyOverlapRatio: CGFloat = 0.65
+
+    /// Khung ô nhân vật khi bar mở — THUẦN để test: sát trái ⌄, cao strip + phần tràn xuống phím.
     static func buddyFrame(width: CGFloat, strip: CGFloat) -> CGRect {
-        CGRect(x: width - stripZoneWidth - buddyZoneWidth, y: 0, width: buddyZoneWidth, height: strip)
+        CGRect(x: width - stripZoneWidth - buddyZoneWidth, y: 0, width: buddyZoneWidth,
+               height: (strip * (1 + buddyOverlapRatio)).rounded())
     }
 
     /// Lúc hiện / đổi cài đặt: gắn hoặc gỡ nhân vật (cài đặt + Plus), nguồn điện thấp ⇒ chỉ dáng tĩnh.
@@ -6099,7 +6104,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         let show = stripOpen && bounds.width > 0
         b.isHidden = !show
         guard show else { return }
-        // Cao = strip thật (rowsContainer bắt đầu ngay dưới) ⇒ nhân vật (cắt theo ô) không bao giờ đè phím.
+        // Strip thật (rowsContainer bắt đầu ngay dưới); ô nhân vật tràn xuống hàng phím đầu (không nhận chạm).
         let strip = min(max(rowsTopConstraint?.constant ?? openStripNow, openStripNow),
                         rowsContainer.frame.height > 0 ? rowsContainer.frame.minY : .greatestFiniteMagnitude)
         let f = Self.buddyFrame(width: bounds.width, strip: strip)
