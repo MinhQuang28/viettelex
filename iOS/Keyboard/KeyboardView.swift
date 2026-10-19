@@ -214,6 +214,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// Chữ/icon trên phím (đã áp độ trong suốt ký tự). Balloon/popup dùng `palette.ink`.
     private var ink: UIColor { palette.keyInk.ui }
     private func inkFaded(_ a: Double) -> UIColor { palette.keyInk.alpha(a).ui }
+    /// Nhãn / logo trên phím cách: phím cách tô nền chức năng riêng (Piano: đen) ⇒ chữ phím chức năng.
+    private var spaceInk: RGBA { palette.functionFill != nil ? palette.fnInk : palette.keyInk }
     /// Phím chức năng + phím cách: nền / chữ-icon (= phím chữ trừ theme tô riêng — Xanh lá).
     /// Đọc một lần lúc dựng phím.
     private var fnFill: UIColor { palette.fnFill.ui }
@@ -4769,7 +4771,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             let l = UILabel()
             l.text = code
             l.font = .systemFont(ofSize: Self.isPad ? 13 : 11, weight: .medium)
-            l.textColor = inkFaded(0.45)             // mờ như stock; theo độ trong suốt ký tự
+            l.textColor = spaceInk.alpha(0.45).ui     // mờ như stock; theo độ trong suốt ký tự
             l.isUserInteractionEnabled = false
             l.isAccessibilityElement = false
             l.translatesAutoresizingMaskIntoConstraints = false
@@ -4781,7 +4783,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             ])
         case .logo:
             let hint = UIImageView(image: spaceLogoImage())
-            hint.tintColor = inkFaded(0.16)
+            hint.tintColor = spaceInk.alpha(0.16).ui
             hint.contentMode = .scaleAspectFit
             hint.translatesAutoresizingMaskIntoConstraints = false
             spaceLogo = hint
@@ -4852,7 +4854,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             let v = UILabel()
             v.text = l.displayName
             v.font = .systemFont(ofSize: 16, weight: .regular)
-            v.textColor = ink
+            v.textColor = spaceInk.ui
             v.sizeToFit()
             box.addSubview(v)
             return v
@@ -4909,7 +4911,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         let l = UILabel()
         l.text = spaceLanguage == .en ? KeyboardLanguage.en.displayName : "ViệtTelex"
         l.font = .systemFont(ofSize: 16, weight: .regular)
-        l.textColor = ink
+        l.textColor = spaceInk.ui
         l.translatesAutoresizingMaskIntoConstraints = false
         spaceMarkView?.isHidden = true     // logo Vᴛ nhường chỗ, khỏi đè lên badge
         space.addSubview(l)

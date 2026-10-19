@@ -127,7 +127,7 @@ struct FeatureSearchEntry: Identifiable {
             .init(viTitle: LK("Phím sẫm khi bấm"), keywords: "pressed key highlight", page: .phim),
             .init(viTitle: LK("Rung phím"), keywords: "haptic rung vibrate", page: .phim),
             .init(viTitle: LK("Âm thanh phím"), keywords: "sound click tiếng âm lượng volume kiểu style gỗ cơ máy chữ bong bóng custom", page: .phim),
-            .init(viTitle: LK("Theme & ảnh nền"), keywords: "theme màu chủ đề wallpaper hình nền", page: .giaoDien),
+            .init(viTitle: LK("Theme & ảnh nền"), keywords: "theme màu chủ đề wallpaper hình nền tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt phím"), keywords: "trong suốt transparent", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt ký tự"), keywords: "trong suốt transparent chữ", page: .giaoDien),
             .init(viTitle: LK("Tuỳ chỉnh nâng cao"), keywords: "màu chữ màu phím màu nhấn accent color colour bo góc tròn vuông corner radius cỡ chữ size phông font độ đậm weight bold đặt lại reset mặc định giao diện theme", page: .giaoDien),

@@ -280,7 +280,7 @@ class KeyboardView(
     // "Cỡ chữ trên phím" = Lớn ⇒ [applyLabelSize] đổi textSize (lúc cấu hình, không mỗi phím).
     private val letterPaint = theme.text(LETTER_SP)
     private val controlPaint = theme.text(CONTROL_SP, color = theme.fnInk, medium = true)
-    private val badgePaint = theme.text(14f, medium = true)
+    private val badgePaint = theme.text(14f, color = theme.spaceInk, medium = true)
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = theme.ink }
     private var letterOff = theme.centerOffset(letterPaint)
     private var controlOff = theme.centerOffset(controlPaint)
@@ -319,13 +319,13 @@ class KeyboardView(
     private val skinPainter: SkinPainter? = if (skins != null) SkinPainter() else null
     // Logo Vᴛ mờ ở góc phải phím space như iOS (thay nhãn "Tiếng Việt").
     private val logoPaint = Paint(Paint.ANTI_ALIAS_FLAG or Paint.FILTER_BITMAP_FLAG).apply {
-        colorFilter = android.graphics.PorterDuffColorFilter(theme.withAlpha(theme.ink, 0.16f), android.graphics.PorterDuff.Mode.SRC_IN)
+        colorFilter = android.graphics.PorterDuffColorFilter(theme.withAlpha(theme.spaceInk, 0.16f), android.graphics.PorterDuff.Mode.SRC_IN)
     }
     private val logo: android.graphics.Bitmap? by lazy { android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ime_space_logo) }
     private val logoEn: android.graphics.Bitmap? by lazy { android.graphics.BitmapFactory.decodeResource(resources, R.drawable.ime_space_logo_en) }
     private val logoRect = android.graphics.RectF()
     /** Mã "VI"/"EN" góc dưới-phải phím cách khi bật vuốt đổi ngôn ngữ (SpaceMark) — mờ như stock. */
-    private val codeColor = theme.withAlpha(theme.ink, 0.45f)
+    private val codeColor = theme.withAlpha(theme.spaceInk, 0.45f)
     private val codePaint = theme.text(if (theme.tablet) 12f else 10.5f, color = codeColor, medium = true,
         align = Paint.Align.RIGHT)
 
@@ -1058,7 +1058,7 @@ class KeyboardView(
     private var carCurA = 0f
     private var carNextA = 0f
     private var flickAnim: android.animation.Animator? = null
-    private val flickPaint = theme.text(16f)
+    private val flickPaint = theme.text(16f, color = theme.spaceInk)
     private val flickOff = theme.centerOffset(flickPaint)
 
     fun configureSpaceFlick(enabled: Boolean, language: KeyboardLanguage) {

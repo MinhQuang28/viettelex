@@ -170,7 +170,7 @@ final class KeyboardThemeTests: XCTestCase {
     // MARK: token
 
     func testThemeSetIsCompactAndSystemIsDefault() {
-        XCTAssertTrue((6...16).contains(KeyboardTheme.allCases.count))
+        XCTAssertTrue((6...20).contains(KeyboardTheme.allCases.count))
         XCTAssertEqual(ThemeSettings().theme, .system)
         XCTAssertEqual(ThemeSettings.load(nil).theme, .system)
     }
@@ -193,12 +193,14 @@ final class KeyboardThemeTests: XCTestCase {
     /// Theme tối cố định (OLED, Tương phản cao, Tim đen, Neon) không đổi theo hệ thống; mọi theme
     /// nền đục khác có bản tối riêng (bug 10/2026: "giao diện plus ở chế độ tối không chuyển tối").
     func testFixedThemesIgnoreSystemAppearance() {
-        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon]
+        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon, .tet, .xmas, .piano]
         for t in KeyboardTheme.allCases where t != .system && t != .glass {
             XCTAssertNotNil(t.palette(systemDark: false).background, "\(t) cần nền đục")
             if fixed.contains(t) {
                 XCTAssertEqual(t.palette(systemDark: false), t.palette(systemDark: true), t.rawValue)
-                XCTAssertTrue(t.palette(systemDark: false).isDark, t.rawValue)
+                // Piano: phím ngà chữ đen nhưng NỀN tối ⇒ thanh gợi ý / emoji theo nhánh tối (surfaceDark).
+                let p = t.palette(systemDark: false)
+                XCTAssertTrue(p.surfaceDark ?? p.isDark, t.rawValue)
             } else {
                 XCTAssertNotEqual(t.palette(systemDark: false), t.palette(systemDark: true), t.rawValue)
             }
@@ -860,7 +862,8 @@ final class ThemeSetTests: XCTestCase {
         super.tearDown()
     }
 
-    static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .neon, .pink]
+    static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .neon, .pink,
+                                             .tet, .tetMai, .xmas, .xmasSnow, .piano]
     static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
 
     // MARK: bảng màu chung iOS ↔ Android
@@ -895,7 +898,7 @@ final class ThemeSetTests: XCTestCase {
         let f = try fixture()
         XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
         XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
-        XCTAssertEqual(f.rows.count, 22)
+        XCTAssertEqual(f.rows.count, 32)
         for r in f.rows {
             let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
             let p = t.palette(systemDark: r.dark)
@@ -991,6 +994,94 @@ final class ThemeSetTests: XCTestCase {
 
     // MARK: trang "Chọn giao diện"
 
+    // MARK: âm / hiệu ứng đi kèm theme ("sound" / "effect")
+
+    func testFestiveThemesCarrySoundAndEffect() {
+        XCTAssertEqual(KeyboardTheme.tet.spec?.sound, "phao"); XCTAssertEqual(KeyboardTheme.tet.spec?.effect, "blossom")
+        XCTAssertEqual(KeyboardTheme.tetMai.spec?.sound, "phao")
+        XCTAssertEqual(KeyboardTheme.xmas.spec?.sound, "jingle"); XCTAssertEqual(KeyboardTheme.xmas.spec?.effect, "snow")
+        XCTAssertEqual(KeyboardTheme.piano.spec?.sound, "piano"); XCTAssertNil(KeyboardTheme.piano.spec?.effect)
+        XCTAssertNil(KeyboardTheme.peach.spec?.sound); XCTAssertNil(KeyboardTheme.peach.spec?.effect)
+        XCTAssertEqual(ThemeSettings(theme: .tet).effectiveKeyStyle.sound, "phao")
+        for t in [KeyboardTheme.tet, .tetMai, .xmas, .xmasSnow, .piano] {
+            XCTAssertEqual(L10n.en[t.title] != nil || L10n.en[t.spec!.nameVi] != nil, true, t.rawValue)
+        }
+    }
+
+    /// Chép JSON → sửa → dán: "sound" / "effect" đi trọn vòng (theme có sẵn, bản vá, theme tự tạo).
+    func testSoundEffectRoundTrip() throws {
+        let s = ThemeSettings(theme: .tet)
+        let text = try XCTUnwrap(ThemeJSONActions.copyText(.builtin(.tet), settings: s, store: [:]))
+        XCTAssertTrue(text.contains("\"sound\""), text)
+        let back = try XCTUnwrap(ThemeSpecParser.parse(text).spec)
+        XCTAssertEqual(back.sound, "phao"); XCTAssertEqual(back.effect, "blossom")
+        XCTAssertEqual(ThemeSpecParser.parse(back.canonical).spec, back)
+        // Sửa theme có sẵn: đổi âm ⇒ lưu vào bản vá; trùng mặc định theme ⇒ không lưu.
+        var settings = s, store: [String: ThemeSpec] = [:]
+        let edited = text.replacingOccurrences(of: "\"phao\"", with: "\"wood\"")
+        XCTAssertTrue(ThemeJSONActions.save(edited, to: .builtin(.tet), settings: &settings, store: &store).ok)
+        XCTAssertEqual(settings.keyStyles["tet"]?.sound, "wood")
+        XCTAssertEqual(settings.effectiveKeyStyle.sound, "wood")
+        XCTAssertNil(settings.keyStyles["tet"]?.effect)
+        let raw = KeyStyleStore.serialize(settings.keyStyles)
+        XCTAssertEqual(KeyStyleStore.parse(raw), settings.keyStyles)
+        settings = s
+        XCTAssertTrue(ThemeJSONActions.save(text, to: .builtin(.tet), settings: &settings, store: &store).ok)
+        XCTAssertNil(settings.keyStyles["tet"]?.sound)
+        // Theme tự tạo: dán + lưu kho giữ nguyên.
+        var custom = back; custom.id = "mytet"
+        let restored = CustomThemeStore.parse(CustomThemeStore.serialize(["mytet": custom]))
+        XCTAssertEqual(restored["mytet"]?.sound, "phao"); XCTAssertEqual(restored["mytet"]?.effect, "blossom")
+    }
+
+    func testThemeExtrasPlanNeverEnablesSound() {
+        let yes: (String) -> Bool = { _ in true }, no: (String) -> Bool = { _ in false }
+        let st = KeyStyle(sound: "phao", effect: "blossom")
+        XCTAssertEqual(ThemeExtras.plan(st, soundOn: false, effectAllowed: yes, soundAllowed: yes),
+                       ThemeExtras.Outcome(effect: "blossom", sound: "phao", soundHint: true))
+        XCTAssertEqual(ThemeExtras.plan(st, soundOn: true, effectAllowed: yes, soundAllowed: yes).soundHint, false)
+        // Không khai báo ⇒ không đổi gì, không gợi ý.
+        XCTAssertEqual(ThemeExtras.plan(KeyStyle(), soundOn: false, effectAllowed: yes, soundAllowed: yes),
+                       ThemeExtras.Outcome(effect: nil, sound: nil, soundHint: false))
+        // Chưa có trên máy / khoá Plus ⇒ bỏ qua (không lưu giá trị khoá).
+        XCTAssertEqual(ThemeExtras.plan(st, soundOn: false, effectAllowed: no, soundAllowed: no),
+                       ThemeExtras.Outcome(effect: nil, sound: nil, soundHint: false))
+    }
+
+    func testThemeExtrasApplyOnSelect() throws {
+        let name = "theme-extras-\(UUID().uuidString)"
+        let d = try XCTUnwrap(UserDefaults(suiteName: name))
+        defer { d.removePersistentDomain(forName: name) }
+        d.set(false, forKey: ThemeExtras.soundOnKey)
+        d.set("subtle", forKey: ThemeExtras.soundStyleKey)
+        // Chọn theme có âm + hiệu ứng: lưu kiểu âm + hiệu ứng, âm thanh phím VẪN TẮT, có gợi ý.
+        let r = ThemeExtras.applyOnSelect(KeyStyle(sound: "wood", effect: "heart"), to: d)
+        XCTAssertTrue(r.soundHint)
+        XCTAssertEqual(d.string(forKey: ThemeExtras.soundStyleKey), "wood")
+        XCTAssertEqual(KeyEffect.load(d), .heart)
+        XCTAssertFalse(d.bool(forKey: ThemeExtras.soundOnKey))
+        // Người dùng đổi tay sau đó: giữ nguyên (chỉ áp lúc chọn) — chọn theme KHÔNG khai báo cũng không đổi.
+        d.set("bubble", forKey: ThemeExtras.soundStyleKey); d.set(KeyEffect.ripple.rawValue, forKey: KeyEffect.key)
+        let none = ThemeExtras.applyOnSelect(ThemeSettings(theme: .peach).effectiveKeyStyle, to: d)
+        XCTAssertFalse(none.soundHint)
+        XCTAssertEqual(d.string(forKey: ThemeExtras.soundStyleKey), "bubble")
+        XCTAssertEqual(KeyEffect.load(d), .ripple)
+        // Âm thanh phím đang bật ⇒ không gợi ý.
+        d.set(true, forKey: ThemeExtras.soundOnKey)
+        XCTAssertFalse(ThemeExtras.applyOnSelect(KeyStyle(sound: "wood"), to: d).soundHint)
+        // Id chưa có trên máy (hiệu ứng / âm mới chưa vào bản này) ⇒ bỏ qua, không ghi id lạ.
+        ThemeExtras.applyOnSelect(KeyStyle(sound: "notASound", effect: "notAnEffect"), to: d)
+        XCTAssertEqual(d.string(forKey: ThemeExtras.soundStyleKey), "wood")
+        XCTAssertEqual(KeyEffect.load(d), .ripple)
+        // Khoá Plus: hiệu ứng Plus không được đặt.
+        PlusGate.paywallEnabled = true
+        PlusGate.setPurchased(false)
+        PlusGate.debugOverride = false
+        d.set(KeyEffect.none.rawValue, forKey: KeyEffect.key)
+        XCTAssertNil(ThemeExtras.applyOnSelect(KeyStyle(effect: "firework"), to: d).effect)
+        XCTAssertEqual(KeyEffect.load(d), .none)
+    }
+
     func testPickerSectionsFreeThenPlus() {
         let secs = ThemePicker.sections
         XCTAssertEqual(secs.map(\.title), ["Miễn phí", "Plus"])
@@ -1037,6 +1128,10 @@ final class ThemeSetTests: XCTestCase {
                 switch t {
                 case .blackHeart: XCTAssertEqual(m, .hearts)
                 case .greenFloral: XCTAssertEqual(m, .flowers)
+                case .tet, .tetMai: XCTAssertEqual(m, .mai)
+                case .xmas: XCTAssertEqual(m, .snowflake)
+                case .xmasSnow: XCTAssertEqual(m, dark ? .star : .snowflake)
+                case .piano: XCTAssertEqual(m, .notes)
                 default: XCTAssertNil(m, t.rawValue)
                 }
             }
@@ -1067,7 +1162,7 @@ final class ThemeSetTests: XCTestCase {
         XCTAssertTrue(D.placements(width: 800, gaps: [D.Gap(center: 50, height: 6)]).isEmpty)
         // Rộng: trần số motif.
         XCTAssertLessThanOrEqual(D.placements(width: 5000, gaps: Array(repeating: D.Gap(center: 50, height: 11), count: 8)).count, D.maxMotifs)
-        for motif in [D.Motif.hearts, .flowers] {
+        for motif in D.Motif.allCases {
             let box = D(motif: motif, color: .white).path(pts).boundingBoxOfPath
             XCTAssertGreaterThanOrEqual(box.minY, 88 - 1e-6); XCTAssertLessThanOrEqual(box.maxY, 205 + 1e-6)
         }
@@ -1081,7 +1176,7 @@ final class ThemeSetTests: XCTestCase {
         let d = UserDefaultsProvider.shared
         let saved = d?.object(forKey: ThemeSettings.themeKey)
         defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
-        for t in [KeyboardTheme.blackHeart, .greenFloral] {
+        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano] {
             for dark in [false, true] {
                 d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
                 let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }
@@ -1113,8 +1208,8 @@ final class ThemeSetTests: XCTestCase {
             // Ảnh nền: bỏ nền + hoạ tiết; chữ ≥ 4.5 trên ảnh tệ nhất cả ở phím chức năng.
             let wp = ThemeSettings(theme: t).palette(systemDark: true, wallpaperActive: true)
             XCTAssertNil(wp.background); XCTAssertNil(wp.decoration)
-            XCTAssertTrue(wp.isDark, t.rawValue)
-            XCTAssertGreaterThanOrEqual(RGBA.contrast(wp.ink, wp.fnFill.over(.white)), 4.5, "\(t) phím chức năng trên ảnh")
+            if t != .piano { XCTAssertTrue(wp.isDark, t.rawValue) }   // Piano: phím ngà chữ đen ở cả hai chế độ
+            XCTAssertGreaterThanOrEqual(RGBA.contrast(wp.fnInk, wp.fnFill.over(.white)), 4.5, "\(t) phím chức năng trên ảnh")
             // Nền theo hệ thống: không hoạ tiết, bảng emoji theo nền tối.
             var sb = ThemeSettings(theme: t)
             sb.systemBackdropThemes = [t]

@@ -49,9 +49,9 @@ class EmojiPane(
     private val fieldPaint = theme.fill(theme.keyFill)
     private val hintPaint = theme.text(16f, color = theme.withAlpha(theme.ink, 0.5f), align = Paint.Align.LEFT)
     private val hintOff = theme.centerOffset(hintPaint)
-    private val headerPaint = TextPaint(theme.text(11f, color = theme.withAlpha(theme.ink, 0.5f), bold = true,
+    private val headerPaint = TextPaint(theme.text(11f, color = theme.withAlpha(theme.barInk, 0.5f), bold = true,
         align = Paint.Align.LEFT))
-    private val abcPaint = theme.text(15f, medium = true)
+    private val abcPaint = theme.text(15f, color = theme.barInk, medium = true)
     private val abcOff = theme.centerOffset(abcPaint)
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val hiPaint = theme.fill(theme.chip)   // chỉ báo kiểu thanh điều hướng Material
@@ -237,20 +237,20 @@ class EmojiPane(
         val cy = (rowTop + rowBottom) / 2
         c.drawText("ABC", 8 * d + 22 * d, cy + abcOff, abcPaint)
         // slot 0 = 🔍, 1…9 = category, 10 = kaomoji
-        iconPaint.color = theme.withAlpha(theme.ink, 0.55f)
+        iconPaint.color = theme.withAlpha(theme.barInk, 0.55f)
         ImeIcons.draw(c, ImeIcons.SEARCH, iconsLeft + 0.5f * iconW, cy, 18f * d, iconPaint)
         val kx = iconsLeft + (SLOTS - 0.5f) * iconW
         if (kaomoji) { val hw = minOf(iconW / 2 - d, 16 * d); c.drawRoundRect(kx - hw, cy - 13 * d, kx + hw, cy + 13 * d, 13 * d, 13 * d, hiPaint) }
-        kaoTabPaint.color = if (kaomoji) theme.ink else theme.withAlpha(theme.ink, 0.55f)
+        kaoTabPaint.color = if (kaomoji) theme.barInk else theme.withAlpha(theme.barInk, 0.55f)
         c.drawText("^‿^", kx, cy + kaoTabOff, kaoTabPaint)
         for (i in 0 until 9) {
             val cx = iconsLeft + (i + 1.5f) * iconW
             val on = i == highlighted && !kaomoji
             if (on) { val hw = minOf(iconW / 2 - d, 16 * d); c.drawRoundRect(cx - hw, cy - 13 * d, cx + hw, cy + 13 * d, 13 * d, 13 * d, hiPaint) }
-            iconPaint.color = if (on) theme.ink else theme.withAlpha(theme.ink, 0.55f)
+            iconPaint.color = if (on) theme.barInk else theme.withAlpha(theme.barInk, 0.55f)
             ImeIcons.draw(c, ImeIcons.CATEGORY[i], cx, cy, 19.5f * d, iconPaint)
         }
-        iconPaint.color = theme.ink
+        iconPaint.color = theme.barInk
         ImeIcons.draw(c, ImeIcons.DELETE, width - 8 * d - 22 * d, cy, 22f * d, iconPaint)
     }
 

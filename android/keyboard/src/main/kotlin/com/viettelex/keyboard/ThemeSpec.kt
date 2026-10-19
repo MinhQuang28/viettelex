@@ -370,7 +370,7 @@ object ThemeColorCode {
 
 /** motif null = "none" (bỏ hoạ tiết). density % (bước ngang = STEP_X × 100 / density), kẹp 50…200. */
 data class ThemeDeco(val motif: String?, val color: Int = 0, val density: Int = 100) {
-    companion object { val DENSITY_RANGE = 50..200; val MOTIFS = setOf(ThemeDecoration.HEARTS, ThemeDecoration.FLOWERS) }
+    companion object { val DENSITY_RANGE = 50..200; val MOTIFS = ThemeDecoration.MOTIFS.toSet() }
 }
 
 /** Màu một chế độ (ARGB). Theme đầy đủ bắt buộc key / special / ink / accent; bản vá mọi trường tuỳ chọn. bg null = theo hệ thống. */
@@ -515,12 +515,15 @@ data class ThemeSpec(
     val weight: KeyLabelWeight? = null,
     /** Tệp tải về (phông / ảnh nền / tiền cảnh / skin phím). Có `assets.font` ⇒ `font` = null. */
     val assets: ThemeAssetSpec = ThemeAssetSpec(),
+    /** Âm phím / hiệu ứng đi kèm (id [ThemeExtraIds]) — chỉ áp lúc chọn theme ([ThemeExtras]). */
+    val sound: String? = null,
+    val effect: String? = null,
 ) {
     fun slots(dark: Boolean): ThemeSlots = if (dark) (this.dark ?: light) else light
     val name: String get() = if (L10n.isEnglish) (nameEn ?: nameVi) else nameVi
     /** Kiểu chữ / bo góc / tệp tải về mặc định của theme. */
     val typography: KeyStyle get() = KeyStyle(corner = corner, fontScale = fontScale, font = font ?: KeyLabelFont.DEFAULT,
-        weight = weight ?: KeyLabelWeight.REGULAR, assets = assets)
+        weight = weight ?: KeyLabelWeight.REGULAR, assets = assets, sound = sound, effect = effect)
 
     fun palette(dark: Boolean): ThemePalette = palette(slots(dark), dark)
 
@@ -540,6 +543,8 @@ data class ThemeSpec(
         if (fa != null) m.add("font" to json(fa)) else font?.let { m.add("font" to SJ.Str(it.id)) }
         weight?.let { m.add("weight" to SJ.Str(it.id)) }
         appendImages(assets, m)
+        sound?.let { m.add("sound" to SJ.Str(it)) }
+        effect?.let { m.add("effect" to SJ.Str(it)) }
         return SJ.Obj(m)
     }
     /** Chuỗi chuẩn (trùng iOS từng ký tự). */
@@ -595,7 +600,13 @@ data class ThemeSpec(
             val accent = s.accent ?: c.rgb(0x007AFF)
             val special = s.special ?: c.rgb(0xCCCCCC)
             val balloon = s.balloon ?: key
-            return ThemePalette(bg = s.bg ?: KeyboardTransparency.systemBackdrop(dark), keyFill = key, specialFill = special,
+            // Nền đục mà chữ theme không đọc được trên nền (Piano: phím ngà chữ đen trên thân đàn đen) ⇒ thanh gợi ý /
+            // bảng emoji theo tông NỀN (chữ đen/trắng đọc được), phím vẫn theo ink — iOS y hệt. Theme khác: null.
+            val solidBg = s.bg?.let { it or (0xFF shl 24) }
+            val barInk = solidBg?.takeIf { c.contrast(ink, it) < KeyboardTransparency.MIN_LABEL_CONTRAST }
+                ?.let { KeyboardTransparency.readable(ink, it) }
+            return ThemePalette(barInk = barInk, surfaceDark = if (barInk != null && solidBg != null) c.luminance(solidBg) < 0.18 else null,
+                bg = s.bg ?: KeyboardTransparency.systemBackdrop(dark), keyFill = key, specialFill = special,
                 ink = ink, trail = s.trail ?: c.withAlpha(accent, 0.6f), balloon = balloon, popup = balloon, action = accent,
                 actionInk = s.accentInk ?: autoAccentInk(accent), chip = special, keyBorder = s.border,
                 isDark = c.luminance(ink) > 0.5, functionFill = s.fn, functionInk = s.fnInk,
@@ -617,7 +628,7 @@ data class ThemeSpec(
             val l = slots(light); val d = slots(dark)
             return ThemeSpec(id, nameVi, nameEn, l, if (d == l) null else d, style.corner, style.fontScale,
                 style.font.takeIf { it != KeyLabelFont.DEFAULT && style.assets.font == null },
-                style.weight.takeIf { it != KeyLabelWeight.REGULAR }, style.assets)
+                style.weight.takeIf { it != KeyLabelWeight.REGULAR }, style.assets, style.sound, style.effect)
         }
     }
 }
@@ -636,7 +647,8 @@ object ThemeSpecParser {
     }
 
     private val ASSET_KEYS = setOf("background", "foreground", "keys")
-    private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight") + ASSET_KEYS
+    private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
+        "sound", "effect") + ASSET_KEYS
     private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco").toSet()
 
     fun parse(text: String): Outcome = when (val r = StrictJson.parse(text)) {
@@ -687,7 +699,7 @@ object ThemeSpecParser {
         if (c.failed) return Outcome(null, c.issues)
         val spec = ThemeSpec(id, vi, en, light, if (dark == light) null else dark, typo.corner, typo.fontScale,
             if (j["font"] != null && typo.assets.font == null) typo.font else null,
-            if (j["weight"] != null) typo.weight else null, typo.assets)
+            if (j["weight"] != null) typo.weight else null, typo.assets, typo.sound, typo.effect)
         if (contrast) c.issues.addAll(contrastIssues(spec))
         return Outcome(if (c.failed) null else spec, c.issues)
     }
@@ -781,6 +793,12 @@ object ThemeSpecParser {
             is SJ.Str -> KeyLabelWeight.entries.firstOrNull { it.id == v.s }?.let { s = s.copy(weight = it) } ?: c.err(ThemeIssue.Code.badValue, "weight")
             else -> c.err(ThemeIssue.Code.wrongType, "weight")
         }
+        fun pick(k: String, allowed: Set<String>): String? = when (val v = d[k]) {
+            null -> null
+            is SJ.Str -> if (v.s in allowed) v.s else { c.err(ThemeIssue.Code.badValue, k); null }
+            else -> { c.err(ThemeIssue.Code.wrongType, k); null }
+        }
+        s = s.copy(sound = pick("sound", ThemeExtraIds.SOUNDS), effect = pick("effect", ThemeExtraIds.EFFECTS))
         return s
     }
 
@@ -860,7 +878,8 @@ object ThemeSpecParser {
     fun override(j: SJ): KeyStyle? {
         if (j !is SJ.Obj) return null
         val c = Ctx()
-        val allowed = setOf("label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark") + ASSET_KEYS
+        val allowed = setOf("label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark",
+            "sound", "effect") + ASSET_KEYS
         for ((k, _) in j.m) if (k !in allowed) c.err(ThemeIssue.Code.unknownKey, k)
         fun rgb(k: String): Int? {
             val v = j[k] ?: return null
@@ -1023,6 +1042,8 @@ object ThemeJsonActions {
                 if (st.fontScale == b.spec?.fontScale) st = st.copy(fontScale = null)
                 b.spec?.font?.let { if (st.font == it) st = st.copy(font = KeyLabelFont.DEFAULT) }
                 b.spec?.weight?.let { if (st.weight == it) st = st.copy(weight = KeyLabelWeight.REGULAR) }
+                if (st.sound == b.spec?.sound) st = st.copy(sound = null)
+                if (st.effect == b.spec?.effect) st = st.copy(effect = null)
                 if (lostBg) warnings.add(ThemeIssue(ThemeIssue.Code.bgKept, "bg"))
                 Saved(true, warnings, s.withKeyStyle(st, b), store)
             }

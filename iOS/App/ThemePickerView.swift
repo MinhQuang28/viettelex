@@ -19,6 +19,8 @@ struct ThemePickerView: View {
     @State private var pasteText: PasteText?
     @State private var toast: String?
     @State private var confirmDelete: String?
+    /// Theme vừa chọn có âm riêng mà Âm thanh phím đang tắt ⇒ gợi ý (không chặn) + nút "Bật".
+    @State private var soundHint = false
     /// Tệp tải về của theme (hỏi → tải → lỗi). Dán / sửa JSON không bao giờ tự tải.
     @ObservedObject private var assets = ThemeAssetCenter.shared
 
@@ -99,7 +101,7 @@ struct ThemePickerView: View {
                 switch ThemeJSONActions.commitPaste(spec, store: &store) {
                 case .failure(let e): return e
                 case .success(let id):
-                    if let s = store[id], let next = ThemePicker.select(custom: s, in: settings) { settings = next }
+                    if let s = store[id], let next = ThemePicker.select(custom: s, in: settings) { settings = next; applyExtras() }
                     persist()
                     offerAssets(for: .custom(id))
                     return nil
@@ -118,6 +120,9 @@ struct ThemePickerView: View {
             Button(L("Để sau"), role: .cancel) { assets.pending = nil }
         } message: { Text(assets.pending?.prompt ?? "") }
         .onAppear { ThemeAssetCenter.collectGarbage(pickerDefaults) }
+        .overlay(alignment: .bottom) {
+            if soundHint && toast == nil { soundHintBar }
+        }
         .overlay(alignment: .bottom) {
             if let toast {
                 Text(toast).font(.footnote).padding(.horizontal, 14).padding(.vertical, 8)
@@ -227,7 +232,7 @@ struct ThemePickerView: View {
                         title: t.title, selected: selected, locked: locked, showPlus: t.isPlus && locked,
                         menu: menu(.builtin(t), title: t.title)) {
             switch ThemePicker.tap(t, in: settings) {
-            case .select(let next): settings = next; onChange()
+            case .select(let next): settings = next; onChange(); applyExtras()
             case .openPlus: showPlus = true
             }
         }
@@ -241,7 +246,9 @@ struct ThemePickerView: View {
                         style: settings.effectiveStyle(id: id, typography: c.typography),
                         title: c.name, selected: selected, locked: locked, showPlus: locked,
                         menu: menu(.custom(id), title: c.name)) {
-            if let next = ThemePicker.select(custom: c, in: settings) { settings = next; onChange(); offerAssets(for: .custom(id)) }
+            if let next = ThemePicker.select(custom: c, in: settings) {
+                settings = next; onChange(); applyExtras(); offerAssets(for: .custom(id))
+            }
             else { showPlus = true }
         }
     }
@@ -275,6 +282,28 @@ struct ThemePickerView: View {
             }
             .foregroundStyle(.primary)
         }
+    }
+
+    /// Âm / hiệu ứng đi kèm theme vừa chọn (chỉ lúc chọn — ThemeExtras). Không bật âm thanh phím.
+    private func applyExtras() {
+        soundHint = ThemeExtras.applyOnSelect(settings.effectiveKeyStyle, to: pickerDefaults).soundHint
+    }
+
+    private var soundHintBar: some View {
+        HStack(spacing: 10) {
+            Text(ThemeExtras.hintText).font(.footnote).fixedSize(horizontal: false, vertical: true)
+            Button(L("Bật")) {
+                pickerDefaults?.set(true, forKey: ThemeExtras.soundOnKey)
+                soundHint = false
+            }
+            .font(.footnote.weight(.semibold))
+            .buttonStyle(.borderedProminent).buttonBorderShape(.capsule)
+        }
+        .padding(.horizontal, 14).padding(.vertical, 10)
+        .background(RoundedRectangle(cornerRadius: 16).fill(.thinMaterial))
+        .padding(.horizontal, 16)
+        .padding(.bottom, 100)   // trên thanh tab nổi
+        .task { try? await Task.sleep(nanoseconds: 6_000_000_000); soundHint = false }
     }
 
     private var plusBadge: some View {

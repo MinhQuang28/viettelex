@@ -9,7 +9,11 @@ import Foundation
 //    "light":{"bg":"#FBE3E1","key":"#FFF8F7","special":"#F1C4BF","ink":"#4A2226","accent":"#C2505A",
 //             "accentInk":"#FFFFFF","border":"#4CAF6E","fn":"#A9BFA3","fnInk":"#C2255C",
 //             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100}},
-//    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold"}
+//    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold",
+//    "sound":"phao", "effect":"blossom"}
+//
+// "sound" / "effect" (tuỳ chọn, id trong danh sách trắng ThemeExtraIds): âm phím / hiệu ứng bấm phím ĐI KÈM theme —
+// CHỈ áp MỘT lần lúc người dùng chọn theme (ThemeExtras.applyOnSelect); không bao giờ tự bật âm thanh phím.
 //
 // Tệp tải về (Plus — ThemeAssets.swift: kế hoạch / kho / dọn; App/ThemeAssetDownloader.swift: tải + xử lý):
 //   "font": "serif" | {"name":"Nunito","url":"https://….ttf|otf","sha256":"…"?}
@@ -595,6 +599,9 @@ struct ThemeSpec: Equatable {
     var weight: KeyLabelWeight?
     /// Tệp tải về (phông / ảnh nền / tiền cảnh / skin phím). Có `assets.font` ⇒ `font` = nil.
     var assets = ThemeAssetSpec()
+    /// Âm phím / hiệu ứng bấm phím đi kèm (id ThemeExtraIds) — chỉ áp lúc chọn theme.
+    var sound: String?
+    var effect: String?
 
     func slots(dark d: Bool) -> ThemeSlots { d ? (dark ?? light) : light }
     var name: String { L10n.isEnglish ? (nameEn ?? nameVi) : nameVi }
@@ -603,8 +610,19 @@ struct ThemeSpec: Equatable {
     var typography: KeyStyle {
         var k = KeyStyle(corner: corner, fontScale: fontScale, font: font ?? .standard, weight: weight ?? .regular)
         k.assets = assets
+        k.sound = sound
+        k.effect = effect
         return k
     }
+}
+
+/// Danh sách trắng id "sound" / "effect" của theme JSON (Android ThemeExtraIds y hệt).
+/// TODO(merge): lấy từ KeySoundStyle.presets / KeyEffect.allCases khi agent âm thanh / hiệu ứng đã vào main
+/// (phao, piano, jingle, blossom, snow… đang được thêm). Id hợp lệ mà máy chưa có ⇒ chọn theme bỏ qua (ThemeExtras).
+enum ThemeExtraIds {
+    static let sounds: Set<String> = ["subtle", "wood", "mechanical", "typewriter", "bubble", "phao", "piano", "jingle"]
+    static let effects: Set<String> = ["none", "heart", "bubble", "ripple", "petal", "firework",
+                                       "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow"]
 }
 
 // MARK: - Đọc / kiểm
@@ -623,7 +641,8 @@ enum ThemeSpecParser {
     }
 
     static let assetKeys: Set<String> = ["background", "foreground", "keys"]
-    static let rootKeys: Set<String> = Set(["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight"])
+    static let rootKeys: Set<String> = Set(["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
+                                            "sound", "effect"])
         .union(assetKeys)
     static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco"])
 
@@ -689,6 +708,8 @@ enum ThemeSpecParser {
         if d["weight"] != nil { spec.weight = typo.weight }
         spec.assets = typo.assets
         if spec.assets.font != nil { spec.font = nil }
+        spec.sound = typo.sound
+        spec.effect = typo.effect
         if contrast { c.issues += contrastIssues(spec) }
         return Outcome(spec: c.failed ? nil : spec, issues: c.issues)
     }
@@ -795,6 +816,15 @@ enum ThemeSpecParser {
         case .string(let f)?: if let v = KeyLabelWeight(rawValue: f) { s.weight = v } else { c.err(.badValue, "weight") }
         default: c.err(.wrongType, "weight")
         }
+        func pick(_ k: String, _ allowed: Set<String>) -> String? {
+            switch d[k] {
+            case nil: return nil
+            case .string(let v)?: if allowed.contains(v) { return v }; c.err(.badValue, k); return nil
+            default: c.err(.wrongType, k); return nil
+            }
+        }
+        s.sound = pick("sound", ThemeExtraIds.sounds)
+        s.effect = pick("effect", ThemeExtraIds.effects)
     }
 
     // MARK: tệp tải về
@@ -879,7 +909,8 @@ enum ThemeSpecParser {
     static func override(from j: StrictJSON) -> KeyStyle? {
         guard case .object(let m) = j else { return nil }
         var c = Ctx()
-        let allowed: Set<String> = Set(["label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark"])
+        let allowed: Set<String> = Set(["label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark",
+                                        "sound", "effect"])
             .union(assetKeys)
         for (k, _) in m where !allowed.contains(k) { c.err(.unknownKey, k) }
         let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
@@ -942,6 +973,8 @@ extension ThemeSpec {
         else if let font { m.append(("font", .string(font.rawValue))) }
         if let weight { m.append(("weight", .string(weight.rawValue))) }
         Self.appendImages(assets, to: &m)
+        if let sound { m.append(("sound", .string(sound))) }
+        if let effect { m.append(("effect", .string(effect))) }
         return .object(m)
     }
 
@@ -1004,6 +1037,15 @@ extension ThemeSpec {
                                 keyBorder: s.border.map(c), isDark: ink.luminance > 0.5)
         p.functionFill = s.fn.map(c)
         p.functionInk = s.fnInk.map(c)
+        // Nền đục mà chữ theme không đọc được trên nền (Piano: phím ngà chữ đen trên thân đàn đen) ⇒ thanh gợi ý /
+        // bảng emoji theo tông NỀN (chữ đen/trắng đọc được), phím vẫn theo `ink`. Theme khác: không đổi gì.
+        if let bg = s.bg.map(c) {
+            let solid = RGBA(r: bg.r, g: bg.g, b: bg.b)
+            if RGBA.contrast(ink, solid) < KeyboardTransparency.minLabelContrast {
+                p.barInk = KeyboardTransparency.readable(ink, on: solid)
+                p.surfaceDark = solid.luminance < 0.18
+            }
+        }
         if let dc = s.deco, let m = dc.motif {
             p.decoration = KeyboardDecoration(motif: m, color: c(dc.color), density: dc.density)
         }
@@ -1037,6 +1079,8 @@ extension ThemeSpec {
         if style.weight != .regular { s.weight = style.weight }
         s.assets = style.assets
         if s.assets.font != nil { s.font = nil }
+        s.sound = style.sound
+        s.effect = style.effect
         return s
     }
 }
@@ -1174,6 +1218,8 @@ enum ThemeJSONActions {
             if st.fontScale == b.spec?.fontScale { st.fontScale = nil }
             if let f = b.spec?.font, st.font == f { st.font = .standard }
             if let w = b.spec?.weight, st.weight == w { st.weight = .regular }
+            if st.sound == b.spec?.sound { st.sound = nil }
+            if st.effect == b.spec?.effect { st.effect = nil }
             s.setStyle(st, for: b)
             if r.lostBg { warnings.append(ThemeIssue(code: .bgKept, path: "bg")) }
         case .custom(let id):

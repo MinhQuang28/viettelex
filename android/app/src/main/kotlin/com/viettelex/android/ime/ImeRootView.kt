@@ -264,17 +264,17 @@ class ImeRootView(
         // Viền mảnh tách khung khỏi app bên dưới.
         p.style = android.graphics.Paint.Style.STROKE
         p.strokeWidth = theme.dp(1f)
-        p.color = theme.withAlpha(theme.ink, 0.14f)
+        p.color = theme.withAlpha(theme.barInk, 0.14f)
         canvas.drawPath(panelPath, p)
         // Thanh kéo: vạch giữa + nút ⤓ (gắn lại) đầu phải.
         val hTop = panel.bottom - handlePx
         val cy = hTop + handlePx / 2f
         val cx = panel.exactCenterX()
         p.style = android.graphics.Paint.Style.FILL
-        p.color = theme.withAlpha(theme.ink, 0.38f)
+        p.color = theme.withAlpha(theme.barInk, 0.38f)
         val half = theme.dp(18f); val th = theme.dp(2f)
         canvas.drawRoundRect(cx - half, cy - th, cx + half, cy + th, th, th, p)
-        p.color = theme.withAlpha(theme.ink, 0.75f)
+        p.color = theme.withAlpha(theme.barInk, 0.75f)
         ImeIcons.draw(canvas, ImeIcons.DOCK, panel.right - theme.dp(FloatingKeyboard.EXIT_W_DP) / 2f, cy, theme.dp(18f), p)
     }
 

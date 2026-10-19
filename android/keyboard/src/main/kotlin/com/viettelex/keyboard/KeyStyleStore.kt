@@ -54,6 +54,8 @@ object KeyStyleStore {
         if (fa != null) f.add("font" to ThemeSpec.json(fa))
         if (st.weight != KeyLabelWeight.REGULAR) f.add("weight" to SJ.Str(st.weight.id))
         ThemeSpec.appendImages(st.assets, f)
+        st.sound?.let { f.add("sound" to SJ.Str(it)) }
+        st.effect?.let { f.add("effect" to SJ.Str(it)) }
         if (!st.light.isEmpty) f.add("light" to ThemeSpec.json(st.light))
         if (!st.dark.isEmpty) f.add("dark" to ThemeSpec.json(st.dark))
         return SJ.Obj(f)

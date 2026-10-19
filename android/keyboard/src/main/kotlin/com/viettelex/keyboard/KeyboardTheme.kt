@@ -86,6 +86,13 @@ data class ThemePalette(
      * [actionInk] (mặc định: Caps tô [chip]). Cùng ý nghĩa iOS `accentShift`.
      */
     val accentShift: Boolean = false,
+    /**
+     * Chữ/icon thanh gợi ý + bảng emoji/clipboard khi KHÁC chữ phím (theme nền tối phím sáng — Piano); null = như
+     * cũ (theo chữ phím). Cùng ý nghĩa iOS `barInk` (ThemeSpec.palette đặt khi chữ không đọc được trên nền).
+     */
+    val barInk: Int? = null,
+    /** Tông vùng không phải phím (thanh điều hướng, …) khi khác [isDark]; null = [isDark]. iOS `surfaceDark`. */
+    val surfaceDark: Boolean? = null,
 ) {
     val keyInk: Int get() = keyLabel ?: ink
     /** Nền phím chức năng (⇧ ⌫ 123 🌐 😊…). */
@@ -111,15 +118,18 @@ data class ThemePalette(
      */
     fun overWallpaper(): ThemePalette {
         val worst = if (isDark) ThemeColor.WHITE else ThemeColor.BLACK
-        fun legible(base: Int): Int {
+        fun legible(base: Int, label: Int = ink): Int {
             val translucent = ThemeColor.alpha(base) < 255
             val solid = if (translucent) (if (isDark) ThemeColor.BLACK else ThemeColor.WHITE) else base
             var a = if (translucent) 0.5f else WALLPAPER_KEY_ALPHA
-            while (a < 1f && ThemeColor.contrast(ink, ThemeColor.over(ThemeColor.withAlpha(solid, a), worst)) < 4.5) a += 0.05f
+            while (a < 1f && ThemeColor.contrast(label, ThemeColor.over(ThemeColor.withAlpha(solid, a), worst)) < 4.5) a += 0.05f
             return ThemeColor.withAlpha(solid, a.coerceAtMost(1f))
         }
-        return copy(keyFill = legible(keyFill), specialFill = legible(specialFill), functionFill = functionFill?.let(::legible),
-            bgBottom = null, wallpaper = true, decoration = null)
+        // Thanh gợi ý nằm trên lớp phủ ảnh (tông theo isDark) ⇒ chữ riêng của thanh (Piano) đổi cho đọc được.
+        val bar = barInk?.let { KeyboardTransparency.readable(it, wallpaperOverlay) }
+        return copy(keyFill = legible(keyFill), specialFill = legible(specialFill), functionFill = functionFill?.let { legible(it, functionInk ?: ink) },
+            bgBottom = null, wallpaper = true, decoration = null, barInk = bar,
+            surfaceDark = if (bar != null && bar != barInk) isDark else surfaceDark)
     }
 
     companion object { const val WALLPAPER_KEY_ALPHA = 0.8f }
@@ -177,8 +187,10 @@ fun ThemePalette.withTransparency(keyboard: Int, labels: Int, systemDark: Boolea
         val behind = c.over(if (wallpaper) wallpaperOverlay else p.bg, sys)
         val label = if (keyLabelPinned) ink else t.readable(ink, c.over(p.keyFill, behind))
         val fnInk = if (keyLabelPinned) functionInk else functionInk?.let { t.readable(it, c.over(p.fnFill, behind)) }
+        val bar = barInk?.let { t.readable(it, behind) }
         p = p.copy(keyLabel = label, functionInk = fnInk, actionInk = t.readable(actionInk, c.over(p.action, behind)),
-            isDark = if (label != ink) c.luminance(label) > 0.5 else isDark)
+            isDark = if (label != ink) c.luminance(label) > 0.5 else isDark, barInk = bar,
+            surfaceDark = if (bar != null) c.luminance(bar) > 0.5 else surfaceDark)
     }
     return p
 }
@@ -201,7 +213,13 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
     // Hệ thống + Màu nhấn D6336C ([KeyStyleStore.migrate]). Id lạ / đã bỏ luôn về Hệ thống ([of]).
     NEON("neon", "Neon", true),
-    PINK("pink", "Hồng", true);
+    PINK("pink", "Hồng", true),
+    // Lễ / mùa (10/2026, hình vẽ vector tự thiết kế) — id trùng iOS.
+    TET("tet", "Tết", true), // l10n-key
+    TET_MAI("tetMai", "Tết mai vàng", true), // l10n-key
+    XMAS("xmas", "Giáng sinh", true), // l10n-key
+    XMAS_SNOW("xmasSnow", "Giáng sinh tuyết", true), // l10n-key
+    PIANO("piano", "Piano", true); // l10n-key
 
     /** Bo góc mặc định (% như [KeyStyle.corner]) khi người dùng chưa chỉnh — null = bo stock. iOS cùng giá trị. */
     val defaultCorner: Int? get() = spec?.corner
@@ -257,6 +275,13 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
     companion object {
         const val HEARTS = "hearts"
         const val FLOWERS = "flowers"
+        const val MAI = "mai"
+        const val DAO = "dao"
+        const val SNOWFLAKE = "snowflake"
+        const val STAR = "star"
+        const val NOTES = "notes"
+        /** Danh sách trắng motif (theme JSON chỉ nhận các id này) — iOS KeyboardDecoration.Motif y hệt. */
+        val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES)
         const val STEP_X = 64.0
         const val MOTIF_SIZE = 8.0
         const val INSET = 14.0
@@ -320,7 +345,102 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
             val a = i * 2 * Math.PI / 5 - Math.PI / 2
             doubleArrayOf(0.32 * Math.cos(a), 0.32 * Math.sin(a), 0.18)
         } + listOf(doubleArrayOf(0.0, 0.0, 0.12))
+
+        /**
+         * Hình motif dạng dữ liệu (đơn vị motif: tâm 0,0, trong ô ±0.5, y xuống) — Y HỆT iOS
+         * KeyboardDecoration.shape. Mọi đường con cùng chiều quay ⇒ tô nonzero = hợp, không thủng. Tim / hoa ⇒ rỗng.
+         */
+        fun shape(motif: String): List<MotifSub> {
+            fun pol(r: Double, a: Double) = doubleArrayOf(r * Math.cos(a), r * Math.sin(a))
+            fun rect(bx: Double, by: Double, ang: Double, len: Double, w: Double): MotifSub {
+                val dx = Math.cos(ang); val dy = Math.sin(ang); val nx = -dy; val ny = dx
+                return MotifSub(bx - nx * w, by - ny * w, listOf(
+                    doubleArrayOf(bx + dx * len - nx * w, by + dy * len - ny * w),
+                    doubleArrayOf(bx + dx * len + nx * w, by + dy * len + ny * w),
+                    doubleArrayOf(bx + nx * w, by + ny * w)))
+            }
+            return when (motif) {
+                MAI -> (0 until 5).map { i ->
+                    val a = i * 2 * Math.PI / 5 - Math.PI / 2
+                    MotifSub(0.0, 0.0, listOf(pol(0.74, a - 0.6) + pol(0.74, a + 0.6) + doubleArrayOf(0.0, 0.0)))
+                }
+                DAO -> (0 until 5).map { i ->
+                    val a = i * 2 * Math.PI / 5 - Math.PI / 2
+                    MotifSub(0.0, 0.0, listOf(pol(0.5, a - 0.62) + pol(0.58, a - 0.28) + pol(0.4, a),
+                        pol(0.58, a + 0.28) + pol(0.5, a + 0.62) + doubleArrayOf(0.0, 0.0)))
+                }
+                SNOWFLAKE -> (0 until 6).flatMap { i ->
+                    val a = i * Math.PI / 3 - Math.PI / 2
+                    val b = pol(0.27, a)
+                    listOf(rect(0.0, 0.0, a, 0.48, 0.055)) +
+                        listOf(-1.0, 1.0).map { sg -> rect(b[0], b[1], a + sg * Math.PI / 3, 0.17, 0.045) }
+                }
+                STAR -> {
+                    val pts = (0 until 10).map { k -> pol(if (k % 2 == 0) 0.5 else 0.21, k * Math.PI / 5 - Math.PI / 2) }
+                    listOf(MotifSub(pts[0][0], pts[0][1], pts.drop(1)))
+                }
+                NOTES -> {
+                    val k = 0.5523; val cx = -0.14; val cy = 0.3; val rx = 0.19; val ry = 0.14
+                    listOf(
+                        MotifSub(cx + rx, cy, listOf(
+                            doubleArrayOf(cx + rx, cy + k * ry, cx + k * rx, cy + ry, cx, cy + ry),
+                            doubleArrayOf(cx - k * rx, cy + ry, cx - rx, cy + k * ry, cx - rx, cy),
+                            doubleArrayOf(cx - rx, cy - k * ry, cx - k * rx, cy - ry, cx, cy - ry),
+                            doubleArrayOf(cx + k * rx, cy - ry, cx + rx, cy - k * ry, cx + rx, cy))),
+                        MotifSub(0.01, 0.3, listOf(doubleArrayOf(0.01, -0.48), doubleArrayOf(0.07, -0.48), doubleArrayOf(0.07, 0.3))),
+                        MotifSub(0.07, -0.48, listOf(doubleArrayOf(0.1, -0.3, 0.38, -0.3, 0.3, -0.02),
+                            doubleArrayOf(0.3, -0.2, 0.18, -0.26, 0.07, -0.28))))
+                }
+                else -> emptyList()
+            }
+        }
     }
+}
+
+/** Một đường con khép kín của motif: điểm đầu + các đoạn ([x, y] thẳng / [c1x, c1y, c2x, c2y, x, y] cubic). */
+class MotifSub(val sx: Double, val sy: Double, val segs: List<DoubleArray>)
+
+/**
+ * Danh sách trắng id "sound" / "effect" của theme JSON — iOS ThemeExtraIds y hệt.
+ * TODO(merge): lấy từ KeySoundStyle.PRESETS / KeyEffect.entries khi agent âm thanh / hiệu ứng đã vào main
+ * (phao, piano, jingle, blossom, snow… đang được thêm). Id hợp lệ mà máy chưa có ⇒ chọn theme bỏ qua ([ThemeExtras]).
+ */
+object ThemeExtraIds {
+    val SOUNDS: Set<String> = setOf("subtle", "wood", "mechanical", "typewriter", "bubble", "phao", "piano", "jingle")
+    val EFFECTS: Set<String> = setOf("none", "heart", "bubble", "ripple", "petal", "firework",
+        "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow")
+}
+
+/**
+ * "sound" / "effect" đi kèm theme: áp MỘT lần ĐÚNG LÚC người dùng chọn theme (chạm thẻ "Chọn giao diện", dán rồi áp
+ * theme tự tạo). Đổi tay sau đó thì giữ tới lần chọn theme kế; theme không khai báo ⇒ không đổi gì. KHÔNG BAO GIỜ
+ * bật âm thanh phím: tắt thì chỉ lưu kiểu âm + [Outcome.soundHint] để app gợi ý "Bật". Id máy chưa có / bị khoá
+ * Plus ⇒ bỏ qua. iOS ThemeExtras y hệt.
+ */
+object ThemeExtras {
+    data class Outcome(val effect: String?, val sound: String?, val soundHint: Boolean)
+
+    /** Logic thuần: [st] = kiểu thực dùng của theme vừa chọn ([ThemeSettings.effectiveKeyStyle]). */
+    fun plan(st: KeyStyle, soundOn: Boolean, effectAllowed: (String) -> Boolean, soundAllowed: (String) -> Boolean): Outcome {
+        val e = st.effect?.takeIf(effectAllowed)
+        val snd = st.sound?.takeIf(soundAllowed)
+        return Outcome(e, snd, snd != null && !soundOn)
+    }
+
+    /** Hiệu ứng có trên máy + được phép (Plus) — id chưa có ⇒ bỏ qua. */
+    fun effectAllowed(id: String): Boolean = KeyEffect.entries.firstOrNull { it.id == id }?.let(KeyEffectGate::allows) ?: false
+    /** Kiểu âm có sẵn. TODO(merge): cổng Plus theo từng kiểu âm nếu agent âm thanh khoá kiểu nào. */
+    fun soundAllowed(id: String): Boolean = KeySoundStyle.PRESETS.any { it.id == id }
+
+    /** Gọi NGAY sau khi lưu theme vừa chọn — đọc/ghi qua hai hàm (SharedPreferences ở app). */
+    fun applyOnSelect(st: KeyStyle, soundOn: Boolean, write: (key: String, value: String) -> Unit): Outcome {
+        val r = plan(st, soundOn, ::effectAllowed, ::soundAllowed)
+        r.effect?.let { write(Keys.KEY_EFFECT, it) }
+        r.sound?.let { write(Keys.KEY_SOUND_STYLE, it) }
+        return r
+    }
+
+    const val HINT = "Giao diện này có âm thanh riêng — bật Âm thanh phím để nghe." // l10n-key
 }
 
 /** Trang "Chọn giao diện" (logic thuần — test JVM; iOS: ThemePicker trong KeyboardTheme.swift). */
@@ -416,6 +536,8 @@ data class ThemeSettings(
             if (s.fontScale == null) s = s.copy(fontScale = typography.fontScale)
             if (s.font == KeyLabelFont.DEFAULT) s = s.copy(font = typography.font)
             if (s.weight == KeyLabelWeight.REGULAR) s = s.copy(weight = typography.weight)
+            if (s.sound == null) s = s.copy(sound = typography.sound)
+            if (s.effect == null) s = s.copy(effect = typography.effect)
             var a = s.assets.mergedOver(typography.assets)
             if (userSystemFont) a = a.copy(font = null)
             s = s.copy(assets = a)

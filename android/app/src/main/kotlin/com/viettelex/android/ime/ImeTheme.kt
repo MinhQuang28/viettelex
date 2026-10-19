@@ -68,7 +68,8 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     /** Sau hai thanh độ trong suốt (phím / ký tự) — áp một lần ở đây, không mỗi phím. */
     val palette: ThemePalette = basePalette.withTransparency(settings.keyboardTransparency,
         settings.labelTransparency, systemDark)
-    val dark = palette.isDark
+    /** Tông vùng không phải phím (thanh điều hướng): theme nền tối phím sáng (Piano) theo nền. */
+    val dark = palette.surfaceDark ?: palette.isDark
     val bg = palette.bg
     val keyFill = palette.keyFill
     val specialFill = palette.specialFill
@@ -76,8 +77,15 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     val fnFill = palette.fnFill
     val spaceFill = palette.spaceFill
     val fnInk = palette.fnInk
+    /** Nhãn / logo trên phím cách: phím cách tô nền chức năng riêng (Piano: đen) ⇒ chữ phím chức năng. */
+    val spaceInk = if (palette.functionFill != null) palette.fnInk else palette.keyInk
     /** Chữ/icon trên phím, strip, pane (đã đổi đen/trắng nếu nền trong suốt lộ nền khác tông). */
     val ink = palette.keyInk
+    /**
+     * Chữ/icon thanh gợi ý, bảng emoji / clipboard / ô tìm emoji (nằm trên NỀN, không trên phím): = [ink] trừ theme
+     * nền tối phím sáng (Piano) — khi đó đen/trắng đọc được trên nền.
+     */
+    val barInk = palette.barInk ?: ink
     /** Chữ balloon/popup — nền balloon không trong suốt nên giữ màu theme gốc. */
     val balloonInk = palette.ink
     /** Alpha chữ/icon trên phím (độ trong suốt ký tự). */

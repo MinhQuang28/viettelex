@@ -104,20 +104,25 @@ struct KeyboardPalette: Equatable {
     static let wallpaperKeyAlpha = 0.8
     func overWallpaper() -> KeyboardPalette {
         let worst: RGBA = isDark ? .white : .black
-        func legible(_ base: RGBA) -> RGBA {
+        func legible(_ base: RGBA, _ label: RGBA) -> RGBA {
             // Theme phím vốn trong (Kính): đổi sang phím phủ đen/trắng bán trong.
             let translucent = base.a < 1
             let solid = translucent ? (isDark ? RGBA.black : RGBA.white) : base
             var a = translucent ? 0.5 : Self.wallpaperKeyAlpha
-            while a < 1, RGBA.contrast(ink, solid.alpha(a).over(worst)) < 4.5 { a += 0.05 }
+            while a < 1, RGBA.contrast(label, solid.alpha(a).over(worst)) < 4.5 { a += 0.05 }
             return solid.alpha(min(a, 1))
         }
         var p = self
-        p.keyFill = legible(keyFill)
-        p.specialFill = legible(specialFill)
-        p.functionFill = functionFill.map(legible)
+        p.keyFill = legible(keyFill, ink)
+        p.specialFill = legible(specialFill, ink)
+        // Phím chức năng đo theo CHỮ phím chức năng (Giáng sinh: glyph vàng, Piano: glyph trắng trên phím đen).
+        p.functionFill = functionFill.map { legible($0, functionInk ?? ink) }
         p.background = nil
         p.decoration = nil
+        // Thanh gợi ý nằm trên lớp phủ ảnh (tông theo isDark) ⇒ chữ riêng của thanh (Piano) đổi cho đọc được.
+        // Theme khác: barInk = ink vốn đọc được trên lớp phủ cùng tông ⇒ không đổi.
+        let bar = KeyboardTransparency.readable(barInk, on: wallpaperOverlay)
+        if bar != barInk { p.barInk = bar; p.surfaceDark = isDark }
         return p
     }
     /// Màu lớp phủ ảnh nền: tối cho theme tối, sáng cho theme sáng.
@@ -241,6 +246,8 @@ enum KeyboardTheme: String, CaseIterable {
     // Bộ 10/2026 (gợi ý từ các theme cộng đồng được thích nhất — thiết kế riêng, không dùng tài
     // sản của ai, không nhân vật có thương hiệu). rawValue = giá trị lưu, trùng id Android.
     case blackHeart, greenFloral, sage, neon, pink
+    // Lễ / mùa (10/2026, hình vẽ vector tự thiết kế): Tết, Tết mai vàng, Giáng sinh, Giáng sinh tuyết, Piano.
+    case tet, tetMai, xmas, xmasSnow, piano
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
     // Hệ thống + Màu nhấn D6336C (KeyStyleStore.migrate). Id lạ / đã bỏ luôn về Hệ thống.
 
@@ -259,6 +266,11 @@ enum KeyboardTheme: String, CaseIterable {
         case .sage: return L("Xanh lá")
         case .neon: return L("Neon")
         case .pink: return L("Hồng")
+        case .tet: return L("Tết")
+        case .tetMai: return L("Tết mai vàng")
+        case .xmas: return L("Giáng sinh")
+        case .xmasSnow: return L("Giáng sinh tuyết")
+        case .piano: return L("Piano")
         }
     }
 
@@ -282,7 +294,8 @@ enum KeyboardTheme: String, CaseIterable {
         switch self {
         case .system, .oled, .contrast: return false
         case .peach, .mint, .sky, .lavender, .glass,
-             .blackHeart, .greenFloral, .sage, .neon, .pink: return true
+             .blackHeart, .greenFloral, .sage, .neon, .pink,
+             .tet, .tetMai, .xmas, .xmasSnow, .piano: return true
         }
     }
 
@@ -337,7 +350,9 @@ enum KeyboardTheme: String, CaseIterable {
 /// không ảnh. Motif CHỈ nằm trong khe GIỮA các hàng phím (không ở thanh gợi ý, không dưới nhãn phím
 /// kể cả khi phím trong suốt). Hình học thuần (test được); Android giữ y hệt (ThemeDecoration).
 struct KeyboardDecoration: Equatable {
-    enum Motif: String { case hearts, flowers }
+    /// Danh sách trắng (theme JSON chỉ nhận các id này — Android ThemeDeco.MOTIFS y hệt). Tim / hoa vẽ riêng;
+    /// mai / đào / bông tuyết / sao / nốt nhạc là dữ liệu hình (`shape`) chung Android.
+    enum Motif: String, CaseIterable { case hearts, flowers, mai, dao, snowflake, star, notes }
     var motif: Motif
     var color: RGBA
     /// Mật độ % ("Giao diện JSON" deco.density, 50…200): bước ngang = stepX × 100 / density.
@@ -413,10 +428,119 @@ struct KeyboardDecoration: Equatable {
                     path.addEllipse(in: CGRect(origin: p(cx - r, cy - r), size: CGSize(width: 2 * r * s, height: 2 * r * s)))
                 }
                 path.addEllipse(in: CGRect(origin: p(-0.12, -0.12), size: CGSize(width: 0.24 * s, height: 0.24 * s)))
+            default:
+                for sub in Self.shape(motif) {
+                    path.move(to: p(CGFloat(sub.start.0), CGFloat(sub.start.1)))
+                    for g in sub.segs {
+                        if g.count == 2 { path.addLine(to: p(CGFloat(g[0]), CGFloat(g[1]))) }
+                        else { path.addCurve(to: p(CGFloat(g[4]), CGFloat(g[5])), control1: p(CGFloat(g[0]), CGFloat(g[1])),
+                                             control2: p(CGFloat(g[2]), CGFloat(g[3]))) }
+                    }
+                    path.closeSubpath()
+                }
             }
         }
         return path
     }
+
+    /// Một đường con khép kín: điểm đầu + các đoạn ([x, y] thẳng / [c1x, c1y, c2x, c2y, x, y] cubic).
+    struct Sub: Equatable { var start: (Double, Double); var segs: [[Double]]
+        static func == (a: Sub, b: Sub) -> Bool { a.start == b.start && a.segs == b.segs }
+    }
+
+    /// Hình motif dạng dữ liệu (đơn vị motif: tâm 0,0, nằm trong ô ±0.5, y xuống). MỌI đường con cùng chiều quay ⇒
+    /// tô nonzero = hợp các mảnh, không thủng. Android ThemeDecoration.shape y hệt (test mốc chung).
+    /// Tim / hoa vẽ riêng ở `path` ⇒ rỗng.
+    static func shape(_ m: Motif) -> [Sub] {
+        func pol(_ r: Double, _ a: Double) -> [Double] { [r * cos(a), r * sin(a)] }
+        func rect(_ bx: Double, _ by: Double, _ ang: Double, _ len: Double, _ w: Double) -> Sub {
+            let dx = cos(ang), dy = sin(ang), nx = -dy, ny = dx
+            return Sub(start: (bx - nx * w, by - ny * w),
+                       segs: [[bx + dx * len - nx * w, by + dy * len - ny * w], [bx + dx * len + nx * w, by + dy * len + ny * w],
+                              [bx + nx * w, by + ny * w]])
+        }
+        switch m {
+        case .hearts, .flowers: return []
+        case .mai:
+            // Mai: 5 cánh tròn đầy (mỗi cánh một vòng cubic từ tâm).
+            return (0..<5).map { i in
+                let a = Double(i) * 2 * .pi / 5 - .pi / 2
+                return Sub(start: (0, 0), segs: [pol(0.74, a - 0.6) + pol(0.74, a + 0.6) + [0, 0]])
+            }
+        case .dao:
+            // Đào: 5 cánh có khía ở đầu cánh.
+            return (0..<5).map { i in
+                let a = Double(i) * 2 * .pi / 5 - .pi / 2
+                return Sub(start: (0, 0), segs: [pol(0.5, a - 0.62) + pol(0.58, a - 0.28) + pol(0.4, a),
+                                                 pol(0.58, a + 0.28) + pol(0.5, a + 0.62) + [0, 0]])
+            }
+        case .snowflake:
+            // 6 nhánh + mỗi nhánh 2 nhánh con chữ V.
+            var out: [Sub] = []
+            for i in 0..<6 {
+                let a = Double(i) * .pi / 3 - .pi / 2
+                out.append(rect(0, 0, a, 0.48, 0.055))
+                let b = pol(0.27, a)
+                for sgn in [-1.0, 1.0] { out.append(rect(b[0], b[1], a + sgn * .pi / 3, 0.17, 0.045)) }
+            }
+            return out
+        case .star:
+            let pts = (0..<10).map { k in pol(k % 2 == 0 ? 0.5 : 0.21, Double(k) * .pi / 5 - .pi / 2) }
+            return [Sub(start: (pts[0][0], pts[0][1]), segs: Array(pts.dropFirst()))]
+        case .notes:
+            // Nốt móc đơn ♪: đầu nốt (elip 4 cubic) + thân + móc.
+            let k = 0.5523, cx = -0.14, cy = 0.3, rx = 0.19, ry = 0.14
+            let head = Sub(start: (cx + rx, cy), segs: [
+                [cx + rx, cy + k * ry, cx + k * rx, cy + ry, cx, cy + ry],
+                [cx - k * rx, cy + ry, cx - rx, cy + k * ry, cx - rx, cy],
+                [cx - rx, cy - k * ry, cx - k * rx, cy - ry, cx, cy - ry],
+                [cx + k * rx, cy - ry, cx + rx, cy - k * ry, cx + rx, cy]])
+            let stem = Sub(start: (0.01, 0.3), segs: [[0.01, -0.48], [0.07, -0.48], [0.07, 0.3]])
+            let flag = Sub(start: (0.07, -0.48), segs: [[0.1, -0.3, 0.38, -0.3, 0.3, -0.02], [0.3, -0.2, 0.18, -0.26, 0.07, -0.28]])
+            return [head, stem, flag]
+        }
+    }
+}
+
+/// "sound" / "effect" đi kèm theme (Tết: pháo + hoa mai rơi, Giáng sinh: chuông + tuyết, Piano: tiếng đàn): áp MỘT
+/// lần ĐÚNG LÚC người dùng chọn theme (chạm thẻ "Chọn giao diện", hoặc dán rồi áp theme tự tạo). Sau đó người dùng đổi
+/// tay thì giữ tới lần chọn theme kế; theme không khai báo ⇒ không đổi gì. KHÔNG BAO GIỜ bật âm thanh phím: tắt thì
+/// chỉ lưu kiểu âm + trả `soundHint` để app gợi ý "Bật". Id máy chưa có / bị khoá Plus ⇒ bỏ qua (không lưu giá trị
+/// khoá). Android ThemeExtras y hệt.
+enum ThemeExtras {
+    static let soundOnKey = "keySound"
+    static let soundStyleKey = "keySoundStyle"
+
+    struct Outcome: Equatable {
+        var effect: String?
+        var sound: String?
+        /// Âm thanh phím đang TẮT mà theme vừa đặt kiểu âm ⇒ app hiện gợi ý (không chặn) kèm nút "Bật".
+        var soundHint: Bool
+    }
+
+    /// Logic thuần: `st` = kiểu thực dùng của theme vừa chọn (ThemeSettings.effectiveKeyStyle).
+    static func plan(_ st: KeyStyle, soundOn: Bool, effectAllowed: (String) -> Bool,
+                     soundAllowed: (String) -> Bool) -> Outcome {
+        let e = st.effect.flatMap { effectAllowed($0) ? $0 : nil }
+        let snd = st.sound.flatMap { soundAllowed($0) ? $0 : nil }
+        return Outcome(effect: e, sound: snd, soundHint: snd != nil && !soundOn)
+    }
+
+    /// Hiệu ứng có trên máy + được phép (Plus) — id chưa có (hiệu ứng mới chưa vào bản này) ⇒ bỏ qua.
+    static func effectAllowed(_ id: String) -> Bool { KeyEffect(rawValue: id).map(KeyEffectGate.allows) ?? false }
+    /// Kiểu âm có sẵn trên máy. TODO(merge): cổng Plus theo từng kiểu âm nếu agent âm thanh khoá kiểu nào.
+    static func soundAllowed(_ id: String) -> Bool { KeySoundStyle.presets.contains { $0.rawValue == id } }
+
+    /// Gọi NGAY sau khi lưu theme vừa chọn. Ghi App Group (cùng khoá trang Âm thanh / Hiệu ứng).
+    @discardableResult
+    static func applyOnSelect(_ st: KeyStyle, to d: UserDefaults?) -> Outcome {
+        let r = plan(st, soundOn: d?.bool(forKey: soundOnKey) ?? false, effectAllowed: effectAllowed, soundAllowed: soundAllowed)
+        if let e = r.effect { d?.set(e, forKey: KeyEffect.key) }
+        if let s = r.sound { d?.set(s, forKey: soundStyleKey) }
+        return r
+    }
+
+    static var hintText: String { L("Giao diện này có âm thanh riêng — bật Âm thanh phím để nghe.") }
 }
 
 /// Trang "Chọn giao diện" (logic thuần — test được; Android: ThemePicker trong KeyboardTheme.kt).
@@ -603,6 +727,8 @@ struct ThemeSettings: Equatable {
             if s.fontScale == nil { s.fontScale = t.fontScale }
             if s.font == .standard { s.font = t.font }
             if s.weight == .regular { s.weight = t.weight }
+            if s.sound == nil { s.sound = t.sound }
+            if s.effect == nil { s.effect = t.effect }
             s.assets = s.assets.merged(over: t.assets)
             if userSystemFont { s.assets.font = nil }
             if s.assets.font != nil { s.font = .standard }
@@ -749,6 +875,9 @@ struct KeyStyle: Equatable {
     var dark = ThemeSlots()
     /// Tệp tải về (phông / ảnh nền / tiền cảnh / skin phím — ThemeAssets.swift). Rỗng = như cũ.
     var assets = ThemeAssetSpec()
+    /// Âm phím / hiệu ứng đi kèm theme ("sound" / "effect", ThemeExtraIds) — CHỈ áp lúc chọn theme (ThemeExtras).
+    var sound: String? = nil
+    var effect: String? = nil
 
     static let `default` = KeyStyle()
     var isDefault: Bool { self == .default }
@@ -878,6 +1007,8 @@ struct KeyStyle: Equatable {
         st.font = edited.font ?? .standard
         st.weight = edited.weight ?? .regular
         st.assets = edited.assets
+        st.sound = edited.sound
+        st.effect = edited.effect
         return (st, l.lostBg || d.lostBg)
     }
 }
@@ -937,6 +1068,8 @@ enum KeyStyleStore {
         if let fa = st.assets.font { f.append(("font", ThemeSpec.json(fa))) }
         if st.weight != .regular { f.append(("weight", .string(st.weight.rawValue))) }
         ThemeSpec.appendImages(st.assets, to: &f)
+        if let v = st.sound { f.append(("sound", .string(v))) }
+        if let v = st.effect { f.append(("effect", .string(v))) }
         if !st.light.isEmpty { f.append(("light", ThemeSpec.json(st.light))) }
         if !st.dark.isEmpty { f.append(("dark", ThemeSpec.json(st.dark))) }
         return .object(f)

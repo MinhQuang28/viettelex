@@ -47,6 +47,7 @@ import com.viettelex.keyboard.KeyStyle
 import com.viettelex.keyboard.KeyboardTheme
 import com.viettelex.keyboard.Keys
 import com.viettelex.keyboard.ThemeEditTarget
+import com.viettelex.keyboard.ThemeExtras
 import com.viettelex.keyboard.ThemeGate
 import com.viettelex.keyboard.ThemeIssue
 import com.viettelex.keyboard.ThemeJsonActions
@@ -81,6 +82,8 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
     var pasteText by remember { mutableStateOf<String?>(null) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }
     var toast by remember { mutableStateOf<String?>(null) }
+    /** Theme vừa chọn có âm riêng mà Âm thanh phím đang tắt ⇒ gợi ý (không chặn) + nút "Bật". */
+    var soundHint by remember { mutableStateOf(false) }
     /** Hỏi trước khi tải tệp của theme (phông / ảnh) còn thiếu — dán JSON không tự tải. */
     val prompt = rememberAssetPrompt()
     BackHandler(onBack = onBack)
@@ -91,7 +94,15 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
         onSelect(ns)
         ThemeAssetFlow.gcAsync(ctx)        // tệp không còn theme nào dùng ⇒ xoá
     }
-    fun choose(ns: ThemeSettings) { onSelect(ns); prompt.offer(ctx, ns.effectiveKeyStyle.assets) }
+    /** Âm / hiệu ứng đi kèm theme vừa chọn (chỉ lúc chọn — [ThemeExtras]); không bao giờ bật âm thanh phím. */
+    fun applyExtras(ns: ThemeSettings) {
+        val sp = Prefs.of(ctx)
+        val r = ThemeExtras.applyOnSelect(ns.effectiveKeyStyle, sp.getBoolean(Keys.KEY_SOUND, Prefs.D.keySound)) { k, v ->
+            sp.edit().putString(k, v).apply()
+        }
+        soundHint = r.soundHint
+    }
+    fun choose(ns: ThemeSettings) { onSelect(ns); applyExtras(ns); prompt.offer(ctx, ns.effectiveKeyStyle.assets) }
     fun copy(t: ThemeEditTarget) {
         val text = ThemeJsonActions.copyText(t, s, store, appBase) ?: return
         (ctx.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager)?.setPrimaryClip(ClipData.newPlainText("VietTelex theme", text))
@@ -156,6 +167,14 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
     // Tệp tải về của theme đang chọn: trạng thái + lỗi / cảnh báo (thiếu chữ Việt, tiền cảnh phủ nhiều).
     val current = s.effectiveKeyStyle.assets
     if (!current.isEmpty) VTSection { ThemeAssetStatusList(current) { prompt.offer(ctx, current) } }
+    if (soundHint) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(tr(ThemeExtras.HINT), style = VTType.footnote, color = c.secondary, modifier = Modifier.weight(1f))
+            TextButton(onClick = { Prefs.of(ctx).edit().putBoolean(Keys.KEY_SOUND, true).apply(); soundHint = false }) {
+                Text(tr("Bật"), color = c.accent)
+            }
+        }
+    }
     toast?.let { msg ->
         Text(msg, style = VTType.footnote, color = c.secondary, modifier = Modifier.fillMaxWidth().padding(16.dp))
     }
@@ -183,6 +202,7 @@ internal fun ThemePickerPage(s: ThemeSettings, dark: Boolean, onSelect: (ThemeSe
                     val added = r.store[r.id]
                     val ns = added?.let { ThemePicker.select(it, s) } ?: s
                     persist(ns, r.store)
+                    if (added != null && ns !== s) applyExtras(ns)
                     pasteText = null
                     // Chỉ HỎI (người dùng vừa bấm Thêm) — dán / xem trước không gửi yêu cầu nào.
                     added?.let { prompt.offer(ctx, ns.effectiveStyleFor(r.id, it.typography).assets) }

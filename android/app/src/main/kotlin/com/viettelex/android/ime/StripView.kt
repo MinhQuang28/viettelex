@@ -124,10 +124,10 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
     /** Icon con trỏ + 📋 có hiện không — chỉ đổi khi nội dung rỗng↔có (StripGeometry.toolsShown). */
     private fun tools(): Boolean = StripGeometry.toolsShown(hasContent, plane == Plane.EDIT, clipOpen)
 
-    private val wordPaint = TextPaint(theme.text(StripGeometry.WORD_SP))
+    private val wordPaint = TextPaint(theme.text(StripGeometry.WORD_SP, color = theme.barInk))
     private var wordOff = theme.centerOffset(wordPaint)
     /** Gboard nhấn mạnh gợi ý giữa (medium). */
-    private val wordCenterPaint = TextPaint(theme.text(StripGeometry.WORD_SP, medium = true))
+    private val wordCenterPaint = TextPaint(theme.text(StripGeometry.WORD_SP, color = theme.barInk, medium = true))
     private var wordCenterOff = theme.centerOffset(wordCenterPaint)
     /** Strip MỞ (dp) theo "Chiều cao thanh gợi ý" ([SuggestionBarHeight]; mặc định Vừa = [KeyLayout.OPEN_STRIP]). */
     var openStripDp = KeyLayout.OPEN_STRIP; private set
@@ -136,15 +136,15 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
     private val emojiPaint = theme.text(22f)
     private val emojiOff = theme.centerOffset(emojiPaint)
     private val iconPaint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private val pasteTitle = theme.text(15f, medium = true, align = Paint.Align.LEFT)
-    private val pasteSub = theme.text(13f, color = theme.withAlpha(theme.ink, 0.7f), align = Paint.Align.LEFT)
+    private val pasteTitle = theme.text(15f, color = theme.barInk, medium = true, align = Paint.Align.LEFT)
+    private val pasteSub = theme.text(13f, color = theme.withAlpha(theme.barInk, 0.7f), align = Paint.Align.LEFT)
     private val pasteTitleText = tr("Dán")
     private val pasteSubText = tr("Nội dung vừa copy")
     private var pasteIconCx = 0f; private var pasteTextX = 0f; private var pasteSubX = 0f
     private var pasteL = 0f; private var pasteR = 0f; private var pasteT = 0f; private var pasteB = 0f
     private var pasteShowSub = true
     private val chipPaint = theme.fill(theme.chip)
-    private val pressPaint = theme.fill(theme.withAlpha(theme.ink, 0.10f))
+    private val pressPaint = theme.fill(theme.withAlpha(theme.barInk, 0.10f))
     private var pressed = T_NONE
     private var pressedIndex = 0
     private var pasteTitleBase = 0f; private var pasteSubBase = 0f; private var pasteIconCy = 0f
@@ -158,7 +158,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
     private var actionPill: BarChip? = null
     private val restoreDefault = "↩\uFE0E " + tr("Khôi phục")
     private var restoreText = restoreDefault
-    private val chipText = TextPaint(theme.text(15f, medium = true))
+    private val chipText = TextPaint(theme.text(15f, color = theme.barInk, medium = true))
     private val chipTextOff = theme.centerOffset(chipText)
 
     // --- touch ---
@@ -414,7 +414,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
             val bx = theme.dp(32f) + (theme.dp(26f) - theme.dp(32f)) * o
             val active = plane == Plane.TEMPLATES && o > 0.5f
             if (active) c.drawCircle(bx, cy, theme.dp(18f), chipPaint)
-            iconPaint.color = theme.withAlpha(theme.ink, if (active) 1f else 0.75f)
+            iconPaint.color = theme.withAlpha(theme.barInk, if (active) 1f else 0.75f)
             ImeIcons.draw(c, ImeIcons.GRID, bx, cy, theme.dp(StripGeometry.iconDp(o)), iconPaint)
         }
         if (tools()) {
@@ -422,11 +422,11 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
             val ex = theme.dp(88f) + (theme.dp(KeyLayout.STRIP_ZONE_W + STRIP_TOOL_W / 2) - theme.dp(88f)) * o
             val active = plane == Plane.EDIT && o > 0.5f
             if (active || pressed == T_EDIT) c.drawCircle(ex, cy, theme.dp(18f), chipPaint)
-            iconPaint.color = theme.withAlpha(theme.ink, if (active) 1f else 0.75f)
+            iconPaint.color = theme.withAlpha(theme.barInk, if (active) 1f else 0.75f)
             ImeIcons.draw(c, ImeIcons.CURSOR, ex, cy, theme.dp(StripGeometry.iconDp(o)), iconPaint)
         }
         val chx = (w - theme.dp(24f)) + (theme.dp(24f) - theme.dp(26f)) * o
-        iconPaint.color = theme.withAlpha(theme.ink, 0.75f)
+        iconPaint.color = theme.withAlpha(theme.barInk, 0.75f)
         ImeIcons.draw(c, ImeIcons.CHEVRON_DOWN, chx, cy, theme.dp(StripGeometry.iconDp(o, delta = 2f)), iconPaint, rotationDeg = 180f * (1f - o))
         drawExtras(c, w, cy, o)
         if (o <= 0f || collapsed && anim == null) return
@@ -446,7 +446,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
             c.drawRoundRect(emojiL[i] + inset, barCy - hh, emojiR[i] - inset, barCy + hh, hh, hh, pressPaint)
         }
         if (chipCount > 0) {
-            chipText.color = theme.ink; chipText.alpha = alpha
+            chipText.color = theme.barInk; chipText.alpha = alpha
             val ci = theme.dp(3f)
             for (i in 0 until chipCount) {
                 val s = slotText[i] ?: continue
@@ -457,8 +457,8 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
             chipPaint.alpha = 255
             return
         }
-        wordPaint.color = theme.ink; wordPaint.alpha = alpha
-        wordCenterPaint.color = theme.ink; wordCenterPaint.alpha = alpha
+        wordPaint.color = theme.barInk; wordPaint.alpha = alpha
+        wordCenterPaint.color = theme.barInk; wordCenterPaint.alpha = alpha
         for (i in 0 until slotCount) {
             val s = slotText[i] ?: continue
             if (i == primary) c.drawText(s, (slotL[i] + slotR[i]) / 2, barCy + wordCenterOff, wordCenterPaint)
@@ -478,14 +478,14 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         if (emojiButton) {
             val cx = x - theme.dp(StripGeometry.EMOJI_W) / 2
             if (pressed == T_EMOJI_BTN && o > 0.5f) c.drawCircle(cx, cy, theme.dp(18f), chipPaint)
-            iconPaint.color = theme.withAlpha(theme.ink, 0.75f)
+            iconPaint.color = theme.withAlpha(theme.barInk, 0.75f)
             ImeIcons.draw(c, ImeIcons.FACE, cx, cy, theme.dp(StripGeometry.iconDp(o)), iconPaint)
             x -= theme.dp(StripGeometry.EMOJI_W)
         }
         if (clipButton && tools()) {
             val cx = x - theme.dp(CLIP_W) / 2
             if (clipOpen && o > 0.5f) c.drawCircle(cx, cy, theme.dp(18f), chipPaint)
-            iconPaint.color = theme.withAlpha(theme.ink, if (clipOpen) 1f else 0.75f)
+            iconPaint.color = theme.withAlpha(theme.barInk, if (clipOpen) 1f else 0.75f)
             ImeIcons.draw(c, ImeIcons.CLIPBOARD, cx, cy, theme.dp(StripGeometry.iconDp(o, delta = 1f)), iconPaint)
         }
     }
@@ -501,7 +501,7 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         chipPaint.alpha = if (pressed == T_RESTORE || pressed == T_PILL) (alpha * 0.8f).toInt() else alpha
         c.drawRoundRect(l, cy - h / 2, l + w, cy + h / 2, h / 2, h / 2, chipPaint)
         chipPaint.alpha = 255
-        chipText.color = theme.ink; chipText.alpha = alpha
+        chipText.color = theme.barInk; chipText.alpha = alpha
         c.drawText(t, width / 2f, cy + chipTextOff, chipText)
     }
 
@@ -510,12 +510,12 @@ class StripView(context: Context, private val theme: ImeTheme, private val feedb
         val r = (pasteB - pasteT) / 2
         c.drawRoundRect(pasteL, pasteT, pasteR, pasteB, r, r, chipPaint)
         chipPaint.alpha = 255
-        iconPaint.color = theme.withAlpha(theme.ink, alpha / 255f)
+        iconPaint.color = theme.withAlpha(theme.barInk, alpha / 255f)
         ImeIcons.draw(c, ImeIcons.CLIPBOARD, pasteIconCx, pasteIconCy, theme.dp(18f), iconPaint)
         pasteTitle.alpha = alpha
         c.drawText(pasteTitleText, pasteTextX, pasteTitleBase, pasteTitle)
         if (pasteShowSub) {
-            pasteSub.color = theme.withAlpha(theme.ink, 0.7f * alpha / 255f)
+            pasteSub.color = theme.withAlpha(theme.barInk, 0.7f * alpha / 255f)
             c.drawText(pasteSubText, pasteSubX, pasteSubBase, pasteSub)
         }
     }

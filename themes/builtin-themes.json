@@ -63,6 +63,38 @@
       "v": 1, "id": "pink", "name": {"vi": "Hồng", "en": "Pink"}, "corner": 70,
       "light": {"bg": "#FCDDE8", "key": "#FFF5F9", "special": "#F6B8CE", "ink": "#5A1F38", "accent": "#D94680"},
       "dark": {"bg": "#2B1520", "key": "#472335", "special": "#5E2F46", "ink": "#FCDDE8", "accent": "#D94680"}
+    },
+    {
+      "v": 1, "id": "tet", "name": {"vi": "Tết", "en": "Lunar New Year"}, "sound": "phao", "effect": "blossom",
+      "light": {"bg": "#8E1010", "key": "#B71C1C", "special": "#7A0D0D", "ink": "#FFD54F", "accent": "#F9A825",
+                "accentInk": "#7F0000", "fn": "#9C1414", "fnInk": "#FFCA28", "deco": {"motif": "mai", "color": "#33FFD54F"}},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "tetMai", "name": {"vi": "Tết mai vàng", "en": "Golden Apricot Tết"}, "sound": "phao", "effect": "blossom",
+      "light": {"bg": "#FFF3D6", "key": "#FFFDF6", "special": "#F3D9A4", "ink": "#7A1414", "accent": "#C62828",
+                "fn": "#F6E2B3", "fnInk": "#B71C1C", "deco": {"motif": "mai", "color": "#CCE5A000"}},
+      "dark": {"bg": "#2B1608", "key": "#47260F", "special": "#5E3418", "ink": "#FFE6A6", "accent": "#D32F2F",
+               "fn": "#3A1E0C", "fnInk": "#FFC94A", "deco": {"motif": "mai", "color": "#66FFC107"}}
+    },
+    {
+      "v": 1, "id": "xmas", "name": {"vi": "Giáng sinh", "en": "Christmas"}, "sound": "jingle", "effect": "snow",
+      "light": {"bg": "#0B3320", "key": "#17573A", "special": "#0F4229", "ink": "#FFFFFF", "accent": "#D32F2F",
+                "fn": "#124A30", "fnInk": "#FFD54F", "deco": {"motif": "snowflake", "color": "#52FFFFFF"}},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "xmasSnow", "name": {"vi": "Giáng sinh tuyết", "en": "Snowy Christmas"}, "sound": "jingle", "effect": "snow",
+      "light": {"bg": "#E6F1FA", "key": "#FFFFFF", "special": "#C3DAEE", "ink": "#12324F", "accent": "#D32F2F",
+                "fn": "#D6E7F5", "fnInk": "#B71C1C", "deco": {"motif": "snowflake", "color": "#996FA8D6"}},
+      "dark": {"bg": "#0C1A2C", "key": "#1B2F49", "special": "#28425F", "ink": "#E6F1FA", "accent": "#D32F2F",
+               "fn": "#15263D", "fnInk": "#FFD54F", "deco": {"motif": "star", "color": "#66FFD54F"}}
+    },
+    {
+      "v": 1, "id": "piano", "name": {"vi": "Piano", "en": "Piano"}, "sound": "piano",
+      "light": {"bg": "#000000", "key": "#FAFAF7", "special": "#85827B", "ink": "#111111", "accent": "#A4161A",
+                "fn": "#111111", "fnInk": "#FFFFFF", "border": "#33FFFFFF", "deco": {"motif": "notes", "color": "#66D4AF37"}},
+      "dark": "same"
     }
   ]
 }

@@ -55,17 +55,30 @@ fun decorPath(path: Path, motif: String, placements: List<ThemeDecoration.Placem
               left: Float = 0f, top: Float = 0f) {
     path.rewind()
     val d = unitPx.toDouble()
+    // Mai / đào / bông tuyết / sao / nốt nhạc: dữ liệu hình chung iOS — tính MỘT lần mỗi lần dựng path.
+    val shape = ThemeDecoration.shape(motif)
     for (p in placements) {
         val s = p.size * d
         val ox = left + p.x * d; val oy = top + p.y * d
         fun x(u: Double) = (ox + u * s).toFloat()
         fun y(u: Double) = (oy + u * s).toFloat()
-        if (motif == ThemeDecoration.HEARTS) {
-            path.moveTo(x(ThemeDecoration.HEART_START[0]), y(ThemeDecoration.HEART_START[1]))
-            for (c in ThemeDecoration.HEART_CUBICS) path.cubicTo(x(c[0]), y(c[1]), x(c[2]), y(c[3]), x(c[4]), y(c[5]))
-            path.close()
-        } else for (c in ThemeDecoration.FLOWER_CIRCLES) {
-            path.addCircle(x(c[0]), y(c[1]), (c[2] * s).toFloat(), Path.Direction.CW)
+        when {
+            motif == ThemeDecoration.HEARTS -> {
+                path.moveTo(x(ThemeDecoration.HEART_START[0]), y(ThemeDecoration.HEART_START[1]))
+                for (c in ThemeDecoration.HEART_CUBICS) path.cubicTo(x(c[0]), y(c[1]), x(c[2]), y(c[3]), x(c[4]), y(c[5]))
+                path.close()
+            }
+            shape.isNotEmpty() -> for (sub in shape) {
+                path.moveTo(x(sub.sx), y(sub.sy))
+                for (g in sub.segs) {
+                    if (g.size == 2) path.lineTo(x(g[0]), y(g[1]))
+                    else path.cubicTo(x(g[0]), y(g[1]), x(g[2]), y(g[3]), x(g[4]), y(g[5]))
+                }
+                path.close()
+            }
+            else -> for (c in ThemeDecoration.FLOWER_CIRCLES) {
+                path.addCircle(x(c[0]), y(c[1]), (c[2] * s).toFloat(), Path.Direction.CW)
+            }
         }
     }
 }
