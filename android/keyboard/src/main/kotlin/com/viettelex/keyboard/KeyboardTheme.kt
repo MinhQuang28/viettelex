@@ -183,6 +183,24 @@ fun ThemePalette.withTransparency(keyboard: Int, labels: Int, systemDark: Boolea
     return p
 }
 
+/**
+ * Nền chip thanh gợi ý (thẻ Dán "Nội dung vừa copy", chip số clipboard, pill Khôi phục / Hoàn tác) khi vẽ
+ * với độ mờ [opacity] (hoạt ảnh thu gọn, nhấn): NHÂN vào alpha gốc của [ThemePalette.chip], không ghi đè.
+ * Bug 19/10/2026 (Android, theme tối): StripView đặt `paint.alpha = 255` ⇒ chip bán trong (Kính tối =
+ * trắng 30%, chip sau độ trong suốt phím) thành trắng ĐẶC, chữ trắng trên đó biến mất.
+ */
+fun ThemePalette.chipFill(opacity: Float = 1f): Int = ThemeColor.withAlpha(chip, opacity.coerceIn(0f, 1f))
+
+/**
+ * Chữ / icon trên chip thanh gợi ý: [ThemePalette.keyInk] nếu đọc được (≥ 3:1) trên chip đã trộn lên nền
+ * bar; không thì đen/trắng — tuỳ chỉnh màu chữ/phím đổi chữ nhưng không đổi chip.
+ */
+fun ThemePalette.chipInk(systemDark: Boolean): Int {
+    val c = ThemeColor
+    val behind = c.over(if (wallpaper) wallpaperOverlay else bg, KeyboardTransparency.systemBackdrop(systemDark))
+    return KeyboardTransparency.readable(keyInk, c.over(chipFill(), behind))
+}
+
 enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolean) {
     SYSTEM("system", "Hệ thống", false),
     OLED("oled", "Tối OLED", false),
