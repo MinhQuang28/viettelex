@@ -425,7 +425,7 @@ enum L10n {
         "Chưa có gõ tắt nào. Thêm bên dưới, hoặc bấm “Thêm bộ gợi ý”.": "No shortcuts yet. Add one below, or tap “Add suggested set”.",
         "Không tìm thấy.": "Nothing found.",
         "Bảng gõ tắt (%@)": "Shortcut table (%@)",
-        "Chạm một dòng để sửa, vuốt trái để xoá.": "Tap a row to edit, swipe left to delete.",
+        "Mới thêm hoặc vừa sửa ở đầu danh sách. Chạm một dòng để sửa, vuốt trái để xoá.": "Newest and recently edited first. Tap a row to edit, swipe left to delete.",
         "Chữ tắt (vd: ko, cty, ->)": "Shortcut (e.g. ko, cty, ->)",
         "Nội dung đầy đủ (được nhiều dòng)": "Full text (multiple lines OK)",
         "Thêm": "Add",

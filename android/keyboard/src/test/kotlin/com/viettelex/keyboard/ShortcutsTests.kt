@@ -316,4 +316,41 @@ class ShortcutsTests {
         val off = mapOf<String, Any>(Keys.SHORTCUTS to "ko: không\n", Keys.SHORTCUTS_ENABLED to false)
         assertTrue(KeyboardSettings.load { off[it] }.shortcuts.isEmpty)
     }
+
+    // MARK: thứ tự danh sách — mới nhất trước (góp ý người dùng 19/10/2026)
+
+    @Test fun orderNewestFirstThenLegacyAlphabetical() {
+        val keys = listOf("ko", "cty", "dc", "mn", "vs")
+        assertEquals(listOf("cty", "dc", "ko", "mn", "vs"), ShortcutOrder.sorted(keys, emptyMap()))   // bảng cũ: giữ thứ tự cũ
+        var table: Map<String, String> = keys.associateWith { it }
+        var times: Map<String, Long> = emptyMap()
+        var old = table; table = table + ("zz" to "z"); times = ShortcutOrder.updated(times, old, table, 100)
+        old = table; table = table + ("aa" to "a"); times = ShortcutOrder.updated(times, old, table, 200)
+        assertEquals(listOf("aa", "zz", "cty", "dc", "ko", "mn", "vs"), ShortcutOrder.sorted(table.keys, times))
+        old = table; table = table + ("mn" to "mọi người"); times = ShortcutOrder.updated(times, old, table, 300)
+        assertEquals(listOf("mn", "aa", "zz"), ShortcutOrder.sorted(table.keys, times).take(3))
+        old = table; table = table - "zz" + ("zz2" to "z"); times = ShortcutOrder.updated(times, old, table, 400)
+        assertNull(times["zz"])
+        assertEquals("zz2", ShortcutOrder.sorted(table.keys, times).first())
+        assertEquals(times, ShortcutOrder.updated(times, table, table, 999))
+        assertEquals(listOf("a", "b", "c"), ShortcutOrder.sorted(listOf("b", "a", "c"), mapOf("b" to 5L, "a" to 5L, "c" to 1L)))
+    }
+
+    @Test fun orderPrefRoundTripAndMigration() {
+        assertEquals(emptyMap<String, Long>(), ShortcutOrder.fromPref(null))      // di trú: chưa có pref
+        val t = mapOf("ko" to 1_760_860_800_123L, "->" to 5L, "a:b" to 7L)
+        assertEquals(t, ShortcutOrder.fromPref(ShortcutOrder.toPref(t)))
+    }
+
+    @Test fun orderImportKeepsFileTimes() {
+        val cur = mapOf("ko" to "không", "dc" to "được")
+        val file = mapOf("ko" to "khum", "mn" to "mọi người", "vs" to "với")
+        val table = cur + file
+        val t = ShortcutOrder.imported(mapOf("dc" to 10L), mapOf("mn" to 50L), cur, file, table, 100)
+        assertEquals(mapOf("dc" to 10L, "mn" to 50L), t)
+        assertEquals(listOf("mn", "dc", "ko", "vs"), ShortcutOrder.sorted(table.keys, t))
+        val legacy = ShortcutOrder.imported(mapOf("dc" to 10L), null, cur, file, table, 100)
+        assertEquals(mapOf("dc" to 10L, "mn" to 100L, "ko" to 100L, "vs" to 100L), legacy)
+    }
 }
+

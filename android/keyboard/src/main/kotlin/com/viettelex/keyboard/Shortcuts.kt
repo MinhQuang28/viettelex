@@ -299,3 +299,51 @@ object ShortcutFile {
     /** Học từ nội dung đã bung: "mọi người" → [mọi, người]. */
     fun words(s: String): List<String> = s.split(Regex("\\s+")).filter { it.isNotEmpty() }
 }
+
+/**
+ * Thứ tự hiển thị bảng gõ tắt — MỚI THÊM / VỪA SỬA LÊN ĐẦU (góp ý người dùng 19/10/2026). Bảng vẫn
+ * như cũ (pref [Keys.SHORTCUTS], IME/YAML/sao lưu không đổi); thứ tự là map RIÊNG [khoá: mốc ms] ở
+ * pref [Keys.SHORTCUTS_ADDED]. Mục chưa có mốc (bảng có từ trước bản này) xếp SAU mọi mục có mốc,
+ * giữ thứ tự cũ (chữ cái) ⇒ di trú không đảo gì. Song sinh iOS ShortcutOrder (Shortcuts.swift).
+ */
+object ShortcutOrder {
+    /** Mới nhất trước (mốc giảm dần, hoà ⇒ chữ cái); mục không mốc sau cùng theo chữ cái. */
+    fun sorted(keys: Collection<String>, times: Map<String, Long>): List<String> =
+        keys.sortedWith { a, b ->
+            val x = times[a]; val y = times[b]
+            when {
+                x != null && y != null -> if (x != y) y.compareTo(x) else a.compareTo(b)
+                x != null -> -1
+                y != null -> 1
+                else -> a.compareTo(b)
+            }
+        }
+
+    fun changedKeys(old: Map<String, String>, new: Map<String, String>): List<String> =
+        new.filter { old[it.key] != it.value }.keys.toList()
+
+    /** Bảng đổi từ [old] sang [new]: khoá mới / đổi nội dung ⇒ mốc [now]; khoá đã xoá ⇒ bỏ mốc. */
+    fun updated(times: Map<String, Long>, old: Map<String, String>, new: Map<String, String>, now: Long): Map<String, Long> {
+        val out = LinkedHashMap(times.filterKeys { it in new })
+        for (k in changedKeys(old, new)) out[k] = now
+        return out
+    }
+
+    /**
+     * Gộp mốc từ file sao lưu. File CÓ mục mốc ([fileTimes] ≠ null) ⇒ khoá của file lấy đúng mốc trong
+     * file (không có ⇒ không mốc = mục cũ); file bản cũ (null) ⇒ khoá mới/đổi nội dung lấy [now].
+     */
+    fun imported(times: Map<String, Long>, fileTimes: Map<String, Long>?, old: Map<String, String>,
+                 file: Map<String, String>, table: Map<String, String>, now: Long): Map<String, Long> {
+        val out = LinkedHashMap(updated(times, old, table, now))
+        if (fileTimes == null) return out
+        for (k in file.keys) if (k in table) { val t = fileTimes[k]; if (t != null) out[k] = t else out.remove(k) }
+        return out
+    }
+
+    /** Pref: cùng định dạng YAML phẳng của bảng ("khoá: mốc"). */
+    fun fromPref(raw: Any?): Map<String, Long> =
+        ShortcutFile.parse(raw as? String).mapNotNull { (k, v) -> v.toLongOrNull()?.let { k to it } }.toMap()
+    fun toPref(times: Map<String, Long>): String = ShortcutFile.exportYAML(times.mapValues { it.value.toString() })
+}
+

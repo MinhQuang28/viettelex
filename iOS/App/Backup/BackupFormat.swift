@@ -11,6 +11,7 @@
 //   "platform": "ios" | "android" | "macos",
 //   "settings":  { "simpleTelex": true, …, "rowHeightAdjust": 0 },
 //   "shortcuts": { "ko": "không", … },                    // gõ tắt: trigger → cụm từ
+//   "shortcutsAdded": { "ko": 1760860800000, … },        // TUỲ CHỌN: mốc thêm/sửa (ms) — thứ tự "mới nhất trước"
 //   "templates": [ { "label": "👋", "text": "Chào buổi sáng" }, … ],
 //   "learnedWords": { "uni": {…}, "bi": {…}, "tri": {…} }  // TUỲ CHỌN (riêng tư)
 // }
@@ -229,6 +230,8 @@ struct BackupPayload: Equatable {
     var shortcuts: [String: String]?
     var templates: [BackupTemplate]?
     var learnedWords: LearnedWords?
+    /// Mốc thêm/sửa gõ tắt (ms epoch, ShortcutOrder) — nil = file không có (bản cũ).
+    var shortcutsAdded: [String: Int64]?
 }
 
 enum BackupError: Error, Equatable {
@@ -267,6 +270,7 @@ enum BackupCodec {
             root["settings"] = o
         }
         if let sc = p.shortcuts { root["shortcuts"] = sc }
+        if let t = p.shortcutsAdded, !t.isEmpty { root["shortcutsAdded"] = t.mapValues { NSNumber(value: $0) } }
         if let t = p.templates { root["templates"] = t.map { ["label": $0.label, "text": $0.text] } }
         if let lw = p.learnedWords {
             var o: [String: Any] = ["uni": lw.uni, "bi": lw.bi, "tri": lw.tri]
@@ -317,6 +321,11 @@ enum BackupCodec {
                 if !key.isEmpty, let s = v as? String, !s.isEmpty { out[key] = s }
             }
             p.shortcuts = out
+        }
+        if let o = root["shortcutsAdded"] as? [String: Any] {
+            var out: [String: Int64] = [:]
+            for (k, raw) in o { if let n = intValue(raw), n > 0, !k.isEmpty { out[k] = Int64(n) } }
+            p.shortcutsAdded = out
         }
         if let arr = root["templates"] as? [Any] {
             var out: [BackupTemplate] = []

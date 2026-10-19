@@ -310,4 +310,20 @@ class BackupTests {
         assertFailsWith<IllegalArgumentException> { MiniJson.parse("{\"a\":1} x") }
         assertFailsWith<IllegalArgumentException> { MiniJson.parse("[1,") }
     }
+
+    /** Thứ tự gõ tắt "mới nhất trước" ([ShortcutOrder]) đi qua file sao lưu; file cũ không có mốc vẫn đọc được. */
+    @Test fun shortcutOrderSurvivesBackup() {
+        val prefs = mapOf<String, Any?>(Keys.SHORTCUTS to ShortcutFile.exportYAML(mapOf("ko" to "không", "mn" to "mọi người", "cty" to "công ty")),
+            Keys.SHORTCUTS_ADDED to ShortcutOrder.toPref(mapOf("mn" to 2_000L, "ko" to 1_000L, "gone" to 5L)))
+        val p = BackupPrefs.snapshot({ prefs[it] }, emptyList(), null)
+        assertEquals(mapOf("mn" to 2_000L, "ko" to 1_000L), p.shortcutsAdded)
+        val back = BackupCodec.decode(BackupCodec.encode(p))
+        assertEquals(mapOf("mn" to 2_000L, "ko" to 1_000L), back.shortcutsAdded)
+        val plan = BackupPrefs.plan(back, { null }, emptyList(), now = 9_000L)
+        val times = ShortcutOrder.fromPref(plan.writes[Keys.SHORTCUTS_ADDED])
+        val table = ShortcutFile.parse(plan.writes[Keys.SHORTCUTS] as String)
+        assertEquals(listOf("mn", "ko", "cty"), ShortcutOrder.sorted(table.keys, times))
+        assertNull(BackupCodec.decode(BackupCodec.encode(p.copy(shortcutsAdded = null))).shortcutsAdded)
+    }
 }
+

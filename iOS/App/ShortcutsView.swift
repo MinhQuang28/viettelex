@@ -10,6 +10,10 @@ enum ShortcutStore {
         (store?.dictionary(forKey: ShortcutFile.storeKey) as? [String: String]) ?? [:]
     }
     static func save(_ t: [String: String]) { store?.set(t, forKey: ShortcutFile.storeKey) }
+
+    /// Mốc thêm/sửa từng khoá (ShortcutOrder) — thứ tự "mới nhất trước" của danh sách.
+    static func loadTimes() -> [String: Int64] { ShortcutOrder.times(from: store) }
+    static func saveTimes(_ t: [String: Int64]) { ShortcutOrder.setTimes(t, in: store) }
 }
 
 /// Dòng trong Tính Năng: bật/tắt + mở trang quản lý.
@@ -74,6 +78,9 @@ extension ShortcutsSection {
 
 struct ShortcutsView: View {
     @State private var table = ShortcutStore.load()
+    @State private var times = ShortcutStore.loadTimes()
+    /// Mục vừa thêm/sửa: cuộn tới + tô nền một lúc.
+    @State private var highlight: String?
     @State private var query = ""
     @State private var newKey = ""
     @State private var newValue = ""
@@ -86,14 +93,20 @@ struct ShortcutsView: View {
 
     private var rows: [(key: String, value: String)] {
         let q = query.trimmingCharacters(in: .whitespaces).lowercased()
-        return table.keys.sorted().compactMap { k in
+        return ShortcutOrder.sorted(table.keys, times: times).compactMap { k in
             let v = table[k]!
             guard q.isEmpty || k.lowercased().contains(q) || v.lowercased().contains(q) else { return nil }
             return (k, v)
         }
     }
 
-    private func persist() { ShortcutStore.save(table) }
+    /// Ghi bảng + mốc thêm/sửa (khoá mới hoặc đổi nội dung ⇒ lên đầu danh sách).
+    private func persist() {
+        let old = ShortcutStore.load()
+        times = ShortcutOrder.updated(times, from: old, to: table, now: ShortcutOrder.nowMs())
+        ShortcutStore.save(table)
+        ShortcutStore.saveTimes(times)
+    }
 
     private func add() {
         let k = newKey.trimmingCharacters(in: .whitespaces)
@@ -102,8 +115,9 @@ struct ShortcutsView: View {
         guard !v.isEmpty else { return }
         if table[k] != nil { notice = L("“%@” đã có — chạm dòng đó để sửa.", k); return }
         table[k] = v
-        newKey = ""; newValue = ""; notice = nil
+        newKey = ""; newValue = ""; notice = nil; query = ""
         persist()
+        highlight = k
     }
 
     private func commitEdit() {
@@ -116,9 +130,11 @@ struct ShortcutsView: View {
         table[k] = v
         editingKey = nil; notice = nil
         persist()
+        highlight = k
     }
 
     var body: some View {
+        ScrollViewReader { proxy in
         List {
             Section {
                 TextField(L("Tìm chữ tắt hoặc nội dung…"), text: $query)
@@ -151,6 +167,7 @@ struct ShortcutsView: View {
                             .contentShape(Rectangle())
                         }
                         .buttonStyle(.borderless)
+                        .listRowBackground(highlight == row.key ? Color.accentColor.opacity(0.18) : nil)
                     }
                 }
                 .onDelete { offsets in
@@ -165,7 +182,7 @@ struct ShortcutsView: View {
                     Text(L("Không tìm thấy.")).foregroundStyle(.secondary)
                 }
             } header: { Text(L("Bảng gõ tắt (%@)", table.count)) } footer: {
-                Text(L("Chạm một dòng để sửa, vuốt trái để xoá."))
+                Text(L("Mới thêm hoặc vừa sửa ở đầu danh sách. Chạm một dòng để sửa, vuốt trái để xoá."))
             }
 
             Section {
@@ -226,5 +243,13 @@ struct ShortcutsView: View {
         }
         .navigationTitle(L("Gõ tắt"))
         .scrollDismissesKeyboard(.immediately)
+        .onChange(of: highlight) { key in
+            guard let key else { return }
+            withAnimation { proxy.scrollTo(key, anchor: .center) }
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.6) {
+                if highlight == key { withAnimation { highlight = nil } }
+            }
+        }
+        }
     }
 }

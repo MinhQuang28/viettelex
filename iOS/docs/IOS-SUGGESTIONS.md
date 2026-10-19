@@ -425,3 +425,18 @@ Người dùng báo bar 30pt thấp, hay chạm nhầm. Cài đặt ở **Tính 
 - Host cấp thiếu chiều cao: bar Vừa/Cao co lại trước (sàn 20 = Thấp), hết chỗ mới dời lên như cũ.
 - Đọc một lần mỗi lần hiện bàn phím (`applyAppearance`) — 0 chi phí mỗi phím.
 - Android song sinh: strip 35 / 42 (mặc định, như cũ) / 51 dp — cùng tỉ lệ 30/36/44.
+
+## Tiếng Anh giữa câu Việt (`EnglishAssist`, 19/10/2026)
+
+Góp ý người dùng: từ tiếng Anh dài hay không nhớ cách viết. Chế độ tiếng Việt, theo PHÍM THÔ của từ đang gõ
+(`Keyboard/EnglishAssist.swift`, song sinh `android/.../EnglishAssist.kt`):
+
+- **Hoàn thành**: phím thô ≥ 4 chữ a–z là tiền tố từ enlexicon và cách đọc Việt yếu — cùng ngưỡng macOS
+  `PredictionLogic.prefersEnglish` (150 / 80 / 60). Không âm tiết Việt nào khớp ⇒ tiếng Anh luôn. Hai từ Anh đầu
+  dẫn, rồi ứng viên Việt.
+- **Sửa chính tả**: không tiền tố Anh nào khớp, không âm tiết Việt nào khớp, ≥ 5 phím ⇒ từ Anh cách ≤ 1 sửa
+  (≤ 2 khi ≥ 8 phím; Damerau OSA, giữ chữ đầu, tính cả tiền tố khi đang gõ dở: "acomm" → accommodation), tần
+  suất ≥ 80, tối đa 2. Bản sửa chạm trượt tiếng Việt (nếu có) đứng trước.
+- 0 chi phí với tiếng Việt: chữ hiện đã có dấu/thanh mà có âm tiết khớp, hoặc âm tiết khớp đủ mạnh ⇒ trả nil trước
+  khi chạm lexicon Anh (heldout: 0/4088 tiền tố bật nhầm; corpus bench 2/159 phím đọc lexicon). Chạy trên hàng
+  đợi nền; dùng `SwipeEnglish.lexicon` vốn đã nạp ⇒ không thêm RAM. Lọc nhạy cảm + DisplayCase như gợi ý Việt.

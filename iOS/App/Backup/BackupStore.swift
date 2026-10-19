@@ -70,6 +70,9 @@ final class BackupStore: SyncLocal {
         (defaults.dictionary(forKey: Self.shortcutsKey) as? [String: String]) ?? [:]
     }
     func setShortcuts(_ d: [String: String]) { defaults.set(d, forKey: Self.shortcutsKey) }
+    /// Mốc thêm/sửa từng gõ tắt (ShortcutOrder — danh sách "mới nhất trước").
+    func shortcutTimes() -> [String: Int64] { ShortcutOrder.times(from: defaults) }
+    func setShortcutTimes(_ t: [String: Int64]) { ShortcutOrder.setTimes(t, in: defaults) }
 
     func templates() -> [BackupTemplate] {
         guard let raw = defaults.array(forKey: Self.templatesKey) as? [[String: String]] else {
@@ -113,8 +116,10 @@ final class BackupStore: SyncLocal {
     // MARK: file sao lưu
 
     func snapshot(includeLearned: Bool, now: Date = Date()) -> BackupPayload {
-        BackupPayload(createdAt: now, platform: "ios", settings: settings(), shortcuts: shortcuts(),
-                      templates: templates(), learnedWords: includeLearned ? (learnedWords() ?? LearnedWords()) : nil)
+        let sc = shortcuts()
+        return BackupPayload(createdAt: now, platform: "ios", settings: settings(), shortcuts: sc,
+                             templates: templates(), learnedWords: includeLearned ? (learnedWords() ?? LearnedWords()) : nil,
+                             shortcutsAdded: shortcutTimes().filter { sc[$0.key] != nil })
     }
 
     /// Nhập theo chính sách BackupMerge; trả câu tóm tắt cho người dùng.
@@ -125,7 +130,10 @@ final class BackupStore: SyncLocal {
         if let sc = p.shortcuts {
             let cur = shortcuts()
             changed = sc.filter { cur[$0.key] != $0.value }.count
-            setShortcuts(BackupMerge.shortcuts(current: cur, imported: sc))
+            let merged = BackupMerge.shortcuts(current: cur, imported: sc)
+            setShortcuts(merged)
+            setShortcutTimes(ShortcutOrder.imported(shortcutTimes(), fileTimes: p.shortcutsAdded, old: cur,
+                                                    file: sc, table: merged, now: ShortcutOrder.nowMs()))
         }
         var added = 0
         if let t = p.templates {
@@ -151,7 +159,11 @@ final class BackupStore: SyncLocal {
     func apply(_ s: SyncSection, _ values: [String: String]) {
         switch s {
         case .settings: setSettings(SyncMerge.settingsFromDomain(values))
-        case .shortcuts: setShortcuts(values)
+        case .shortcuts:
+            // mục kéo về (mới / đổi nội dung) lên đầu danh sách; mục bị xoá bỏ mốc
+            setShortcutTimes(ShortcutOrder.updated(shortcutTimes(), from: shortcuts(), to: values,
+                                                   now: ShortcutOrder.nowMs()))
+            setShortcuts(values)
         case .templates: setTemplates(SyncMerge.templatesFromDomain(values))
         }
     }
