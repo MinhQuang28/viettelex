@@ -434,8 +434,10 @@ final class KeyboardViewController: UIInputViewController {
     private func applyKeySound(_ settings: KeyboardSettings) {
         let on = Self.customKeySoundActive(setting: settings.keySound, style: settings.keySoundStyle, fullAccess: hasFullAccess)
         KeyboardView.customSoundEnabled = on
-        // Piano: nốt theo phím (resolve một lần lúc hiện, không mỗi phím); pedal về trạng thái nhả.
-        KeyboardView.pianoEnabled = on && KeySoundStyle.resolve(settings.keySoundStyle, customAvailable: true) == .piano
+        // Piano / Đàn tranh: nốt theo phím (resolve một lần lúc hiện, không mỗi phím); pedal về trạng thái nhả.
+        let instrument = KeyInstrument.of(settings.keySoundStyle)
+        KeyboardView.pianoEnabled = on && instrument != nil
+        KeyboardView.pianoMap = instrument?.map ?? .piano
         KeyboardView.pianoPedal = PianoPedal()
         KeySound.shared.setVolume(percent: settings.keySoundVolume)
         KeySound.shared.setStyle(settings.keySoundStyle)

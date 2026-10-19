@@ -153,6 +153,7 @@ object L10nTable {
         put("Pháo", "Firecracker")
         put("Chuông", "Jingle bell")
         put("Piano", "Piano")
+        put("Đàn tranh", "Đàn tranh (Vietnamese zither)")
         put("Chạm một kiểu để chọn và nghe thử.", "Tap a style to choose and preview it.")
         put("Hệ thống: âm thanh khi chạm của Android — theo Cài đặt → Âm thanh → Âm thanh khi chạm, âm lượng theo hệ thống. Các kiểu khác là tiếng riêng của VietTelex.",
             "System: Android's touch sounds — follows Settings → Sound → Touch sounds, at the system volume. The other styles are VietTelex's own sounds.")
@@ -497,6 +498,7 @@ object L10nTable {
         put("Tết mai vàng", "Golden Apricot Tết")
         put("Giáng sinh", "Christmas")
         put("Giáng sinh tuyết", "Snowy Christmas")
+        put("Sen Việt", "Vietnamese Lotus")
         put("Giao diện này có âm thanh riêng — bật Âm thanh phím để nghe.", "This theme has its own key sound — turn on Key Sound to hear it.")
         put("Theme cao cấp & ảnh nền", "Premium themes & wallpaper")
         put("Thêm bộ màu bàn phím và đặt ảnh riêng làm nền.", "More keyboard color themes and your own photo as the background.")

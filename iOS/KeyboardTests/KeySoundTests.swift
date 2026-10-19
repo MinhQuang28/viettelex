@@ -84,7 +84,7 @@ final class KeySoundTests: XCTestCase {
         // Chỉ số case = seed nhiễu: các kiểu cũ giữ nguyên vị trí (mẫu + checksum không đổi).
         XCTAssertEqual(KeySoundStyle.allCases.map(\.rawValue),
                        ["subtle", "wood", "mechanical", "typewriter", "bubble", "custom", "system", "rock", "pop", "water", "vintage",
-                        "phao", "jingle", "piano"])
+                        "phao", "jingle", "piano", "dantranh"])
         XCTAssertEqual(L10n.en["iOS"], "System click")
         for st in KeySoundStyle.allCases { XCTAssertNotNil(L10n.en[st.viTitle], "\(st) thiếu bản EN") }
         XCTAssertNotNil(L10n.en["Âm thanh gõ"])
@@ -198,7 +198,7 @@ final class KeySoundTests: XCTestCase {
     /// Danh sách id DUY NHẤT cho trường "sound" của theme JSON; "theme" (đã bỏ) ⇒ mặc định.
     func testPresetIDsForThemeJSON() {
         XCTAssertEqual(KeySoundStyle.presetIDs, ["subtle", "wood", "mechanical", "typewriter", "bubble", "rock", "pop",
-                                                 "water", "vintage", "phao", "jingle", "piano"])
+                                                 "water", "vintage", "phao", "jingle", "piano", "dantranh"])
         for bad in ["system", "custom", "theme"] { XCTAssertFalse(KeySoundStyle.presetIDs.contains(bad), bad) }
         XCTAssertEqual(KeySoundStyle.resolve("theme", customAvailable: true), .subtle)
         let d = UserDefaults(suiteName: "vt-keysound-theme")!
@@ -365,6 +365,161 @@ final class KeySoundTests: XCTestCase {
         XCTAssertTrue(ks.startNow())
         XCTAssertEqual(ks.activeStyle, .wood)
         XCTAssertTrue(ks.play(.letter))
+        XCTAssertFalse(ks.playPiano(.note(60), sustain: false))
+    }
+
+    // MARK: Đàn tranh (theme Sen Việt) — cùng hạ tầng Piano (NoteMap / pool / pedal), khác thang + tiếng
+
+    /// Ánh xạ phím → nốt (chung Android PianoTests.danTranhMapping): ngũ cung điệu Bắc C D F G A, cùng vị trí
+    /// hàng/cột như Piano (chỉ thang khác).
+    func testDanTranhMapping() {
+        let m = NoteMap.dantranh
+        let rows = NoteMap.rows.enumerated().map { r, row in (0..<row.count).map { m.midi(row: r, col: $0) } }
+        XCTAssertEqual(rows, [[84, 86, 89, 91, 93, 96, 98, 101, 103, 105],
+                              [72, 74, 77, 79, 81, 84, 86, 89, 91, 93],
+                              [60, 62, 65, 67, 69, 72, 74, 77, 79],
+                              [48, 50, 53, 55, 57, 60, 62]])
+        XCTAssertEqual(m.midi(forKey: "d"), 65)   // Piano: 64 (E4) — đàn tranh: F4 (Xang)
+        XCTAssertEqual(m.midi(forKey: "E"), 77)
+        XCTAssertEqual(m.midi(forKey: "0"), 105)
+        XCTAssertEqual(m.midi(forKey: ","), 69)
+        XCTAssertEqual(m.midi(forKey: "đ"), 67)
+        XCTAssertEqual(m.midi(forKey: nil), 60)
+        XCTAssertEqual(m.notes.count, 25)
+        for x in m.notes + m.spaceChord + m.returnChord + [m.deleteNote, m.modifierNote] {
+            XCTAssertTrue([0, 2, 5, 7, 9].contains(x % 12), "\(x) ngoài ngũ cung điệu Bắc")
+        }
+        for c in "1234567890qwertyuiopasdfghjklzxcvbnm,.?!'đ" {
+            XCTAssertTrue(m.notes.contains(m.midi(forKey: String(c))), "\(c)")
+        }
+        // Cùng vị trí với Piano: mỗi phím cùng quãng tám, chỉ bậc E ↔ F khác.
+        for c in "qwertyuiopasdfghjklzxcvbnm" {
+            let a = PianoMap.midi(forKey: String(c)), b = m.midi(forKey: String(c))
+            XCTAssertTrue(a == b || (a % 12 == 4 && b == a + 1), "\(c)")
+        }
+        // PianoMap giữ nguyên API cũ (uỷ cho NoteMap.piano).
+        XCTAssertEqual(PianoMap.notes, NoteMap.piano.notes)
+        XCTAssertEqual(KeyInstrument.of("dantranh"), .dantranh)
+        XCTAssertEqual(KeyInstrument.of("piano"), .piano)
+        XCTAssertNil(KeyInstrument.of("wood")); XCTAssertNil(KeyInstrument.of("system")); XCTAssertNil(KeyInstrument.of(nil))
+        XCTAssertEqual(KeyInstrument.dantranh.map, .dantranh)
+        XCTAssertEqual(KeyInstrument.dantranh.style, .dantranh)
+    }
+
+    /// Tổng hợp tất định + checksum chung Android (PianoTests.danTranhChecksums).
+    func testDanTranhSynthParity() {
+        XCTAssertEqual(DanTranhSynth.note(60), DanTranhSynth.note(60))
+        func sum(_ a: [Float]) -> Double { a.reduce(0.0) { $0 + Double(abs($1)) } }
+        let golden: [(Int, Double, Double)] = [(48, 637.1004, 721.6308), (60, 556.5538, 650.7014), (72, 500.1500, 588.8047),
+                                               (93, 397.5509, 488.6524), (105, 449.1060, 656.5890)]
+        for (m, n, sus) in golden {
+            let a = DanTranhSynth.note(m)
+            XCTAssertEqual(a.count, 22_050)
+            XCTAssertEqual(sum(a), n, accuracy: 0.02, "\(m)")
+            XCTAssertEqual(sum(DanTranhSynth.note(m, sustain: true)), sus, accuracy: 0.02, "\(m) ngân")
+            XCTAssertEqual(Double(a.map(abs).max() ?? 0), DanTranhSynth.notePeak, accuracy: 1e-4)
+            XCTAssertEqual(a.first ?? 1, 0, accuracy: 1e-6); XCTAssertEqual(a.last ?? 1, 0, accuracy: 1e-6)
+        }
+        XCTAssertEqual(sum(DanTranhSynth.space()), 434.8580, accuracy: 0.02)
+        XCTAssertEqual(sum(DanTranhSynth.returnChord()), 367.0031, accuracy: 0.02)
+        XCTAssertEqual(sum(DanTranhSynth.delete()), 72.3706, accuracy: 0.02)
+        XCTAssertEqual(sum(DanTranhSynth.pedal()), 189.2533, accuracy: 0.02)
+        XCTAssertEqual(sum(DanTranhSynth.previewMelody()), 1353.9346, accuracy: 0.05)
+        XCTAssertEqual(DanTranhSynth.note(60, sustain: true).count, 27_563)
+        XCTAssertNotEqual(DanTranhSynth.note(60), PianoSynth.note(60))
+    }
+
+    /// Không to hơn Piano: đỉnh + RMS mỗi nốt / hợp âm / pedal / ⌫ ≤ Piano; 8 giọng chồng nhau không vỡ tiếng.
+    /// "Nhấn nhá" chỉ là rung nhẹ: đuôi nốt A4 vẫn ≈ 440 Hz.
+    func testDanTranhNotLouderThanPiano() {
+        XCTAssertLessThanOrEqual(DanTranhSynth.notePeak, PianoSynth.notePeak)
+        XCTAssertLessThanOrEqual(DanTranhSynth.chordPeak, PianoSynth.chordPeak)
+        XCTAssertLessThanOrEqual(DanTranhSynth.pedalPeak, PianoSynth.pedalPeak)
+        for m in [48, 60, 72, 93, 105] {
+            XCTAssertLessThan(KeySoundSynth.rms(DanTranhSynth.note(m)), KeySoundSynth.rms(PianoSynth.note(m)), "\(m)")
+        }
+        XCTAssertLessThan(KeySoundSynth.rms(DanTranhSynth.space()), KeySoundSynth.rms(PianoSynth.space()))
+        XCTAssertLessThan(KeySoundSynth.rms(DanTranhSynth.returnChord()), KeySoundSynth.rms(PianoSynth.returnChord()))
+        XCTAssertLessThan(KeySoundSynth.rms(DanTranhSynth.pedal()), KeySoundSynth.rms(PianoSynth.pedal()))
+        XCTAssertLessThan(KeySoundSynth.rms(DanTranhSynth.delete()), KeySoundSynth.rms(PianoSynth.delete()))
+        XCTAssertLessThanOrEqual(Double(VoicePool.chordScale(8)) * 8 * DanTranhSynth.notePeak, 1.0)
+        let a4 = DanTranhSynth.note(69)
+        var crossings = 0
+        for i in 13_000..<17_400 where (a4[i] <= 0) != (a4[i + 1] <= 0) { crossings += 1 }
+        let hz = Double(crossings) / 2 / (4_400.0 / PianoSynth.sampleRate)
+        XCTAssertEqual(hz, 440, accuracy: 440 * 0.015, "A4 lệch cao độ")
+    }
+
+    /// Bộ nốt dựng lúc hiện (Float32): 25 nốt 1.0 s + cách/Enter + ⌫ + pedal ≈ 2.45 MB (Piano 1.97 MB, 0.8 s);
+    /// bộ ngân dựng lười cùng cỡ Piano. Android lưu PCM16 ⇒ một nửa.
+    func testDanTranhMemoryBound() {
+        XCTAssertEqual(DanTranhSynth.normalBankBytes, 2_447_552)
+        XCTAssertLessThanOrEqual(DanTranhSynth.normalBankBytes, 5 * 1024 * 1024 / 2)
+        XCTAssertEqual(DanTranhSynth.sustainBankBytes, PianoSynth.sustainBankBytes)
+        let i = KeyInstrument.dantranh
+        let real = i.map.notes.reduce(0) { $0 + i.note($1).count } + i.space().count + i.returnChord().count
+            + i.delete().count + i.pedal().count
+        XCTAssertEqual(real * 4, i.normalBankBytes)
+        XCTAssertEqual(KeyInstrument.piano.normalBankBytes, PianoSynth.normalBankBytes)
+    }
+
+    /// Đàn tranh đi CHUNG đường Piano ở bàn phím: nốt theo bảng đàn tranh, cách/Enter/⌫ riêng, Shift = pedal
+    /// (cùng máy trạng thái PianoPedal: một-lần ngân đúng một nốt, Caps giữ tới khi tắt).
+    func testDanTranhRouteReusesPianoPedal() {
+        let saved = KeyboardView.pianoMap
+        defer { KeyboardView.pianoMap = saved; KeyboardView.pianoEnabled = false; KeyboardView.pianoPedal = PianoPedal() }
+        KeyboardView.customSoundEnabled = true
+        KeyboardView.pianoEnabled = true
+        KeyboardView.pianoMap = KeyInstrument.dantranh.map
+        KeyboardView.pianoPedal = PianoPedal()
+        KeyboardView.clickLetter("d")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:65")
+        KeyboardView.clickSpace()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:space")
+        KeyboardView.clickReturn()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:returnKey")
+        KeyboardView.clickDelete()
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:delete")
+        KeyboardView.clickShift(.on)
+        XCTAssertEqual(KeyboardView.pianoPedal.state, .once)
+        KeyboardView.clickLetter("e")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:77:sustain")
+        KeyboardView.clickLetter("e")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:77")
+        KeyboardView.clickShift(.caps)
+        KeyboardView.clickLetter("a"); XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:60:sustain")
+        KeyboardView.clickLetter("s"); XCTAssertEqual(KeyboardView.debugLastClickRoute, "piano:62:sustain")
+        KeyboardView.clickShift(.off)
+        XCTAssertEqual(KeyboardView.pianoPedal.state, .off)
+        KeyboardView.customSoundEnabled = false
+    }
+
+    /// Engine thật (bỏ qua nếu không có audio): đàn tranh dựng bằng đường Piano — 4 nốt cùng khung ⇒ 4 giọng; đổi
+    /// Piano ⇄ Đàn tranh dựng lại bộ nốt, giữ pool; rời nhạc cụ ⇒ đường 3 tiếng.
+    func testDanTranhEngineChordAndSwitch() throws {
+        let ks = KeySound.shared
+        ks.debugWant(false); ks.stopNow()
+        ks.setStyle("piano")
+        ks.debugWant(true)
+        defer { ks.setStyle(KeySoundStyle.defaultStyle.rawValue); ks.debugWant(false); ks.stopNow() }
+        guard ks.startNow() else { throw XCTSkip("không có audio output trên máy test") }
+        XCTAssertEqual(ks.instrument, .piano)
+        ks.setStyle("dantranh")
+        XCTAssertTrue(ks.startNow())
+        XCTAssertEqual(ks.activeStyle, .dantranh)
+        XCTAssertEqual(ks.instrument, .dantranh)
+        var voices = Set<Int>()
+        for m in [60, 65, 67, 72] {
+            XCTAssertTrue(ks.playPiano(.note(m), sustain: false))
+            voices.insert(ks.lastPianoVoice)
+        }
+        XCTAssertEqual(voices.count, 4)
+        XCTAssertEqual(ks.pianoSimultaneous, 4)
+        XCTAssertTrue(ks.playPiano(.space, sustain: false))
+        XCTAssertTrue(ks.playPiano(.pedal, sustain: false))
+        ks.setStyle("wood")
+        XCTAssertTrue(ks.startNow())
+        XCTAssertEqual(ks.activeStyle, .wood)
         XCTAssertFalse(ks.playPiano(.note(60), sustain: false))
     }
 
@@ -565,7 +720,7 @@ final class KeySoundTests: XCTestCase {
         XCTAssertEqual(back.settings?["keySound"], .bool(true))
         let st = #"{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"android","settings":{"keySoundStyle":"bubble"}}"#
         XCTAssertEqual(try BackupCodec.decode(Data(st.utf8)).settings?["keySoundStyle"], .string("bubble"))
-        for id in ["system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano"] {
+        for id in ["system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano", "dantranh"] {
             let j = #"{"format":"viettelex-backup","version":1,"minReaderVersion":1,"platform":"android","settings":{"keySoundStyle":"\#(id)"}}"#
             XCTAssertEqual(try BackupCodec.decode(Data(j.utf8)).settings?["keySoundStyle"], .string(id), id)
         }

@@ -163,10 +163,11 @@ class KeyFeedbackPreview(ctx: Context) {
         val key = KeySoundCustom.bankKey(style, custom) + if (sequence) "/seq" else ""
         if (key != trackKey || track == null) {
             release()
-            val piano = Feedback.isPiano(style)   // Piano: giai điệu ngắn / một nốt C4 ở 22.05 kHz
-            val rate = if (piano) com.viettelex.keyboard.PianoSynth.SAMPLE_RATE else KeySoundSynth.SAMPLE_RATE
-            val samples = if (piano) {
-                if (sequence) com.viettelex.keyboard.PianoSynth.previewMelody() else com.viettelex.keyboard.PianoSynth.note(60)
+            // Piano / Đàn tranh: giai điệu ngắn / một nốt C4 ở 22.05 kHz
+            val inst = com.viettelex.keyboard.KeyInstrument.of(style)
+            val rate = if (inst != null) com.viettelex.keyboard.PianoSynth.SAMPLE_RATE else KeySoundSynth.SAMPLE_RATE
+            val samples = if (inst != null) {
+                if (sequence) inst.previewMelody() else inst.note(60)
             } else {
                 val bank = KeySoundSynth.bank(style, KeySoundCustom.load(custom)).second
                 if (sequence) KeySoundSynth.previewSequence(bank) else bank[0]

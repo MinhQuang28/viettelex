@@ -325,6 +325,7 @@ enum L10n {
         "Pháo": "Firecracker",
         "Chuông": "Jingle bell",
         "Piano": "Piano",
+        "Đàn tranh": "Đàn tranh (Vietnamese zither)",
         "Chạm một kiểu để chọn và nghe thử.": "Tap a style to choose and preview it.",
         "iOS: tiếng bấm bàn phím của hệ thống — theo Cài đặt → Âm thanh & Cảm ứng → Phản hồi bàn phím, không cần Toàn quyền Truy cập. Các kiểu khác là tiếng riêng của VietTelex (cần Toàn quyền Truy cập).": "System click: the iOS keyboard click — follows Settings → Sounds & Haptics → Keyboard Feedback and doesn't need Full Access. The other styles are VietTelex's own sounds (Full Access required).",
         // Hiệu ứng khi bấm phím (KeyEffects.swift)
@@ -667,6 +668,7 @@ enum L10n {
         "Tết mai vàng": "Golden Apricot Tết",
         "Giáng sinh": "Christmas",
         "Giáng sinh tuyết": "Snowy Christmas",
+        "Sen Việt": "Vietnamese Lotus",
         "Giao diện này có âm thanh riêng — bật Âm thanh phím để nghe.": "This theme has its own key sound — turn on Key Sound to hear it.",
         "Đóng mẫu câu": "Close snippets",
         "Đóng công cụ văn bản": "Close text tools",

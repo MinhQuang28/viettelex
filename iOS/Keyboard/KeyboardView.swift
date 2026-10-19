@@ -4054,9 +4054,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// "Âm thanh phím" (setting keySound + Full Access): BẬT ⇒ tiếng riêng qua KeySound,
     /// KHÔNG kèm playInputClick (không kêu đôi). TẮT ⇒ y như cũ (click hệ thống).
     nonisolated(unsafe) static var customSoundEnabled = false
-    /// Kiểu "Piano" (cùng customSoundEnabled): mỗi phím một nốt theo nhãn phím (PianoMap) — controller
-    /// bật khi kiểu = piano. Kiểu khác: đường 3 tiếng như cũ.
+    /// Kiểu "Piano" / "Đàn tranh" (cùng customSoundEnabled): mỗi phím một nốt theo nhãn phím (`pianoMap`) —
+    /// controller bật khi kiểu là nhạc cụ (KeyInstrument). Kiểu khác: đường 3 tiếng như cũ.
     nonisolated(unsafe) static var pianoEnabled = false
+    /// Bảng nốt của nhạc cụ đang chọn (Piano / Đàn tranh) — controller đặt một lần lúc hiện.
+    nonisolated(unsafe) static var pianoMap: NoteMap = .piano
     /// Pedal ngân của Piano (Shift/Caps người dùng bấm).
     nonisolated(unsafe) static var pianoPedal = PianoPedal()
     static var pianoActive: Bool { customSoundEnabled && pianoEnabled }
@@ -4089,7 +4091,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
     /// Phím ký tự; `key` = nhãn phím (Piano chọn nốt theo vị trí). Kiểu khác bỏ qua `key`.
     static func clickLetter(_ key: String? = nil) {
-        if pianoActive { piano(.note(PianoMap.midi(forKey: key)), typed: true); return }
+        if pianoActive { piano(.note(pianoMap.midi(forKey: key)), typed: true); return }
         feedback(.letter)
     }
     static func clickDelete() {
