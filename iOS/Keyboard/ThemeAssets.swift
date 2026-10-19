@@ -382,11 +382,7 @@ enum ThemeAssetLoader {
             return FileManager.default.fileExists(atPath: u.path) ? (u, e) : nil
         }
         // Phông: mô tả từ tệp (không đăng ký toàn hệ thống).
-        var font: CTFontDescriptor?
-        if let (u, _) = file(.font, plan.font),
-           let ds = CTFontManagerCreateFontDescriptorsFromURL(u as CFURL) as? [CTFontDescriptor] {
-            font = ds.first
-        }
+        let font = file(.font, plan.font).flatMap { fontDescriptor(at: $0.0) }
         // Skin: gom vai theo ảnh ⇒ cạnh giải = lớn nhất các vai cần; mỗi ảnh giải một lần.
         var roles: [ThemeAssetRef: Set<String>] = [:]
         for (role, s) in plan.skins {
@@ -413,6 +409,22 @@ enum ThemeAssetLoader {
     }
 
     static func dropCache() { cache = nil }
+
+    /// Mô tả CoreText từ tệp phông (KHÔNG đăng ký toàn hệ thống — không tra theo tên PostScript; CTFont tạo từ
+    /// mô tả này dùng đúng tệp). Tệp hỏng ⇒ nil.
+    static func fontDescriptor(at url: URL) -> CTFontDescriptor? {
+        (CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor])?.first
+    }
+
+    /// Phông tải về `font` đã có trong kho (mục lục + tệp) ⇒ mô tả; chưa tải / thiếu tệp / hỏng ⇒ nil.
+    /// Ô xem trước trong APP dùng (cùng tệp với bàn phím) — bàn phím đi đường `load` (cache theo chữ ký).
+    static func fontDescriptor(_ font: ThemeFontAsset?, dir: URL? = ThemeAssetStore.defaultDir) -> CTFontDescriptor? {
+        guard let font, let dir, let e = ThemeAssetStore.readIndex(dir)[ThemeAssetFile(cls: .font, ref: font.ref).key]
+        else { return nil }
+        let u = dir.appendingPathComponent(e.file)
+        guard FileManager.default.fileExists(atPath: u.path) else { return nil }
+        return fontDescriptor(at: u)
+    }
 
     /// Ảnh nền theme (aspect-fill, cắt đúng cỡ view) / tiền cảnh (căng — giải ở cỡ view) — gọi trên
     /// Wallpaper.queue. Bitmap ≤ cỡ view × scale giải (≤ 2).

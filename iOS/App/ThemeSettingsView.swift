@@ -543,6 +543,8 @@ struct ThemePreview: View {
     var keysOnly = false
     /// Tuỳ chỉnh nâng cao (bo góc, phông, độ đậm, cỡ) — màu đã nằm trong `palette`.
     var keyStyle: KeyStyle = .default
+    /// Phông tải về: tải xong (storeVersion đổi) ⇒ vẽ lại bằng phông mới.
+    @ObservedObject private var assetCenter = ThemeAssetCenter.shared
 
     private static let rows = ["qwertyuiop", "asdfghjkl", "zxcvbnm"]
 
@@ -599,33 +601,33 @@ struct ThemePreview: View {
         let keyW = (size.width - pad * 2 - gap * 9) / 10
         let keyH = (size.height - pad * 2 - gap * 3) / 4
         let radius: CGFloat = large ? 6 : 2.5
+        let custom = assetCenter.previewFont(keyStyle.assets.font)
         return VStack(spacing: gap) {
             ForEach(Self.rows, id: \.self) { row in
                 HStack(spacing: gap) {
                     ForEach(Array(row), id: \.self) { ch in
-                        key(large ? String(ch) : "", w: keyW, h: keyH, r: radius)
+                        key(large ? String(ch) : "", w: keyW, h: keyH, r: radius, custom: custom)
                     }
                 }
             }
             HStack(spacing: gap) {
-                key(large ? "123" : "", w: keyW * 2, h: keyH, r: radius,
+                key(large ? "123" : "", w: keyW * 2, h: keyH, r: radius, custom: custom,
                     fill: palette.functionFill ?? palette.specialFill, ink: palette.fnInk)
-                key(large ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius, fill: palette.fnFill)
-                key(large ? "return" : "", w: keyW * 2 + gap, h: keyH, r: radius, fill: palette.accent,
+                key(large ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius, custom: custom, fill: palette.fnFill)
+                key(large ? "return" : "", w: keyW * 2 + gap, h: keyH, r: radius, custom: custom, fill: palette.accent,
                     ink: palette.accentInk)
             }
         }
         .padding(pad)
     }
 
-    private func key(_ label: String, w: CGFloat, h: CGFloat, r: CGFloat,
+    private func key(_ label: String, w: CGFloat, h: CGFloat, r: CGFloat, custom: CTFontDescriptor?,
                      fill: RGBA? = nil, ink: RGBA? = nil) -> some View {
         let r = KeyStyle.cornerRadius(percent: keyStyle.corner, size: CGSize(width: w, height: h), fallback: r)
         let base: CGFloat = label.count > 1 ? 11 : 15
-        let font: Font = keyStyle.customizesLabels
-            ? Font(KeyLabelFonts.make(keyStyle.font, keyStyle.weight,
-                                      size: base * (label.count > 1 ? 1 : keyStyle.labelScale), compact: nil))
-            : .system(size: base)
+        let font: Font = KeyLabelFonts.previewFont(keyStyle, custom: custom,
+                                                   size: base * (label.count > 1 ? 1 : keyStyle.labelScale))
+            .map { Font($0) } ?? .system(size: base)
         return RoundedRectangle(cornerRadius: r)
             .fill(Color((fill ?? palette.keyFill).ui))
             .overlay(RoundedRectangle(cornerRadius: r)

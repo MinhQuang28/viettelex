@@ -45,6 +45,7 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asComposePath
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -507,6 +508,9 @@ private fun KeyboardRaiseRow() {
 internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int, large: Boolean, modifier: Modifier,
                              backdrop: Int? = null, keysOnly: Boolean = false, bottomPadDp: Float = 0f,
                              keyStyle: KeyStyle = KeyStyle.DEFAULT) {
+    // Nhãn chữ (chỉ bản lớn, khi chữ được tuỳ chỉnh): phông đọc lại khi kho đổi (tải xong) ⇒ vẽ lại bằng phông mới.
+    val labels = PreviewLabelFont.showsLabels(large, keyStyle)
+    val labelPaint = if (labels) rememberPreviewLabelPaint(keyStyle) else null
     Box(modifier) {
         val bottom = p.bgBottom
         if (!keysOnly) Canvas(Modifier.fillMaxSize()) {
@@ -544,19 +548,49 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
                 val kr = KeyStyle.cornerRadius(keyStyle.corner, w, kh, r)
                 drawRoundRect(Color(fill), Offset(x, y), Size(w, kh), CornerRadius(kr))
                 p.keyBorder?.let { drawRoundRect(Color(it), Offset(x, y), Size(w, kh), CornerRadius(kr), style = Stroke(1.dp.toPx())) }
-                if (large) drawCircle(Color(p.keyInk).copy(alpha = 0.8f * p.labelAlpha), minOf(w, kh) * 0.09f, Offset(x + w / 2, y + kh / 2))
+                if (large && labelPaint == null) drawCircle(Color(p.keyInk).copy(alpha = 0.8f * p.labelAlpha), minOf(w, kh) * 0.09f, Offset(x + w / 2, y + kh / 2))
+            }
+            fun label(text: String, x: Float, y: Float, w: Float, ink: Int, size: Float) {
+                val lp = labelPaint ?: return
+                lp.textSize = size
+                lp.color = ink
+                lp.alpha = (255 * p.labelAlpha).toInt().coerceIn(0, 255)
+                val fm = lp.fontMetrics
+                drawContext.canvas.nativeCanvas.drawText(text, x + w / 2, y + kh / 2 - (fm.ascent + fm.descent) / 2, lp)
             }
             val counts = intArrayOf(10, 9, 7)
             for (row in 0..2) {
                 val n = counts[row]
                 val x0 = pad + (10 - n) * (kw + gap) / 2
-                for (i in 0 until n) key(x0 + i * (kw + gap), pad + row * (kh + gap), kw, p.keyFill)
+                for (i in 0 until n) {
+                    val x = x0 + i * (kw + gap); val ky = pad + row * (kh + gap)
+                    key(x, ky, kw, p.keyFill)
+                    label(PREVIEW_ROWS[row][i].toString(), x, ky, kw, p.keyInk, kh * 0.55f * keyStyle.letterScale)
+                }
             }
             val y = pad + 3 * (kh + gap)
             key(pad, y, kw * 2 + gap, p.fnFill)
+            label("123", pad, y, kw * 2 + gap, p.fnInk, kh * 0.36f * keyStyle.controlScale)
             key(pad + 2 * (kw + gap), y, kw * 6 + gap * 5, p.spaceFill)
             key(pad + 8 * (kw + gap), y, kw * 2 + gap, p.action)
         }
     }
 }
 
+private val PREVIEW_ROWS = arrayOf("qwertyuiop", "asdfghjkl", "zxcvbnm")
+
+/** Paint nhãn ô xem trước: Typeface cùng luật bàn phím; phụ thuộc [ThemeAssetFlow.storeVersion] (tải xong ⇒ nạp lại). */
+@Composable
+private fun rememberPreviewLabelPaint(style: KeyStyle): android.graphics.Paint {
+    val ctx = LocalContext.current
+    val version = ThemeAssetFlow.storeVersion
+    return remember(style.font, style.weight, style.assets.font, version) {
+        val file = PreviewLabelFont.downloadedFile(style, ThemeAssetFlow.dir(ctx))
+        val downloaded = file?.let { runCatching { android.graphics.Typeface.createFromFile(it) }.getOrNull() }
+        android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG).apply {
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = com.viettelex.android.ime.keyLabelTypeface(style, downloaded)
+                ?: android.graphics.Typeface.create("sans-serif", android.graphics.Typeface.NORMAL)
+        }
+    }
+}

@@ -138,26 +138,7 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
      * giữ typeface cũ — không đổi gì). Độ đậm 100…900 cần API 28; máy cũ: Đậm/Rất đậm ⇒ BOLD,
      * Mỏng/Vừa ⇒ họ "-light"/"-medium" của sans-serif.
      */
-    val keyTypeface: Typeface? by lazy {
-        val st = keyStyle
-        // Phông tải về (theme / người dùng chọn): đã kiểm ở app; thiếu tệp ⇒ phông hệ thống như chưa chọn.
-        assets?.typeface?.let { tf ->
-            return@lazy if (android.os.Build.VERSION.SDK_INT >= 28 && st.weight != KeyLabelWeight.REGULAR)
-                Typeface.create(tf, st.weight.weight, false) else tf
-        }
-        if (st.font == KeyLabelFont.DEFAULT || st.font == KeyLabelFont.ROUNDED) {
-            if (st.weight == KeyLabelWeight.REGULAR) return@lazy null
-        }
-        val family = st.font.androidFamily ?: "sans-serif"
-        val base = Typeface.create(family, Typeface.NORMAL)
-        if (android.os.Build.VERSION.SDK_INT >= 28) Typeface.create(base, st.weight.weight, false)
-        else when (st.weight) {
-            KeyLabelWeight.BOLD, KeyLabelWeight.HEAVY -> Typeface.create(family, Typeface.BOLD)
-            KeyLabelWeight.LIGHT -> if (st.font.androidFamily == null) Typeface.create("sans-serif-light", Typeface.NORMAL) else base
-            KeyLabelWeight.MEDIUM -> if (st.font.androidFamily == null) Typeface.create("sans-serif-medium", Typeface.NORMAL) else base
-            KeyLabelWeight.REGULAR -> base
-        }
-    }
+    val keyTypeface: Typeface? by lazy { keyLabelTypeface(keyStyle, assets?.typeface) }
 
     /** Bo góc phím [w]×[h] px (Tuỳ chỉnh nâng cao); mặc định ⇒ [fallback]. */
     fun keyRadius(w: Float, h: Float, fallback: Float): Float = KeyStyle.cornerRadius(keyStyle.corner, w, h, fallback)
@@ -172,5 +153,29 @@ class ImeTheme(ctx: Context, val settings: ThemeSettings = ThemeSettings(), wall
     fun centerOffset(p: Paint): Float {
         val fm = p.fontMetrics
         return -(fm.ascent + fm.descent) / 2f
+    }
+}
+
+/**
+ * Typeface nhãn phím theo Tuỳ chỉnh nâng cao — DÙNG CHUNG bàn phím ([ImeTheme.keyTypeface]) và ô xem trước trong app
+ * (KeyboardPreview) để hai bên không lệch nhau. [downloaded] = phông tải về đã nạp từ kho (đã kiểm ở app); null (chưa
+ * tải / thiếu tệp) ⇒ phông hệ thống như chưa chọn. Kết quả null = mặc định (paint giữ typeface cũ).
+ */
+fun keyLabelTypeface(st: KeyStyle, downloaded: Typeface?): Typeface? {
+    downloaded?.let { tf ->
+        return if (android.os.Build.VERSION.SDK_INT >= 28 && st.weight != KeyLabelWeight.REGULAR)
+            Typeface.create(tf, st.weight.weight, false) else tf
+    }
+    if (st.font == KeyLabelFont.DEFAULT || st.font == KeyLabelFont.ROUNDED) {
+        if (st.weight == KeyLabelWeight.REGULAR) return null
+    }
+    val family = st.font.androidFamily ?: "sans-serif"
+    val base = Typeface.create(family, Typeface.NORMAL)
+    return if (android.os.Build.VERSION.SDK_INT >= 28) Typeface.create(base, st.weight.weight, false)
+    else when (st.weight) {
+        KeyLabelWeight.BOLD, KeyLabelWeight.HEAVY -> Typeface.create(family, Typeface.BOLD)
+        KeyLabelWeight.LIGHT -> if (st.font.androidFamily == null) Typeface.create("sans-serif-light", Typeface.NORMAL) else base
+        KeyLabelWeight.MEDIUM -> if (st.font.androidFamily == null) Typeface.create("sans-serif-medium", Typeface.NORMAL) else base
+        KeyLabelWeight.REGULAR -> base
     }
 }

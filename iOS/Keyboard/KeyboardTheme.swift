@@ -1133,6 +1133,17 @@ final class KeyLabelFonts {
         }
     }
 
+    /// Phông nhãn của ô xem trước trong APP (ThemePreview) — CÙNG luật với bàn phím (`makeFont`): phông tải về đã
+    /// có trong kho (`custom`) ⇒ chính nó (bỏ độ đậm như bàn phím); chưa tải ⇒ phông hệ thống của kiểu (bàn phím
+    /// cũng dự phòng như vậy). nil = không tuỳ chỉnh chữ (ô xem trước giữ `.system`).
+    /// Bug 19/10/2026 (iPhone 13 mini): ô xem trước chỉ đọc `style.font` (= .standard khi chọn phông tải về) ⇒ chọn
+    /// phông "Vt" tải về xong ô xem trước vẫn phông hệ thống.
+    static func previewFont(_ style: KeyStyle, custom: CTFontDescriptor?, size: CGFloat) -> UIFont? {
+        guard style.customizesLabels else { return nil }
+        if style.assets.font != nil, let custom { return CTFontCreateWithFontDescriptor(custom, size, nil) as UIFont }
+        return make(style.font, style.weight, size: size, compact: nil)
+    }
+
     /// Số đo em (đo ở cỡ thật của nhãn phím ~24pt — SF / New York đổi nét theo cỡ quang học,
     /// đo ở cỡ khác lệch bề ngang; một lần cho mỗi mẫu).
     func em(_ sample: String) -> KeyLabelEm {
