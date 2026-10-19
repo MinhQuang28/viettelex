@@ -47,6 +47,8 @@ struct ThemeSettingsView: View {
     @AppStorage(KeyEffect.key, store: groupDefaults) private var keyEffectRaw = KeyEffect.defaultValue.rawValue
     /// "Bạn đồng hành" (Plus, BuddyCharacter) — trang con BuddyPickerView.
     @AppStorage(BuddyCharacter.key, store: groupDefaults) private var buddyRaw = BuddyCharacter.defaultValue.rawValue
+    /// Thống kê Đập chuột (bàn phím ghi) — đọc lại mỗi lần trang hiện.
+    @State private var moleStats = MoleStats.load(groupDefaults)
 
     /// Ảnh đưa vào trình chỉnh: mới chọn (chưa ghi gì) hoặc bản gốc đã lưu ("Chỉnh ảnh").
     struct EditorInput: Identifiable {
@@ -79,6 +81,10 @@ struct ThemeSettingsView: View {
     private var hasWallpaperFile: Bool { wallpaperImage != nil }
 
     var body: some View {
+        list.onAppear { moleStats = MoleStats.load(groupDefaults) }
+    }
+
+    @ViewBuilder private var list: some View {
         List {
             Section {
                 ThemePreview(palette: settings.palette(systemDark: scheme == .dark,
@@ -131,6 +137,15 @@ struct ThemeSettingsView: View {
                     .disabled(settings.wallpaperActive(fileExists: hasWallpaperFile))
                 }
             } header: { Text("Theme") }
+
+            // Đập chuột: thẻ thống kê khi theme đang dùng có trò chơi, hoặc đã từng chơi.
+            if settings.effectiveKeyStyle.game == MoleGame.themeGame || moleStats.total > 0 {
+                Section {
+                    MoleStatsCard(stats: moleStats)
+                } footer: {
+                    Text(L("Gõ như thường — chú chuột thò lên ở phím bạn sắp gõ. Gõ trúng lúc nó đang lên là đập được!"))
+                }
+            }
 
             Section {
                 NavigationLink {
@@ -734,5 +749,23 @@ struct ThemeFontGrid: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(title + (selected ? L(", đang chọn") : ""))
+    }
+}
+
+/// "Hôm nay đập N con chuột 🐭" + chuỗi dài nhất / tổng (theme Đập chuột).
+struct MoleStatsCard: View {
+    let stats: MoleStats
+    var body: some View {
+        HStack(spacing: 12) {
+            Text("🐭").font(.system(size: 34))
+            VStack(alignment: .leading, spacing: 3) {
+                Text(L("Hôm nay đập %@ con chuột 🐭", stats.count(on: MoleStats.dayNumber())))
+                    .font(.headline)
+                Text(L("Chuỗi dài nhất: %@ · Tổng: %@", stats.best, stats.total))
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+        }
+        .padding(.vertical, 4)
+        .accessibilityElement(children: .combine)
     }
 }

@@ -263,6 +263,8 @@ enum KeyboardTheme: String, CaseIterable {
     // Bộ đủ món 10/2026: Ghi-ta (mặt đàn gỗ thích mật ong, phím gỗ hồng sắc, dây đàn + khảm xà cừ, lỗ thoát âm trên
     // phím cách, âm ghi-ta mộc + hiệu ứng rung dây).
     case guitar
+    // Trò chơi khi gõ 10/2026: Đập chuột (bãi cỏ + phím hang đất; "game":"mole" — MoleGame).
+    case mole
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
     // Hệ thống + Màu nhấn D6336C (KeyStyleStore.migrate). Id lạ / đã bỏ luôn về Hệ thống.
 
@@ -294,6 +296,7 @@ enum KeyboardTheme: String, CaseIterable {
         case .valentine: return L("Valentine")
         case .halloween: return L("Halloween")
         case .guitar: return L("Ghi-ta")
+        case .mole: return L("Đập chuột")
         }
     }
 
@@ -322,7 +325,8 @@ enum KeyboardTheme: String, CaseIterable {
              .sen,
              .typewriter, .rgb, .space,
              .trungthu, .valentine, .halloween,
-             .guitar: return true
+             .guitar,
+             .mole: return true
         }
     }
 
@@ -901,6 +905,7 @@ struct ThemeSettings: Equatable {
             if s.sound == nil { s.sound = t.sound }
             if s.effect == nil { s.effect = t.effect }
             if s.swipe == nil { s.swipe = t.swipe }
+            if s.game == nil { s.game = t.game }
             s.assets = s.assets.merged(over: t.assets)
             if userSystemFont { s.assets.font = nil }
             if s.assets.font != nil { s.font = .standard }
@@ -1052,6 +1057,8 @@ struct KeyStyle: Equatable {
     var effect: String? = nil
     /// Nét vuốt theme ("swipe", ThemeExtraIds.swipes) — chỉ dùng khi chọn "Theo giao diện" (SwipeTrailPolicy).
     var swipe: String? = nil
+    /// Trò chơi khi gõ của theme ("game", ThemeExtraIds.games) — bàn phím đọc từ kiểu thực dùng (MolePolicy).
+    var game: String? = nil
 
     static let `default` = KeyStyle()
     var isDefault: Bool { self == .default }
@@ -1186,6 +1193,7 @@ struct KeyStyle: Equatable {
         st.sound = edited.sound
         st.effect = edited.effect
         st.swipe = edited.swipe
+        st.game = edited.game
         return (st, l.lostBg || d.lostBg)
     }
 }
@@ -1248,6 +1256,7 @@ enum KeyStyleStore {
         if let v = st.sound { f.append(("sound", .string(v))) }
         if let v = st.effect { f.append(("effect", .string(v))) }
         if let v = st.swipe { f.append(("swipe", .string(v))) }
+        if let v = st.game { f.append(("game", .string(v))) }
         if !st.light.isEmpty { f.append(("light", ThemeSpec.json(st.light))) }
         if !st.dark.isEmpty { f.append(("dark", ThemeSpec.json(st.dark))) }
         return .object(f)

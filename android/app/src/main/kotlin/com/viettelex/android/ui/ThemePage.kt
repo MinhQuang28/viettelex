@@ -49,6 +49,7 @@ import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.viettelex.keyboard.KeyboardSettings
 import com.viettelex.keyboard.KeyboardTheme
 import com.viettelex.keyboard.KeyboardTransparency
@@ -350,6 +351,22 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
                 modifier = Modifier.weight(1f))
             Text("${(if (on) com.viettelex.keyboard.BuddyCharacter.of(buddyRaw) else com.viettelex.keyboard.BuddyCharacter.OFF).title} ›",
                 style = VTType.body, color = c.secondary, maxLines = 1)
+        }
+    }
+
+    // Đập chuột: thẻ thống kê khi theme đang dùng có trò chơi, hoặc đã từng chơi (IME ghi file thống kê).
+    val mole = remember(s) { com.viettelex.android.ime.MoleStatsFile.read(ctx) }
+    if (s.effectiveKeyStyle.game == com.viettelex.keyboard.MoleGame.THEME_GAME || mole.total > 0) {
+        VTSection(footer = tr("Gõ như thường — chú chuột thò lên ở phím bạn sắp gõ. Gõ trúng lúc nó đang lên là đập được!")) {
+            VTRow {
+                Text("🐭", style = VTType.body.copy(fontSize = 30.sp))
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    Text(tr("Hôm nay đập %s con chuột 🐭", mole.count(com.viettelex.keyboard.MoleStats.dayNumber())),
+                        style = VTType.body, color = c.label)
+                    Text(tr("Chuỗi dài nhất: %s · Tổng: %s", mole.best, mole.total), style = VTType.body.copy(fontSize = 13.sp),
+                        color = c.secondary)
+                }
+            }
         }
     }
 

@@ -260,7 +260,9 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     HALLOWEEN("halloween", "Halloween", true), // l10n-key
     // Bộ đủ món 10/2026: Ghi-ta (mặt đàn gỗ mật ong, phím gỗ hồng sắc, dây đàn + khảm, lỗ thoát âm trên phím cách,
     // âm ghi-ta mộc + hiệu ứng rung dây) — id trùng iOS.
-    GUITAR("guitar", "Ghi-ta", true); // l10n-key
+    GUITAR("guitar", "Ghi-ta", true), // l10n-key
+    // Trò chơi khi gõ 10/2026: Đập chuột (bãi cỏ + phím hang đất; "game":"mole" — [MoleGame]). Id trùng iOS.
+    MOLE("mole", "Đập chuột", true); // l10n-key
 
     /** Bo góc mặc định (% như [KeyStyle.corner]) khi người dùng chưa chỉnh — null = bo stock. iOS cùng giá trị. */
     val defaultCorner: Int? get() = spec?.corner
@@ -572,6 +574,8 @@ object ThemeExtraIds {
     val EFFECTS: Set<String> get() = KeyEffect.entries.map { it.id }.toSet()
     /** "swipe": kiểu nét vuốt cụ thể (không có "theme" — theme không trỏ về chính nó). */
     val SWIPES: Set<String> get() = SwipeTrailStyle.THEME_IDS.toSet()
+    /** "game": trò chơi khi gõ (iOS ThemeExtraIds.games y hệt). */
+    val GAMES: Set<String> = setOf(MoleGame.THEME_GAME)
 }
 
 /**
@@ -702,6 +706,7 @@ data class ThemeSettings(
             if (s.sound == null) s = s.copy(sound = typography.sound)
             if (s.effect == null) s = s.copy(effect = typography.effect)
             if (s.swipe == null) s = s.copy(swipe = typography.swipe)
+            if (s.game == null) s = s.copy(game = typography.game)
             var a = s.assets.mergedOver(typography.assets)
             if (userSystemFont) a = a.copy(font = null)
             s = s.copy(assets = a)

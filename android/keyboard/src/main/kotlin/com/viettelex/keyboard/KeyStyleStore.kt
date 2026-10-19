@@ -57,6 +57,7 @@ object KeyStyleStore {
         st.sound?.let { f.add("sound" to SJ.Str(it)) }
         st.effect?.let { f.add("effect" to SJ.Str(it)) }
         st.swipe?.let { f.add("swipe" to SJ.Str(it)) }
+        st.game?.let { f.add("game" to SJ.Str(it)) }
         if (!st.light.isEmpty) f.add("light" to ThemeSpec.json(st.light))
         if (!st.dark.isEmpty) f.add("dark" to ThemeSpec.json(st.dark))
         return SJ.Obj(f)

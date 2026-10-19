@@ -26,7 +26,7 @@ class GuitarThemeTests {
         assertTrue(t.isPlus)
         assertEquals("Ghi-ta", spec.nameVi); assertEquals("Guitar", spec.nameEn)
         assertEquals("Guitar", L10nTable.EN[t.viTitle])
-        assertEquals("thêm cuối danh sách", KeyboardTheme.GUITAR, KeyboardTheme.entries.last())
+        assertEquals("thêm cuối danh sách (sau Halloween)", KeyboardTheme.GUITAR, KeyboardTheme.entries[KeyboardTheme.HALLOWEEN.ordinal + 1])
         val c = ThemeColor
         for (dk in listOf(false, true)) {
             val p = t.palette(dk)!!

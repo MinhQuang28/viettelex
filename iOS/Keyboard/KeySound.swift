@@ -88,6 +88,10 @@ final class KeySound {
     /// Giọng của lần phát piano gần nhất (test hợp âm); −1 = chưa.
     private(set) var lastPianoVoice = -1
 
+    // --- "Éc" của theme Đập chuột (MoleGame): chỉ dựng khi theme bật trò chơi (setSqueakEnabled) ---
+    private var squeakWanted = false
+    private var squeakBuffer: AVAudioPCMBuffer?
+
     func setVolume(percent: Int) {
         let g = KeySoundSynth.gain(forPercent: percent)
         lock.lock(); defer { lock.unlock() }
@@ -159,6 +163,38 @@ final class KeySound {
         lock.unlock()
         return play(.modifier)
     }
+
+    /// Theme Đập chuột đang bật ⇒ dựng mẫu "éc" (~5.7k mẫu) cùng engine; tắt ⇒ nhả. Theme khác: không gọi.
+    func setSqueakEnabled(_ on: Bool) {
+        lock.lock()
+        squeakWanted = on
+        if !on { squeakBuffer = nil }
+        let build = on && engine != nil && squeakBuffer == nil
+        lock.unlock()
+        if build { queue.async { [self] in lock.lock(); buildSqueakLocked(); lock.unlock() } }
+    }
+
+    private func buildSqueakLocked() {
+        guard squeakWanted, squeakBuffer == nil,
+              let fmt = AVAudioFormat(standardFormatWithSampleRate: KeySoundSynth.sampleRate, channels: 1) else { return }
+        squeakBuffer = Self.pcm(KeySoundSynth.squeakSamples(), fmt)
+    }
+
+    /// "Éc" khi đập trúng chuột — node phím chức năng (phím chữ vừa kêu ở node chữ, không cắt nhau). Engine chưa
+    /// chạy / chưa có mẫu ⇒ bỏ (không chờ). Không cấp phát.
+    @discardableResult
+    func playSqueak() -> Bool {
+        guard lock.try() else { return false }
+        defer { lock.unlock() }
+        guard wanted, running, engine?.isRunning == true, let b = squeakBuffer,
+              nodes.count > KeySoundKind.modifier.rawValue else { return false }
+        lastPlay = CACurrentMediaTime()
+        nodes[KeySoundKind.modifier.rawValue].scheduleBuffer(b, at: nil, options: .interrupts, completionHandler: nil)
+        return true
+    }
+
+    /// Đã dựng mẫu "éc" (test).
+    var hasSqueak: Bool { lock.lock(); defer { lock.unlock() }; return squeakBuffer != nil }
 
     /// Kiểu đang dựng có tiếng Enter riêng (test).
     var hasReturnSound: Bool { lock.lock(); defer { lock.unlock() }; return returnBuffer != nil }
@@ -396,6 +432,7 @@ final class KeySound {
                 returnBuffer = KeySoundSynth.returnSamples(bank.style).flatMap { Self.pcm($0, fmt) }
                 if bank.style.rawValue != styleRaw { TouchLog.write("keysound: \(styleRaw) thiếu file → \(bank.style.rawValue)") }
             }
+            if squeakWanted, squeakBuffer == nil { buildSqueakLocked() }
             e.mainMixerNode.outputVolume = gain
             if !e.isRunning {
                 e.prepare()
@@ -452,7 +489,7 @@ final class KeySound {
         if let o = configObserver { NotificationCenter.default.removeObserver(o); configObserver = nil }
         for n in nodes + pianoNodes + sustainNodes { n.stop() }
         engine?.stop()
-        engine = nil; nodes = []; buffers = []; returnBuffer = nil; builtKey = nil
+        engine = nil; nodes = []; buffers = []; returnBuffer = nil; builtKey = nil; squeakBuffer = nil
         pianoNodes = []; sustainNodes = []; pianoExtra = []; pianoMode = false; sustainReady = false
         pianoBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)
         sustainBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)

@@ -30,7 +30,8 @@ class ThemeSetTests {
         KeyboardTheme.NEON, KeyboardTheme.PINK, KeyboardTheme.TET, KeyboardTheme.TET_MAI, KeyboardTheme.XMAS,
         KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO,
         KeyboardTheme.SEN, KeyboardTheme.TYPEWRITER, KeyboardTheme.RGB, KeyboardTheme.SPACE,
-        KeyboardTheme.TRUNG_THU, KeyboardTheme.VALENTINE, KeyboardTheme.HALLOWEEN)
+        KeyboardTheme.TRUNG_THU, KeyboardTheme.VALENTINE, KeyboardTheme.HALLOWEEN,
+        KeyboardTheme.MOLE)
     private val pastels = listOf(KeyboardTheme.PEACH, KeyboardTheme.MINT, KeyboardTheme.SKY, KeyboardTheme.LAVENDER)
 
     private fun fixtureLines(): List<List<String>> {
@@ -46,7 +47,7 @@ class ThemeSetTests {
         assertEquals(lines.first { it[0] == "order" }[1].split(','), KeyboardTheme.entries.map { it.id })
         assertEquals(lines.first { it[0] == "plus" }[1].split(','), KeyboardTheme.entries.filter { it.isPlus }.map { it.id })
         val rows = lines.filter { it[0] != "order" && it[0] != "plus" }
-        assertEquals(48, rows.size)
+        assertEquals(50, rows.size)
         for (r in rows) {
             val t = KeyboardTheme.entries.first { it.id == r[0] }
             val p = t.palette(r[1] == "1")!!
@@ -60,7 +61,7 @@ class ThemeSetTests {
     @Test fun darkVariantsDifferAndFollowSystem() {
         val fixed = setOf(KeyboardTheme.OLED, KeyboardTheme.CONTRAST, KeyboardTheme.BLACK_HEART, KeyboardTheme.NEON,
             KeyboardTheme.TET, KeyboardTheme.XMAS, KeyboardTheme.PIANO, KeyboardTheme.RGB, KeyboardTheme.SPACE,
-            KeyboardTheme.TRUNG_THU, KeyboardTheme.HALLOWEEN)
+            KeyboardTheme.TRUNG_THU, KeyboardTheme.HALLOWEEN, KeyboardTheme.MOLE)
         for (t in KeyboardTheme.entries) {
             val light = t.palette(false) ?: continue
             val dark = t.palette(true)!!
@@ -400,7 +401,8 @@ class ThemeSetTests {
             KeyboardTheme.SEN to ThemeDecoration.LOTUS,
             KeyboardTheme.SPACE to ThemeDecoration.STARFIELD,
             KeyboardTheme.TRUNG_THU to ThemeDecoration.LANTERN, KeyboardTheme.VALENTINE to ThemeDecoration.HEARTS,
-            KeyboardTheme.HALLOWEEN to ThemeDecoration.PUMPKIN, KeyboardTheme.GUITAR to ThemeDecoration.STRINGS)
+            KeyboardTheme.HALLOWEEN to ThemeDecoration.PUMPKIN, KeyboardTheme.GUITAR to ThemeDecoration.STRINGS,
+            KeyboardTheme.MOLE to ThemeDecoration.FLOWERS)
         for ((t, m) in festive) for (dk in listOf(false, true)) assertEquals("$t", m, t.palette(dk)!!.decoration!!.motif)
         assertEquals(ThemeDecoration.SNOWFLAKE, KeyboardTheme.XMAS_SNOW.palette(false)!!.decoration!!.motif)
         assertEquals(ThemeDecoration.STAR, KeyboardTheme.XMAS_SNOW.palette(true)!!.decoration!!.motif)

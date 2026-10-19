@@ -79,12 +79,14 @@ enum KeySoundStyle: String, CaseIterable {
     case trong, boo
     // Theme "Ghi-ta" (10/2026): mỗi phím một nốt ghi-ta mộc dây sắt (KeyInstrument.guitar), cách = quạt hợp âm theo vòng.
     case guitar
+    // Theme "Đập chuột" (10/2026): búa gỗ bọc vải gõ nhẹ ("bop").
+    case bop
 
     /// Bật "Âm thanh phím" lần đầu ⇒ "Nhẹ nhàng" (bật công tắc phải NGHE khác đi; "iOS" = như lúc tắt).
     static let defaultStyle: KeySoundStyle = .subtle
     /// Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức `baseRecipe`.
     static let presets: [KeySoundStyle] = [.subtle, .wood, .mechanical, .typewriter, .bubble, .rock, .pop, .water, .vintage, .phao, .jingle,
-                                           .scifi, .trong, .boo]
+                                           .scifi, .trong, .boo, .bop]
     /// Mọi kiểu dựng sẵn (3 tiếng + nhạc cụ mỗi phím một nốt: Piano, Đàn tranh, Ghi-ta).
     static let allPresets: [KeySoundStyle] = presets + [.piano, .dantranh, .guitar]
     /// DANH SÁCH DUY NHẤT id hợp lệ cho trường "sound" của theme JSON (chọn theme ⇒ đặt keySoundStyle).
@@ -123,6 +125,7 @@ enum KeySoundStyle: String, CaseIterable {
         case .trong: return LK("Trống lân")
         case .boo: return LK("Ma quái")
         case .guitar: return LK("Ghi-ta mộc")
+        case .bop: return LK("Búa gỗ")
         }
     }
 
@@ -217,8 +220,23 @@ enum KeySoundSynth {
                                   t(0.10, 990, 1560, glide: 0.012, tau: 0.010)],
                           noises: [n(0.06, hp: 200, lp: 1200, tau: 0.004)],
                           attack: 0.004, duration: 0.054, outLP: 2000, peak: 0.45)
+        case .bop:
+            // Búa gỗ bọc vải: thân trầm ngắn (210 → 165 Hz) + chút gỗ (×2.4) + hơi vải mềm — êm, không "tách".
+            return Recipe(tones: [t(1.0, 210, 165, glide: 0.006, tau: 0.011), t(0.22, 210 * 2.4, 165 * 2.4, glide: 0.006, tau: 0.003)],
+                          noises: [n(0.18, hp: 90, lp: 900, tau: 0.0018)],
+                          attack: 0.0018, duration: 0.048, outLP: 1500, peak: 0.50)
         }
     }
+
+    /// "Éc" khi đập trúng chuột (theme Đập chuột — MoleGame): hai tiếng chíp ngắn vút lên, nhỏ + mềm (đỉnh ≤ Gõ gỗ).
+    /// Seed cố định ⇒ tất định, checksum chung Android (KeySoundSynth.squeakSamples).
+    static let squeakRecipe = Recipe(
+        tones: [t(1.0, 1900, 2700, glide: 0.018, tau: 0.030), t(0.18, 3800, 5400, glide: 0.018, tau: 0.012),
+                t(0.75, 2200, 3100, glide: 0.016, tau: 0.026, delay: 0.062), t(0.12, 4400, 6200, glide: 0.016, tau: 0.010, delay: 0.062)],
+        noises: [],
+        attack: 0.006, duration: 0.130, outLP: 4200, peak: 0.42)
+    static let squeakSeed: UInt32 = 0x6D6F_6C65
+    static func squeakSamples() -> [Float] { render(squeakRecipe, seed: squeakSeed) }
 
     /// Tiếng Enter RIÊNG của kiểu (nil = như phím chức năng). Máy chữ: tiếng phím chức năng + "ding" chuông về
     /// dòng. Seed cố định theo (typewriter, modifier) ⇒ không đổi khi thêm kiểu mới. Android y hệt.

@@ -112,6 +112,14 @@ class Feedback(private val ctx: Context) {
     var progression = ChordProgression(0)
         private set
     private fun progressionClock(): Double = SystemClock.uptimeMillis() / 1000.0
+    // --- "Éc" của theme Đập chuột ([com.viettelex.keyboard.MoleGame]) — chỉ nạp khi theme bật trò chơi ---
+    private var squeakWanted = false
+    private var squeakId = 0
+    @Volatile private var squeakLoaded = false
+    /** Test: số lần phát "éc". */
+    var squeaks = 0
+        private set
+
     /** Test/log: giọng lần phát piano gần nhất (≥ VOICES = giọng ngân). */
     var lastPianoVoice = -1
         private set
@@ -123,6 +131,7 @@ class Feedback(private val ctx: Context) {
     fun configureSound(enabled: Boolean, volume: Int, style: String, worker: (Runnable) -> Unit) {
         soundEnabled = enabled
         soundStyle = style
+        soundWorker = worker
         pedal.reset()
         progression = ChordProgression(KeyInstrument.of(style)?.map?.progression?.size ?: 0)
         volumePercent = volume.coerceIn(0, 100)
@@ -131,7 +140,7 @@ class Feedback(private val ctx: Context) {
         refreshRinger(force = true)
         val customFile = customFile(ctx)
         val key = KeySoundCustom.bankKey(style, customFile)
-        if (pool != null && key == poolKey) return
+        if (pool != null && key == poolKey) { loadSqueak(); return }
         releaseSound()
         val inst = KeyInstrument.of(style)
         val p = SoundPool.Builder().setMaxStreams(if (inst != null) 2 * PianoSynth.VOICES else 4).setAudioAttributes(
@@ -141,12 +150,14 @@ class Feedback(private val ctx: Context) {
         pool = p; poolKey = key
         val fresh = BooleanArray(ids.size); loaded = fresh
         val dir = ctx.cacheDir
-        if (inst != null) { configurePiano(p, dir, inst, worker); return }
+        if (inst != null) { configurePiano(p, dir, inst, worker); loadSqueak(); return }
         p.setOnLoadCompleteListener { sp, sampleId, status ->
             if (sp !== pool || status != 0) return@setOnLoadCompleteListener
             for (i in ids.indices) if (ids[i] == sampleId) fresh[i] = true
             if (sampleId == returnId) returnLoaded = true
+            if (sampleId == squeakId) squeakLoaded = true
         }
+        loadSqueak()
         worker(Runnable {
             val files = soundFiles(dir, style, customFile)
             val ret = returnFile(dir, style)
@@ -173,6 +184,7 @@ class Feedback(private val ctx: Context) {
         val fresh = BooleanArray(PIANO_MAX_SAMPLE_IDS); pianoLoaded = fresh
         p.setOnLoadCompleteListener { sp, sampleId, status ->
             if (sp === pool && status == 0 && sampleId in fresh.indices) fresh[sampleId] = true
+            if (sp === pool && status == 0 && sampleId == squeakId) squeakLoaded = true
         }
         worker(Runnable {
             val notes = inst.map.notes.map { it to pianoNoteFile(dir, inst, it, sustain = false) }
@@ -207,6 +219,33 @@ class Feedback(private val ctx: Context) {
         })
     }
 
+    /** Theme Đập chuột đang bật ⇒ nạp mẫu "éc" vào SoundPool (nếu có); tắt ⇒ bỏ. Theme khác: không gọi gì thêm. */
+    fun setSqueakEnabled(on: Boolean) {
+        squeakWanted = on
+        if (!on) { squeakId = 0; squeakLoaded = false } else loadSqueak()
+    }
+
+    private fun loadSqueak() {
+        val p = pool ?: return
+        val w = soundWorker ?: return
+        if (!squeakWanted || squeakId != 0) return
+        squeakId = -1                                  // đang nạp
+        val dir = ctx.cacheDir
+        w(Runnable {
+            val f = squeakFile(dir)
+            main.post { if (pool === p && squeakWanted && f != null) squeakId = p.load(f.path, 1) }
+        })
+    }
+
+    /** "Éc" khi đập trúng chuột: CHỈ khi Âm thanh phím (đường âm riêng) đang phát ([com.viettelex.keyboard.MolePolicy]). */
+    fun squeak(): Boolean {
+        val route = KeySoundSynth.route(soundEnabled, volumePercent, ringerNormal(), soundStyle)
+        if (!squeakAllowed(route)) return false
+        squeaks++
+        if (squeakLoaded && squeakId > 0) pool?.play(squeakId, gain, gain, 2, 0, 1f)
+        return true
+    }
+
     /** Nhả SoundPool (ẩn bàn phím, thiếu RAM, tắt setting). */
     fun releaseSound() {
         pool?.release()
@@ -215,6 +254,7 @@ class Feedback(private val ctx: Context) {
         ids.fill(0)
         loaded = BooleanArray(ids.size)
         returnId = 0; returnLoaded = false
+        squeakId = 0; squeakLoaded = false
         pianoMode = false
         pianoIds.fill(0); sustainIds.fill(0); pianoExtra.fill(0)
         pianoStreams.fill(0); sustainStreams.fill(0)
@@ -363,6 +403,14 @@ class Feedback(private val ctx: Context) {
         const val SPACE = 3
         const val RETURN = 4
         private val CUSTOM_KIND_GAIN = floatArrayOf(1f, 0.9f, 0.82f)   // = KeySoundCustom.variant
+
+        /** "Éc" chỉ khi đường âm riêng đang phát (Âm thanh phím bật, âm lượng > 0, máy không im) — test được. */
+        fun squeakAllowed(route: KeySoundSynth.Route): Boolean =
+            com.viettelex.keyboard.MolePolicy.shouldSqueak(route == KeySoundSynth.Route.CUSTOM)
+
+        /** WAV "éc" (cache, ghi 1 lần). */
+        fun squeakFile(dir: File): File? =
+            cachedWav(dir, "keysound-v${KeySoundSynth.VERSION}-squeak.wav", KeySoundSynth.SAMPLE_RATE) { KeySoundSynth.squeakSamples() }
 
         /** Kiểu đã lưu là nhạc cụ mỗi phím một nốt (Piano / Đàn tranh — đường nốt riêng). */
         fun isPiano(style: String?): Boolean = KeyInstrument.of(style) != null

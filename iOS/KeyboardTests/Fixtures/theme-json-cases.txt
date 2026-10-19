@@ -178,3 +178,9 @@ CASE	spacedeco-unknown	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#
 CASE	spacedeco-number	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","spaceDeco":1}}
 CASE	motif-strings-inlay	ok	{"dark":"same","light":{"accent":"#000000","deco":{"alt":"inlay","color":"#D9FBF1DC","motif":"strings"},"ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","deco":{"motif":"strings","alt":"inlay","color":"#D9FBF1DC"}}}
 CASE	sound-guitar-string	ok	{"dark":"same","effect":"string","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"sound":"guitar","v":1}	{"v":1,"name":{"vi":"x"},"sound":"guitar","effect":"string","light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"}}
+# Đập chuột: "game" (danh sách trắng: "mole") + âm "bop".
+CASE	game-mole	ok	{"dark":"same","game":"mole","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"sound":"bop","v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"sound":"bop","game":"mole"}
+CASE	game-unknown	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"game":"tetris"}
+CASE	game-upper	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"game":"Mole"}
+CASE	game-number	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"game":1}
+CASE	game-null	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"game":null}
