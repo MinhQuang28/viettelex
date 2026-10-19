@@ -1945,6 +1945,31 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         }
         layoutDecoration()
         layoutRainbow()
+        layoutStringGaps()
+    }
+
+    /// Khe giữa các hàng phím (toạ độ view) từ khung phím của lượt layout này — chỉ gọi lúc layout (hoạ tiết / Rung dây).
+    private func keyRowGaps() -> [KeyboardDecoration.Gap] {
+        rowsContainer.layoutIfNeeded()            // khung phím của lượt layout này (hàng xếp lồng nhau)
+        var spans: [(top: Double, bottom: Double)] = []
+        for row in rowsContainer.arrangedSubviews where !row.isHidden {
+            row.layoutIfNeeded()
+            func walk(_ v: UIView) {
+                if v is KeyButton, !v.isHidden, v.bounds.height > 0 {
+                    let f = v.convert(v.bounds, to: self)
+                    spans.append((Double(f.minY), Double(f.maxY)))
+                } else { v.subviews.forEach(walk) }
+            }
+            walk(row)
+        }
+        return KeyboardDecoration.rowGaps(spans)
+    }
+
+    /// Rung dây: khe hàng cho overlay (dây rung ở khe gần phím). Kiểu khác ⇒ không làm gì (0 chi phí).
+    private func layoutStringGaps() {
+        guard let o = keyEffects, o.effect == .string else { return }
+        let g = keyRowGaps()
+        if g != o.stringGaps { o.stringGaps = g }
     }
 
     /// Hoạ tiết theme: bật/tắt + màu (mỗi lần đổi theme / sáng-tối). Không theme nào có hoạ tiết
@@ -1968,24 +1993,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         let size = themeBackdrop.bounds.size
         guard size.width > 0, size.height > 0 else { return }
         // Khe giữa các hàng phím (toạ độ view) — chỉ khi layout (không mỗi lần gõ), chỉ theme có hoạ tiết.
-        rowsContainer.layoutIfNeeded()            // khung phím của lượt layout này (hàng xếp lồng nhau)
-        var spans: [(top: Double, bottom: Double)] = []
-        for row in rowsContainer.arrangedSubviews where !row.isHidden {
-            row.layoutIfNeeded()
-            func walk(_ v: UIView) {
-                if v is KeyButton, !v.isHidden, v.bounds.height > 0 {
-                    let f = v.convert(v.bounds, to: self)
-                    spans.append((Double(f.minY), Double(f.maxY)))
-                } else { v.subviews.forEach(walk) }
-            }
-            walk(row)
-        }
-        let gaps = KeyboardDecoration.rowGaps(spans)
+        let gaps = keyRowGaps()
         guard gaps != decorGaps || size.width != decorWidth else { return }
         decorGaps = gaps; decorWidth = size.width
         CATransaction.begin(); CATransaction.setDisableActions(true)
         decorLayer.frame = CGRect(origin: .zero, size: size)
-        decorLayer.path = d.path(KeyboardDecoration.placements(width: Double(size.width), gaps: gaps, density: d.density))
+        decorLayer.path = d.path(KeyboardDecoration.placements(width: Double(size.width), gaps: gaps, density: d.density),
+                                  width: Double(size.width))
         CATransaction.commit()
     }
     #if DEBUG
@@ -2015,6 +2029,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         return (decorLayer.isHidden ? [] : motifs, keys)
     }
     var debugRowsMinY: CGFloat { rowsContainer.frame.minY }
+    /// Test: số lớp lỗ thoát âm trên phím cách chính (Ghi-ta: 3; theme khác: 0) + path lỗ tối.
+    var debugSoundhole: (count: Int, hole: CGPath?) { (spaceBarButton?.soundholeLayers.count ?? 0, spaceBarButton?.soundholeLayers.first?.path) }
     #endif
 
     /// Giải ảnh nền ở đúng cỡ view, ngoài main thread (ImageIO thumbnail).
@@ -2108,6 +2124,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     // never fires (the missed-keypress bug). Retitle in place instead.
     private var letterKeys: [(button: UIButton, base: String)] = []
     private weak var spaceBar: UIButton?
+    private var spaceBarButton: KeyButton? { spaceBar as? KeyButton }
     private weak var spaceLogo: UIImageView?
     /// Mã "VI"/"EN" góc dưới-phải phím cách (thay logo khi bật vuốt đổi ngôn ngữ — SpaceMark).
     private weak var spaceCode: UILabel?
@@ -3241,6 +3258,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         space.pressedBackground = specialFill      // space sẫm lại khi đè
         space.accessibilityLabel = L("Dấu cách")
         if primary { spaceBar = space; installSpaceMark(on: space) }
+        if palette.spaceSoundhole {   // Ghi-ta: lỗ thoát âm + vành hoa văn (vẽ một lần, theo cỡ phím)
+            space.setSoundhole(ring: palette.accent.alpha(0.85 * palette.surfaceAlpha).ui, inner: spaceInk.alpha(0.45).ui)
+        }
         space.addAction(UIAction { _ in Self.clickSpace() }, for: .touchDown)
         space.addTarget(self, action: #selector(spaceTouchDown(_:event:)), for: .touchDown)
         // Vuốt đổi ngôn ngữ (SpaceFlick): theo dõi ngón — công tắc tắt ⇒ handler thoát ngay.
@@ -3255,6 +3275,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             if let space { self.fxMark(space) }
             let now = CACurrentMediaTime()
             if now - self.lastSpaceTap < 0.35 {
+                Self.chordSentenceEnd()               // ". " tự chèn = kết câu ⇒ vòng hợp âm cách về đầu
                 self.tapped(.doubleSpacePeriod)
             } else {
                 self.tapped(.space)
@@ -3293,8 +3314,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             // Âm / rung + balloon lúc chạm như mọi phím ký tự (tester 1.2.8: "rung chưa áp dụng
             // với dấu chấm" — "," / "." / "@" / "/" hàng đáy trước đây im lặng hoàn toàn).
             let shown = p.title
+            let ends = ChordProgression.isSentenceEnd(shown)   // "." hàng đáy: kết câu ⇒ vòng hợp âm cách về đầu
             b.addAction(UIAction { [weak self, weak b] _ in
-                Self.clickLetter()
+                Self.clickLetter(sentenceEnd: ends)
                 if let self, let b { self.showBalloon(over: b, text: shown) }
             }, for: .touchDown)
             b.addAction(UIAction { [weak self] _ in self?.hideBalloonAfterTap() },
@@ -3847,7 +3869,43 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             applyPadTypographyIfNeeded()
             applyKeyStyleIfNeeded()
             layoutSkin()
+            layoutSoundhole()
             super.layoutSubviews()
+        }
+
+        // MARK: lỗ thoát âm (theme Ghi-ta, "spaceDeco":"soundhole") — chỉ phím cách của theme đó; khác ⇒ rỗng (0 chi phí).
+        /// [lỗ tối, vành ngoài, vành trong] — path dựng lại chỉ khi cỡ phím đổi (lúc layout, không mỗi lần gõ).
+        private(set) var soundholeLayers: [CAShapeLayer] = []
+        private var soundholeLaidOut: CGSize = .zero
+        func setSoundhole(ring: UIColor, inner: UIColor) {
+            if soundholeLayers.isEmpty {
+                for i in 0..<3 {
+                    let l = CAShapeLayer()
+                    l.actions = ["path": NSNull(), "position": NSNull(), "bounds": NSNull(), "frame": NSNull()]
+                    if i == 0 { l.strokeColor = nil } else { l.fillColor = nil }
+                    layer.insertSublayer(l, at: UInt32(skinLayer == nil ? i : i + 1))
+                    soundholeLayers.append(l)
+                }
+            }
+            soundholeLayers[0].fillColor = UIColor.black.withAlphaComponent(CGFloat(Soundhole.holeAlpha)).cgColor
+            soundholeLayers[1].strokeColor = ring.cgColor
+            soundholeLayers[2].strokeColor = inner.cgColor
+            soundholeLaidOut = .zero
+            setNeedsLayout()
+        }
+        private func layoutSoundhole() {
+            guard !soundholeLayers.isEmpty, bounds.size != soundholeLaidOut, bounds.width > 0, bounds.height > 0 else { return }
+            soundholeLaidOut = bounds.size
+            let r = CGFloat(Soundhole.radius(width: Double(bounds.width), height: Double(bounds.height)))
+            let c = CGPoint(x: bounds.midX, y: bounds.midY)
+            func circle(_ rr: CGFloat) -> CGPath { CGPath(ellipseIn: CGRect(x: c.x - rr, y: c.y - rr, width: 2 * rr, height: 2 * rr), transform: nil) }
+            soundholeLayers[0].frame = bounds; soundholeLayers[0].path = circle(r)
+            for (i, ring) in Soundhole.rings.enumerated() {
+                let l = soundholeLayers[1 + i]
+                l.frame = bounds
+                l.lineWidth = CGFloat(ring.width) * r
+                l.path = circle(CGFloat(ring.radius) * r)
+            }
         }
         /// Phím (baseButton) — nhận bo góc / kẹp chữ của Tuỳ chỉnh nâng cao. Slot gợi ý, nút rail: false.
         var styledKey = false
@@ -4064,6 +4122,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     nonisolated(unsafe) static var pianoMap: NoteMap = .piano
     /// Pedal ngân của Piano (Shift/Caps người dùng bấm).
     nonisolated(unsafe) static var pianoPedal = PianoPedal()
+    /// Vòng hợp âm phím cách (Piano / Ghi-ta; count 0 = nhạc cụ không có vòng — Đàn tranh) — controller đặt lúc hiện.
+    nonisolated(unsafe) static var chordProgression = ChordProgression(count: 0)
+    /// Đồng hồ (giây) của vòng hợp âm — test thay để giả lập nghỉ gõ.
+    nonisolated(unsafe) static var progressionClock: () -> Double = { CACurrentMediaTime() }
     static var pianoActive: Bool { customSoundEnabled && pianoEnabled }
     #if DEBUG
     /// Test hook: đường âm lần bấm gần nhất — "system" | "custom:<loại>".
@@ -4093,24 +4155,44 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         AudioServicesPlaySystemSound(1519)   // dự phòng: Core Haptics không chạy được
     }
     /// Phím ký tự; `key` = nhãn phím (Piano chọn nốt theo vị trí). Kiểu khác bỏ qua `key`.
-    static func clickLetter(_ key: String? = nil) {
-        if pianoActive { piano(.note(pianoMap.midi(forKey: key)), typed: true); return }
+    /// `sentenceEnd`: phím không nhãn nhưng là dấu kết câu ("." hàng đáy) — vòng hợp âm cách về đầu.
+    static func clickLetter(_ key: String? = nil, sentenceEnd: Bool = false) {
+        if pianoActive {
+            if chordProgression.count > 0 {
+                chordProgression.typed(now: progressionClock(), sentenceEnd: sentenceEnd || ChordProgression.isSentenceEnd(key))
+            }
+            piano(.note(pianoMap.midi(forKey: key)), typed: true)
+            return
+        }
         feedback(.letter)
     }
     static func clickDelete() {
-        if pianoActive { piano(.delete, typed: false); return }
+        if pianoActive {
+            if chordProgression.count > 0 { chordProgression.typed(now: progressionClock(), sentenceEnd: false) }
+            piano(.delete, typed: false)
+            return
+        }
         feedback(.delete)
     }
     static func clickModifier() { feedback(.modifier) }
-    /// Phím cách: Piano ⇒ hợp âm trầm nhẹ; kiểu khác ⇒ tiếng phím chức năng như cũ.
+    /// Phím cách: Piano / Ghi-ta ⇒ hợp âm KẾ TIẾP của vòng (ChordProgression: C → Am → F → G / Am → F → C → G, nghỉ
+    /// > 3 s hoặc kết câu ⇒ về đầu); Đàn tranh ⇒ hợp âm dây buông cố định; kiểu khác ⇒ tiếng phím chức năng như cũ.
     static func clickSpace() {
-        if pianoActive { piano(.space, typed: false); return }
+        if pianoActive {
+            if chordProgression.count > 0 { piano(.chord(chordProgression.space(now: progressionClock())), typed: false) }
+            else { piano(.space, typed: false) }
+            return
+        }
         feedback(.modifier)
     }
     /// Enter: Piano ⇒ hợp âm "kết" (chủ + năm); Máy chữ ⇒ tiếng phím + "ding" về dòng (KeySound.playReturn);
     /// kiểu khác ⇒ tiếng phím chức năng.
     static func clickReturn() {
-        if pianoActive { piano(.returnKey, typed: false); return }
+        if pianoActive {
+            if chordProgression.count > 0 { chordProgression.returnKey(now: progressionClock()) }   // chủ rồi về đầu vòng
+            piano(.returnKey, typed: false)
+            return
+        }
         if customSoundEnabled {
             KeySound.shared.playReturn()
             #if DEBUG
@@ -4134,6 +4216,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         debugLastClickRoute = "piano:pedal:\(pianoPedal.state)"
         #endif
         if hapticsEnabled { impact() }
+    }
+    /// Kết câu không qua phím "." (cách đúp ⇒ ". "): vòng hợp âm cách về đầu.
+    static func chordSentenceEnd() {
+        guard pianoActive, chordProgression.count > 0 else { return }
+        chordProgression.typed(now: progressionClock(), sentenceEnd: true)
     }
     /// Shift đổi không do bấm phím Shift (rời plane…): Caps tắt ⇒ damper.
     static func pianoShiftChanged(_ now: PianoPedal.Shift) {
@@ -6023,6 +6110,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                                               color: palette.accent.alpha(1).ui, keyFill: palette.keyFill.ui,
                                               dark: palette.isDark, in: self, keys: rowsContainer, existing: keyEffects)
         if keyEffects == nil { fxRect = nil }
+        layoutStringGaps()
     }
 
     #if DEBUG

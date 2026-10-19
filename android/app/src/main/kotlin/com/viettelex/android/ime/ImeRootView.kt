@@ -73,6 +73,16 @@ class ImeRootView(
         else android.graphics.drawable.ColorDrawable(theme.bg)
     }
 
+    fun refreshStringGaps() = updateStringGaps()
+
+    /** Rung dây: khe hàng phím (px, toạ độ overlay) cho hiệu ứng — kiểu khác / tắt ⇒ thoát ngay (0 chi phí). */
+    private fun updateStringGaps() {
+        val fx = effects ?: return
+        if (fx.effect != com.viettelex.keyboard.KeyEffect.STRING) return
+        val off = (keyboard.top - fx.top).toDouble()
+        fx.setStringGaps(com.viettelex.keyboard.ThemeDecoration.rowGaps(keyboard.keySpans().map { doubleArrayOf(it[0] + off, it[1] + off) }))
+    }
+
     /** Đặt motif hoạ tiết vào khe giữa các hàng phím (chỉ theme có hoạ tiết; gọi khi layout / dựng phím). */
     private fun updateDecorGaps() {
         val dd = bgDrawable as? ThemeDecorDrawable ?: return
@@ -97,7 +107,8 @@ class ImeRootView(
 
     init {
         background = bgDrawable
-        if (bgDrawable is ThemeDecorDrawable || rainbow != null) keyboard.onKeysLaidOut = { updateDecorGaps(); updateRainbowOutline() }
+        // Mỗi hàm tự thoát ngay nếu theme / hiệu ứng không cần (không hoạ tiết, không cầu vồng, không Rung dây).
+        keyboard.onKeysLaidOut = { updateDecorGaps(); updateRainbowOutline(); updateStringGaps() }
         if (wallpaperFile != null || themeBgFile != null) setWillNotDraw(false)
         isMotionEventSplittingEnabled = true
         addView(keyboard)
@@ -373,6 +384,7 @@ class ImeRootView(
         // ⇒ trùm từ đỉnh cửa sổ tới đáy vùng phím: preview / popup hàng trên nổi ra ngoài khung.
         balloon.layout(px, 0, px + pw, py + s + keyH)
         effects?.layout(px, 0, px + pw, py + s + keyH)
+        updateStringGaps()
         if (wallpaperFile != null && (wallW != pw || wallH != ph)) loadWallpaperFor(pw, ph) else updateWallMatrix()
         loadThemeBgFor(pw, ph)
     }
@@ -459,6 +471,7 @@ class ImeRootView(
         overlay?.layout(0, s, w, s + keyH)
         balloon.layout(0, 0, w, s + keyH)
         effects?.layout(0, 0, w, s + keyH)
+        updateStringGaps()
     }
 
     private var insetsKnown = false

@@ -35,8 +35,9 @@ class ThemeDecorDrawable(private val bg: Int, private val decoration: ThemeDecor
     }
 
     private fun rebuild() {
-        decorPath(path, decoration.motif, ThemeDecoration.placements(bounds.width() / density.toDouble(), gaps, decoration.density),
-            density, bounds.left.toFloat(), 0f, decoration.alt)
+        val w = bounds.width() / density.toDouble()
+        decorPath(path, decoration.motif, ThemeDecoration.placements(w, gaps, decoration.density),
+            density, bounds.left.toFloat(), 0f, decoration.alt, width = w)
     }
 
     override fun draw(canvas: Canvas) {
@@ -50,11 +51,22 @@ class ThemeDecorDrawable(private val bg: Int, private val decoration: ThemeDecor
     override fun getOpacity(): Int = PixelFormat.TRANSLUCENT
 }
 
-/** Dựng path hoạ tiết vào [path] từ [placements] (dp), [unitPx] px mỗi dp, gốc (left, top). Nền IME + xem trước. */
+/**
+ * Dựng path hoạ tiết vào [path] từ [placements] (dp), [unitPx] px mỗi dp, gốc (left, top). Nền IME + xem trước.
+ * [width] (dp) = bề ngang vùng vẽ — dây đàn ("strings") kéo hết khe; null ⇒ suy từ motif (như iOS).
+ */
 fun decorPath(path: Path, motif: String, placements: List<ThemeDecoration.Placement>, unitPx: Float,
-              left: Float = 0f, top: Float = 0f, alt: String? = null) {
+              left: Float = 0f, top: Float = 0f, alt: String? = null, width: Double? = null) {
     path.rewind()
     val d = unitPx.toDouble()
+    if (motif == ThemeDecoration.STRINGS || alt == ThemeDecoration.STRINGS) {
+        // Ghi-ta: mỗi khe một dây ngang (cùng chiều quay với motif — nonzero hợp với chấm khảm đè lên).
+        for (s in ThemeDecoration.strings(placements, width)) {
+            val t = (top + (s.y - s.h / 2) * d).toFloat(); val b = (top + (s.y + s.h / 2) * d).toFloat()
+            val x0 = (left + s.x0 * d).toFloat(); val x1 = (left + s.x1 * d).toFloat()
+            path.moveTo(x1, t); path.lineTo(x1, b); path.lineTo(x0, b); path.lineTo(x0, t); path.close()
+        }
+    }
     // Mai / đào / bông tuyết / sao / nốt nhạc / đèn lồng…: dữ liệu hình chung iOS — tính MỘT lần mỗi lần dựng path.
     // [alt]: motif thứ hai xen kẽ (vị trí lẻ) — Trung Thu đèn lồng + trăng, Halloween bí ngô + dơi.
     val motifs = arrayOf(motif, alt ?: motif)
@@ -72,6 +84,7 @@ fun decorPath(path: Path, motif: String, placements: List<ThemeDecoration.Placem
                 for (c in ThemeDecoration.HEART_CUBICS) path.cubicTo(x(c[0]), y(c[1]), x(c[2]), y(c[3]), x(c[4]), y(c[5]))
                 path.close()
             }
+            m == ThemeDecoration.STRINGS -> {}   // dây vẽ một lần mỗi khe ở trên
             shape.isNotEmpty() -> for (sub in shape) {
                 path.moveTo(x(sub.sx), y(sub.sy))
                 for (g in sub.segs) {

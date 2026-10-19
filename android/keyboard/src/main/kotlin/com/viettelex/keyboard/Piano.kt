@@ -4,6 +4,7 @@ import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.cos
 import kotlin.math.exp
+import kotlin.math.log2
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -30,6 +31,11 @@ class NoteMap(
     val returnChord: List<Int>,
     val deleteNote: Int,
     val modifierNote: Int,
+    /**
+     * Vòng hợp âm phím cách ([ChordProgression]) — mỗi phần tử một hợp âm (MIDI, trầm → cao = thứ tự quạt dây). Rỗng =
+     * cách phát [spaceChord] cố định (Đàn tranh). Nốt hợp âm KHÔNG vào [notes] (hợp âm dựng nguyên khối).
+     */
+    val progression: List<List<Int>> = emptyList(),
 ) {
     fun scaleNote(base: Int, step: Int): Int = base + 12 * (step / 5) + scale[step % 5]
     fun midi(row: Int, col: Int): Int = scaleNote(ROW_BASE[row], col)
@@ -62,13 +68,65 @@ class NoteMap(
         val ROWS = listOf("1234567890", "qwertyuiop", "asdfghjkl", "zxcvbnm")
         val ROW_BASE = intArrayOf(84, 72, 60, 48)
         const val FALLBACK_BASE = 60
-        /** Piano: ngũ cung trưởng C D E G A; cách C3+G3+C4, Enter C4+G4+C5 (chủ + năm), ⌫ A2 tắt tiếng, chức năng C3. */
-        val PIANO = NoteMap(intArrayOf(0, 2, 4, 7, 9), listOf(48, 55, 60), listOf(60, 67, 72), 45, 48)
+        /**
+         * Piano: ngũ cung trưởng C D E G A; cách = vòng hợp âm đệm C → Am → F → G (C3 G3 E4 / A2 E3 C4 / F2 C3 A3 /
+         * G2 D3 B3), Enter C4+G4+C5 (chủ + năm), ⌫ A2 tắt tiếng, chức năng C3. [spaceChord] C3+G3+C4 = hợp âm cách cũ.
+         */
+        val PIANO = NoteMap(intArrayOf(0, 2, 4, 7, 9), listOf(48, 55, 60), listOf(60, 67, 72), 45, 48,
+            listOf(listOf(48, 55, 64), listOf(45, 52, 60), listOf(41, 48, 57), listOf(43, 50, 59)))
         /**
          * Đàn tranh: ngũ cung "điệu Bắc" Hò Xự Xang Xê Cống ≈ C D F G A; cách: dây buông C3+G3+C4 rải nhẹ;
          * Enter: Hò–Xang–Hò C4+F4+C5 rải; ⌫: dây A2 bị chặn tiếng; chức năng: C3.
          */
         val DANTRANH = NoteMap(intArrayOf(0, 2, 5, 7, 9), listOf(48, 55, 60), listOf(60, 65, 72), 45, 48)
+        /**
+         * Ghi-ta mộc: ngũ cung C D E G A như Piano. Cách: quạt xuống 6 dây theo vòng Am → F → C → G (thế bấm mở Am/E,
+         * F chặn, C/G, G); Enter: quạt "kết" về chủ C trưởng (C3 E3 G3 C4 E4 G4); ⌫: chặn dây quanh E2; chức năng: C3.
+         */
+        val GUITAR = NoteMap(intArrayOf(0, 2, 4, 7, 9), emptyList(), listOf(48, 52, 55, 60, 64, 67), 40, 48,
+            listOf(listOf(40, 45, 52, 57, 60, 64), listOf(41, 48, 53, 57, 60, 65),
+                listOf(43, 48, 52, 55, 60, 64), listOf(43, 47, 50, 55, 59, 67)))
+    }
+}
+
+/**
+ * Vòng hợp âm phím cách (Piano / Ghi-ta) — máy trạng thái THUẦN (iOS struct ChordProgression y hệt, test chung).
+ * Trạng thái = chỉ số hợp âm kế tiếp + thời điểm gõ gần nhất (giây). Mỗi lần cách phát hợp âm [index] rồi tiến
+ * (vòng lại); nghỉ > [IDLE_RESET] ⇒ về đầu; kết câu (. ! ?) ⇒ về đầu; Enter ⇒ chủ rồi về đầu; gõ chữ / ⌫ chỉ cập
+ * nhật thời điểm.
+ */
+data class ChordProgression(val count: Int) {
+    var index = 0
+        private set
+    var lastTime = Double.NEGATIVE_INFINITY
+        private set
+
+    /** Phím cách lúc [now]: chỉ số hợp âm cần phát (0…count−1), rồi tiến một bước. */
+    fun space(now: Double): Int {
+        if (count <= 0) { lastTime = now; return 0 }
+        if (now - lastTime > IDLE_RESET) index = 0
+        val i = index % count
+        index = (i + 1) % count
+        lastTime = now
+        return i
+    }
+
+    /** Gõ phím khác (chữ, ký hiệu, ⌫); [sentenceEnd] (. ! ?) ⇒ về hợp âm đầu. */
+    fun typed(now: Double, sentenceEnd: Boolean) {
+        if (sentenceEnd || now - lastTime > IDLE_RESET) index = 0
+        lastTime = now
+    }
+
+    /** Enter: hợp âm chủ (bàn phím phát returnChord), rồi vòng về đầu. */
+    fun returnKey(now: Double) { index = 0; lastTime = now }
+
+    fun reset() { index = 0; lastTime = Double.NEGATIVE_INFINITY }
+
+    companion object {
+        const val IDLE_RESET = 3.0
+        /** Nhãn phím kết câu: . ! ? */
+        fun isSentenceEnd(key: String?): Boolean =
+            key != null && key.length == 1 && (key[0] == '.' || key[0] == '!' || key[0] == '?')
     }
 }
 
@@ -101,7 +159,12 @@ object PianoEvent {
     const val RETURN = -2
     const val DELETE = -3
     const val PEDAL = -4
-    /** Chỉ số trong bộ âm đặc biệt (cách, Enter, ⌫, pedal). */
+    /** Hợp âm thứ i của vòng phím cách = CHORD0 − i (−5, −6, …) — iOS PianoEvent.chord(i). */
+    const val CHORD0 = -5
+    /** Số hợp âm vòng tối đa (bộ âm đặc biệt = 4 + MAX_CHORDS). */
+    const val MAX_CHORDS = 4
+    fun chord(i: Int): Int = CHORD0 - i
+    /** Chỉ số trong bộ âm đặc biệt (cách, Enter, ⌫, pedal, rồi hợp âm vòng 0…). */
     fun extraIndex(ev: Int): Int = -ev - 1
 }
 
@@ -180,6 +243,8 @@ object PianoSynth {
     fun note(m: Int, sustain: Boolean = false): FloatArray =
         samples(listOf(m), if (sustain) Kind.SUSTAIN else Kind.NORMAL, NOTE_PEAK)
     fun space(): FloatArray = samples(PianoMap.SPACE_CHORD, Kind.NORMAL, CHORD_PEAK)
+    /** Hợp âm thứ i của vòng phím cách (C → Am → F → G). */
+    fun chord(i: Int): FloatArray = samples(NoteMap.PIANO.progression[i], Kind.NORMAL, CHORD_PEAK)
     fun returnChord(): FloatArray = samples(PianoMap.RETURN_CHORD, Kind.NORMAL, CHORD_PEAK)
     fun delete(): FloatArray = samples(listOf(PianoMap.DELETE_NOTE), Kind.MUTED, NOTE_PEAK)
 
@@ -213,11 +278,11 @@ object PianoSynth {
         return out
     }
 
-    /** Số mẫu PCM của bộ nốt dựng sẵn (25 nốt + cách + Enter + ⌫ + pedal). Android lưu PCM16 (×2 byte). */
+    /** Số mẫu PCM của bộ nốt dựng sẵn (25 nốt + 4 hợp âm vòng cách + Enter + ⌫ + pedal). Android lưu PCM16 (×2 byte). */
     val normalBankSamples: Int get() {
         val note = (NOTE_DURATION * SAMPLE_RATE).roundToInt()
-        return PianoMap.NOTES.size * note + 2 * note + (MUTED_DURATION * SAMPLE_RATE).roundToInt() +
-            (PEDAL_DURATION * SAMPLE_RATE).roundToInt()
+        return PianoMap.NOTES.size * note + (NoteMap.PIANO.progression.size + 1) * note +
+            (MUTED_DURATION * SAMPLE_RATE).roundToInt() + (PEDAL_DURATION * SAMPLE_RATE).roundToInt()
     }
     val sustainBankSamples: Int get() = PianoMap.NOTES.size * (SUSTAIN_DURATION * SUSTAIN_SAMPLE_RATE).roundToInt()
 }
@@ -336,22 +401,176 @@ object DanTranhSynth {
 }
 
 /**
+ * Ghi-ta mộc dây sắt (theme "Ghi-ta", 10/2026): dây gảy tổng hợp CÙNG HỌ [DanTranhSynth] — tất định, Y HỆT iOS
+ * GuitarSynth (test chốt checksum chung; lý do từng số ghi ở file Swift). Sáng hơn (gảy p = 0.13, 10 hoạ âm, f/9000,
+ * mở 0.8 ms), thân đàn nâng nhẹ quanh 200 Hz, tắt hai tầng 0.12 / 0.55 s (~1.2 s), KHÔNG rung. Cách: quạt 6 dây
+ * 25 ms theo vòng Am → F → C → G; Enter: quạt chủ C 35 ms; ⌫: chặn dây + gõ thân 90 Hz; pedal: vuốt G3 B3 E4.
+ * Không to hơn Piano.
+ */
+object GuitarSynth {
+    const val NOTE_DURATION = 1.2
+    const val NOTE_PEAK = 0.32
+    const val CHORD_PEAK = 0.24
+    const val DELETE_PEAK = 0.26
+    const val PEDAL_PEAK = 0.16
+    const val PLUCK_POSITION = 0.13
+    const val PARTIALS = 10
+    const val PLUCK_BEND = 0.0023
+    const val PLUCK_BEND_TAU = 0.02
+    const val ATTACK = 0.0008
+    const val BODY_FREQ = 200.0
+    const val BODY_BOOST = 0.5
+    const val BODY_WIDTH = 0.9
+    const val STRUM = 0.025
+    const val TONIC_STRUM = 0.035
+    val CHUCK_NOTES = listOf(40, 45, 50, 55)
+    const val CHUCK_STRUM = 0.006
+    const val THUMP_FREQ = 90.0
+    val BRUSH_NOTES = listOf(55, 59, 64)
+    const val BRUSH_STRUM = 0.03
+
+    enum class Kind { NORMAL, SUSTAIN, MUTED, BRUSH }
+
+    /** Mẫu bắt đầu của dây thứ [j] khi quạt ([strum] giây giữa hai dây). */
+    fun onset(j: Int, strum: Double, sr: Double): Int = (j * strum * sr).roundToInt()
+
+    /** Cộng hưởng thân đàn: hệ số biên độ theo tần số hoạ âm (1 … 1 + BODY_BOOST, đỉnh ở BODY_FREQ). */
+    fun body(f: Double): Double {
+        val o = log2(f / BODY_FREQ) / BODY_WIDTH
+        return 1 + BODY_BOOST * exp(-0.5 * o * o)
+    }
+
+    fun samples(midis: List<Int>, kind: Kind, peak: Double, strum: Double = 0.0): FloatArray {
+        val sr = if (kind == Kind.SUSTAIN) PianoSynth.SUSTAIN_SAMPLE_RATE.toDouble() else PianoSynth.SAMPLE_RATE.toDouble()
+        val dur = when (kind) {
+            Kind.NORMAL -> NOTE_DURATION
+            Kind.SUSTAIN -> PianoSynth.SUSTAIN_DURATION
+            Kind.MUTED -> PianoSynth.MUTED_DURATION
+            Kind.BRUSH -> PianoSynth.PEDAL_DURATION
+        }
+        val n = (dur * sr).roundToInt()
+        val out = DoubleArray(n)
+        val amps = DoubleArray(PARTIALS); val e1 = DoubleArray(PARTIALS); val e2 = DoubleArray(PARTIALS)
+        val d1 = DoubleArray(PARTIALS); val d2 = DoubleArray(PARTIALS)
+        midis.forEachIndexed { j, m ->
+            val f = PianoSynth.freq(m)
+            val s = min(1.4, max(0.6, (262 / f).pow(0.25)))
+            val (t1, t2) = when (kind) {
+                Kind.NORMAL -> 0.12 * s to 0.55 * s
+                Kind.SUSTAIN -> 0.25 * s to 1.1 * s
+                Kind.MUTED -> 0.012 to 0.03
+                Kind.BRUSH -> 0.04 to 0.15
+            }
+            var kmax = 0
+            for (k in 0 until PARTIALS) {
+                val kd = (k + 1).toDouble()
+                if (kd * f >= 0.45 * sr) break
+                amps[k] = abs(sin(PI * kd * PLUCK_POSITION)) / kd * exp(-(kd - 1) * f / 9000) * body(kd * f)
+                val damp = 1 + 0.9 * (kd - 1)
+                d1[k] = exp(-damp / (sr * t1)); d2[k] = exp(-damp / (sr * t2))
+                e1[k] = 0.55; e2[k] = 0.45
+                kmax = k + 1
+            }
+            val start = onset(j, strum, sr)
+            if (start >= n || kmax == 0) return@forEachIndexed
+            var phase = 0.0
+            for (i in start until n) {
+                val tt = (i - start) / sr
+                val ratio = 1 + PLUCK_BEND * exp(-tt / PLUCK_BEND_TAU)
+                phase += 2 * PI * f * ratio / sr
+                val c2 = 2 * cos(phase)
+                var prev = 0.0; var cur = sin(phase); var acc = 0.0
+                for (k in 0 until kmax) {
+                    if (k > 0) { val nx = c2 * cur - prev; prev = cur; cur = nx }
+                    acc += amps[k] * (e1[k] + e2[k]) * cur
+                    e1[k] *= d1[k]; e2[k] *= d2[k]
+                }
+                if (tt < ATTACK) acc *= 0.5 - 0.5 * cos(PI * tt / ATTACK)
+                out[i] += acc
+            }
+        }
+        if (kind == Kind.MUTED) {
+            // Tiếng gõ thân đàn khi bàn tay chặn dây.
+            val w = 2 * PI * THUMP_FREQ / sr
+            for (i in 0 until n) out[i] += 0.35 * sin(w * i) * exp(-i / (sr * 0.015))
+        }
+        val release = when (kind) { Kind.NORMAL -> 0.08; Kind.SUSTAIN -> 0.2; Kind.MUTED -> 0.03; Kind.BRUSH -> 0.06 }
+        return PianoSynth.finish(out, sr, ATTACK, release, peak)
+    }
+
+    fun note(m: Int, sustain: Boolean = false): FloatArray =
+        samples(listOf(m), if (sustain) Kind.SUSTAIN else Kind.NORMAL, NOTE_PEAK)
+    /** Hợp âm thứ i của vòng phím cách: quạt xuống 6 dây, 25 ms giữa hai dây. */
+    fun chord(i: Int): FloatArray = samples(NoteMap.GUITAR.progression[i], Kind.NORMAL, CHORD_PEAK, STRUM)
+    fun space(): FloatArray = chord(0)
+    fun returnChord(): FloatArray = samples(NoteMap.GUITAR.returnChord, Kind.NORMAL, CHORD_PEAK, TONIC_STRUM)
+    fun delete(): FloatArray = samples(CHUCK_NOTES, Kind.MUTED, DELETE_PEAK, CHUCK_STRUM)
+    fun pedal(): FloatArray = samples(BRUSH_NOTES, Kind.BRUSH, PEDAL_PEAK, BRUSH_STRUM)
+
+    /** Nghe thử trong app: quạt Am rồi A3 C4 E4 G4 A4 (cách 0.16 s, ngân chồng). */
+    fun previewMelody(): FloatArray {
+        val step = (0.16 * PianoSynth.SAMPLE_RATE).roundToInt()
+        val lead = chord(0)
+        val notes = listOf(57, 60, 64, 67, 69).map { note(it) }
+        val off = 3 * step
+        val out = FloatArray(max(lead.size, off + step * (notes.size - 1) + notes[0].size))
+        for (j in lead.indices) out[j] += lead[j] * 0.8f
+        notes.forEachIndexed { i, x -> for (j in x.indices) out[off + i * step + j] += x[j] * 0.8f }
+        return out
+    }
+
+    /** Số mẫu PCM bộ nốt dựng sẵn: 25 nốt 1.2 s + 4 hợp âm vòng + chủ + ⌫ + pedal. Android lưu PCM16 (×2 byte). */
+    val normalBankSamples: Int get() {
+        val note = (NOTE_DURATION * PianoSynth.SAMPLE_RATE).roundToInt()
+        return NoteMap.GUITAR.notes.size * note + (NoteMap.GUITAR.progression.size + 1) * note +
+            (PianoSynth.MUTED_DURATION * PianoSynth.SAMPLE_RATE).roundToInt() +
+            (PianoSynth.PEDAL_DURATION * PianoSynth.SAMPLE_RATE).roundToInt()
+    }
+    val sustainBankSamples: Int get() =
+        NoteMap.GUITAR.notes.size * (PianoSynth.SUSTAIN_DURATION * PianoSynth.SUSTAIN_SAMPLE_RATE).roundToInt()
+}
+
+/**
  * Nhạc cụ "mỗi phím một nốt" — chọn bảng nốt + bộ tổng hợp; Feedback dùng CHUNG pool giọng, pedal, id theo MIDI
  * cho mọi nhạc cụ (không nhân bản đường Piano). [cacheTag] = tiền tố tên WAV cache. iOS KeyInstrument y hệt.
+ * Có vòng hợp âm ([hasProgression]: Piano, Ghi-ta) ⇒ phím cách phát [PianoEvent.chord] theo [ChordProgression];
+ * Đàn tranh giữ hợp âm dây buông cố định.
  */
 enum class KeyInstrument(val style: KeySoundStyle, val map: NoteMap, val cacheTag: String) {
     PIANO(KeySoundStyle.PIANO, NoteMap.PIANO, "piano-v1"),
-    DANTRANH(KeySoundStyle.DANTRANH, NoteMap.DANTRANH, "dantranh-v1");
+    DANTRANH(KeySoundStyle.DANTRANH, NoteMap.DANTRANH, "dantranh-v1"),
+    GUITAR(KeySoundStyle.GUITAR, NoteMap.GUITAR, "guitar-v1");
 
-    fun note(m: Int, sustain: Boolean = false): FloatArray =
-        if (this == PIANO) PianoSynth.note(m, sustain) else DanTranhSynth.note(m, sustain)
-    fun space(): FloatArray = if (this == PIANO) PianoSynth.space() else DanTranhSynth.space()
-    fun returnChord(): FloatArray = if (this == PIANO) PianoSynth.returnChord() else DanTranhSynth.returnChord()
-    fun delete(): FloatArray = if (this == PIANO) PianoSynth.delete() else DanTranhSynth.delete()
-    fun pedal(): FloatArray = if (this == PIANO) PianoSynth.pedal() else DanTranhSynth.pedal()
-    fun previewMelody(): FloatArray = if (this == PIANO) PianoSynth.previewMelody() else DanTranhSynth.previewMelody()
-    val normalBankSamples: Int get() = if (this == PIANO) PianoSynth.normalBankSamples else DanTranhSynth.normalBankSamples
-    val sustainBankSamples: Int get() = if (this == PIANO) PianoSynth.sustainBankSamples else DanTranhSynth.sustainBankSamples
+    val hasProgression: Boolean get() = map.progression.isNotEmpty()
+
+    fun note(m: Int, sustain: Boolean = false): FloatArray = when (this) {
+        PIANO -> PianoSynth.note(m, sustain); DANTRANH -> DanTranhSynth.note(m, sustain); GUITAR -> GuitarSynth.note(m, sustain)
+    }
+    fun space(): FloatArray = when (this) {
+        PIANO -> PianoSynth.space(); DANTRANH -> DanTranhSynth.space(); GUITAR -> GuitarSynth.space()
+    }
+    /** Hợp âm thứ i của vòng phím cách (nhạc cụ không có vòng ⇒ hợp âm cách cố định). */
+    fun chord(i: Int): FloatArray = when (this) {
+        PIANO -> PianoSynth.chord(i); DANTRANH -> DanTranhSynth.space(); GUITAR -> GuitarSynth.chord(i)
+    }
+    fun returnChord(): FloatArray = when (this) {
+        PIANO -> PianoSynth.returnChord(); DANTRANH -> DanTranhSynth.returnChord(); GUITAR -> GuitarSynth.returnChord()
+    }
+    fun delete(): FloatArray = when (this) {
+        PIANO -> PianoSynth.delete(); DANTRANH -> DanTranhSynth.delete(); GUITAR -> GuitarSynth.delete()
+    }
+    fun pedal(): FloatArray = when (this) {
+        PIANO -> PianoSynth.pedal(); DANTRANH -> DanTranhSynth.pedal(); GUITAR -> GuitarSynth.pedal()
+    }
+    fun previewMelody(): FloatArray = when (this) {
+        PIANO -> PianoSynth.previewMelody(); DANTRANH -> DanTranhSynth.previewMelody(); GUITAR -> GuitarSynth.previewMelody()
+    }
+    val normalBankSamples: Int get() = when (this) {
+        PIANO -> PianoSynth.normalBankSamples; DANTRANH -> DanTranhSynth.normalBankSamples; GUITAR -> GuitarSynth.normalBankSamples
+    }
+    val sustainBankSamples: Int get() = when (this) {
+        PIANO -> PianoSynth.sustainBankSamples; DANTRANH -> DanTranhSynth.sustainBankSamples; GUITAR -> GuitarSynth.sustainBankSamples
+    }
 
     companion object {
         fun of(style: KeySoundStyle): KeyInstrument? = entries.firstOrNull { it.style == style }

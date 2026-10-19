@@ -9,7 +9,7 @@ import Foundation
 //    "light":{"bg":"#FBE3E1","key":"#FFF8F7","special":"#F1C4BF","ink":"#4A2226","accent":"#C2505A",
 //             "accentInk":"#FFFFFF","border":"#4CAF6E","fn":"#A9BFA3","fnInk":"#C2255C",
 //             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100},
-//             "borderFx":"rainbow"},
+//             "borderFx":"rainbow", "spaceDeco":"soundhole"},
 //             (deco "alt": motif thứ hai xen kẽ, vd {"motif":"pumpkin","alt":"bat",…})
 //    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold",
 //    "sound":"phao", "effect":"blossom"}
@@ -423,11 +423,17 @@ struct ThemeSlots: Equatable {
     var deco: ThemeDeco?
     /// Hiệu ứng viền phím: "rainbow" (Gaming RGB — viền cầu vồng, chỉ xoay màu khi đang gõ) | "none" (bản vá: bỏ).
     var borderFx: String?
+    /// Hình vẽ trên phím cách: "soundhole" (Ghi-ta — lỗ thoát âm tròn + vành hoa văn, vẽ MỘT lần vào lớp của phím cách)
+    /// | "none" (bản vá: bỏ). Không có hook skin ảnh cho builtin (skin = ảnh tải về) ⇒ slot riêng tối giản.
+    var spaceDeco: String?
 
     var isEmpty: Bool { self == ThemeSlots() }
     static let rainbow = "rainbow"
     /// Giá trị hợp lệ của "borderFx" (Android ThemeSlots.BORDER_FX y hệt).
     static let borderFxValues: Set<String> = [rainbow, "none"]
+    static let soundhole = "soundhole"
+    /// Giá trị hợp lệ của "spaceDeco" (Android ThemeSlots.SPACE_DECO y hệt).
+    static let spaceDecoValues: Set<String> = [soundhole, "none"]
     static let colorKeys = ["accent", "accentInk", "balloon", "bg", "border", "fn", "fnInk", "ink", "key", "special", "trail"]
     static let requiredKeys = ["key", "special", "ink", "accent"]
 
@@ -472,6 +478,7 @@ struct ThemeSlots: Equatable {
         for k in Self.colorKeys where patch[color: k] != nil { o[color: k] = patch[color: k] }
         if let d = patch.deco { o.deco = d }
         if let fx = patch.borderFx { o.borderFx = fx }
+        if let sd = patch.spaceDeco { o.spaceDeco = sd }
         return o
     }
 
@@ -495,6 +502,7 @@ struct ThemeSlots: Equatable {
         }
         if deco != base.deco { p.deco = deco ?? ThemeDeco(motif: nil) }
         if borderFx != base.borderFx { p.borderFx = borderFx ?? "none" }
+        if spaceDeco != base.spaceDeco { p.spaceDeco = spaceDeco ?? "none" }
         return (p, lostBg)
     }
 }
@@ -653,7 +661,7 @@ enum ThemeSpecParser {
     static let rootKeys: Set<String> = Set(["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
                                             "sound", "effect"])
         .union(assetKeys)
-    static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco", "borderFx"])
+    static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco", "borderFx", "spaceDeco"])
 
     /// Đọc theme ĐẦY ĐỦ từ văn bản (dán / trình sửa). Cảnh báo tương phản kèm theo.
     static func parse(_ text: String) -> Outcome {
@@ -749,6 +757,12 @@ enum ThemeSpecParser {
                 guard case .string(let fx) = val else { c.err(.wrongType, path); continue }
                 guard ThemeSlots.borderFxValues.contains(fx) else { c.err(.badValue, path); continue }
                 s.borderFx = fx
+                continue
+            }
+            if k == "spaceDeco" {
+                guard case .string(let sd) = val else { c.err(.wrongType, path); continue }
+                guard ThemeSlots.spaceDecoValues.contains(sd) else { c.err(.badValue, path); continue }
+                s.spaceDeco = sd
                 continue
             }
             guard slotKeys.contains(k) else { c.err(.unknownKey, path); continue }
@@ -1035,6 +1049,7 @@ extension ThemeSpec {
             m.append(("deco", .object(dm)))
         }
         if let fx = s.borderFx { m.append(("borderFx", .string(fx))) }
+        if let sd = s.spaceDeco { m.append(("spaceDeco", .string(sd))) }
         return .object(m)
     }
 }
@@ -1075,6 +1090,7 @@ extension ThemeSpec {
             p.decoration = KeyboardDecoration(motif: m, color: c(dc.color), density: dc.density, alt: dc.alt)
         }
         p.rainbowBorder = s.borderFx == ThemeSlots.rainbow
+        p.spaceSoundhole = s.spaceDeco == ThemeSlots.soundhole
         return p
     }
 
@@ -1092,6 +1108,7 @@ extension ThemeSpec {
         if a(p.trail) != a(p.accent.alpha(0.6)) { s.trail = a(p.trail) }
         if let d = p.decoration { s.deco = ThemeDeco(motif: d.motif, color: a(d.color), density: d.density, alt: d.alt) }
         if p.rainbowBorder { s.borderFx = ThemeSlots.rainbow }
+        if p.spaceSoundhole { s.spaceDeco = ThemeSlots.soundhole }
         return s
     }
 
