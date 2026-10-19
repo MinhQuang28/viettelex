@@ -382,6 +382,11 @@ data class ThemeSlots(
     val balloon: Int? = null, val trail: Int? = null, val deco: ThemeDeco? = null,
     /** Hiệu ứng viền phím: "rainbow" (Gaming RGB — chỉ xoay màu khi đang gõ) | "none" (bản vá: bỏ). iOS y hệt. */
     val borderFx: String? = null,
+    /**
+     * Hình vẽ trên phím cách: "soundhole" (Ghi-ta — lỗ thoát âm + vành hoa văn, vẽ một lần cùng nền phím) | "none"
+     * (bản vá: bỏ). iOS y hệt. Skin ảnh ("keys") là tệp tải về ⇒ theme có sẵn dùng slot tối giản này.
+     */
+    val spaceDeco: String? = null,
 ) {
     val isEmpty: Boolean get() = this == ThemeSlots()
 
@@ -412,6 +417,7 @@ data class ThemeSlots(
         }
         if (deco != base.deco) p = p.copy(deco = deco ?: ThemeDeco(null))
         if (borderFx != base.borderFx) p = p.copy(borderFx = borderFx ?: "none")
+        if (spaceDeco != base.spaceDeco) p = p.copy(spaceDeco = spaceDeco ?: "none")
         return p to lostBg
     }
 
@@ -421,6 +427,9 @@ data class ThemeSlots(
         const val RAINBOW = "rainbow"
         /** Giá trị hợp lệ của "borderFx" (iOS ThemeSlots.borderFxValues y hệt). */
         val BORDER_FX = setOf(RAINBOW, "none")
+        const val SOUNDHOLE = "soundhole"
+        /** Giá trị hợp lệ của "spaceDeco" (iOS ThemeSlots.spaceDecoValues y hệt). */
+        val SPACE_DECO = setOf(SOUNDHOLE, "none")
     }
 }
 
@@ -526,6 +535,8 @@ data class ThemeSpec(
     /** Âm phím / hiệu ứng đi kèm (id [ThemeExtraIds]) — chỉ áp lúc chọn theme ([ThemeExtras]). */
     val sound: String? = null,
     val effect: String? = null,
+    /** Nét vuốt của theme (id [ThemeExtraIds.SWIPES]) — chỉ dùng khi cài đặt nét vuốt = "Theo giao diện". */
+    val swipe: String? = null,
     /** Trò chơi khi gõ ("mole" — [MoleGame]) — chạy khi theme đang dùng ([ThemeExtraIds.GAMES]). iOS `game`. */
     val game: String? = null,
 ) {
@@ -533,7 +544,7 @@ data class ThemeSpec(
     val name: String get() = if (L10n.isEnglish) (nameEn ?: nameVi) else nameVi
     /** Kiểu chữ / bo góc / tệp tải về mặc định của theme. */
     val typography: KeyStyle get() = KeyStyle(corner = corner, fontScale = fontScale, font = font ?: KeyLabelFont.DEFAULT,
-        weight = weight ?: KeyLabelWeight.REGULAR, assets = assets, sound = sound, effect = effect, game = game)
+        weight = weight ?: KeyLabelWeight.REGULAR, assets = assets, sound = sound, effect = effect, swipe = swipe, game = game)
 
     fun palette(dark: Boolean): ThemePalette = palette(slots(dark), dark)
 
@@ -555,6 +566,7 @@ data class ThemeSpec(
         appendImages(assets, m)
         sound?.let { m.add("sound" to SJ.Str(it)) }
         effect?.let { m.add("effect" to SJ.Str(it)) }
+        swipe?.let { m.add("swipe" to SJ.Str(it)) }
         game?.let { m.add("game" to SJ.Str(it)) }
         return SJ.Obj(m)
     }
@@ -579,6 +591,7 @@ data class ThemeSpec(
                 m.add("deco" to SJ.Obj(dm))
             }
             s.borderFx?.let { m.add("borderFx" to SJ.Str(it)) }
+            s.spaceDeco?.let { m.add("spaceDeco" to SJ.Str(it)) }
             return SJ.Obj(m)
         }
 
@@ -624,7 +637,7 @@ data class ThemeSpec(
                 actionInk = s.accentInk ?: autoAccentInk(accent), chip = special, keyBorder = s.border,
                 isDark = c.luminance(ink) > 0.5, functionFill = s.fn, functionInk = s.fnInk,
                 decoration = s.deco?.let { d -> d.motif?.let { ThemeDecoration(it, d.color, d.density, d.alt) } },
-                rainbowBorder = s.borderFx == ThemeSlots.RAINBOW)
+                rainbowBorder = s.borderFx == ThemeSlots.RAINBOW, spaceSoundhole = s.spaceDeco == ThemeSlots.SOUNDHOLE)
         }
 
         /** Palette (đã giải) → màu một chế độ; bỏ trường bằng mặc định tự tính. */
@@ -635,7 +648,8 @@ data class ThemeSpec(
                 fn = p.functionFill, fnInk = p.functionInk, balloon = p.balloon.takeIf { it != p.keyFill },
                 trail = p.trail.takeIf { it != c.withAlpha(p.action, 0.6f) },
                 deco = p.decoration?.let { ThemeDeco(it.motif, it.color, it.density, it.alt) },
-                borderFx = if (p.rainbowBorder) ThemeSlots.RAINBOW else null)
+                borderFx = if (p.rainbowBorder) ThemeSlots.RAINBOW else null,
+                spaceDeco = if (p.spaceSoundhole) ThemeSlots.SOUNDHOLE else null)
         }
 
         /** Theme đầy đủ từ palette sáng/tối đã giải + kiểu chữ ("Chép JSON"). */
@@ -643,7 +657,7 @@ data class ThemeSpec(
             val l = slots(light); val d = slots(dark)
             return ThemeSpec(id, nameVi, nameEn, l, if (d == l) null else d, style.corner, style.fontScale,
                 style.font.takeIf { it != KeyLabelFont.DEFAULT && style.assets.font == null },
-                style.weight.takeIf { it != KeyLabelWeight.REGULAR }, style.assets, style.sound, style.effect, style.game)
+                style.weight.takeIf { it != KeyLabelWeight.REGULAR }, style.assets, style.sound, style.effect, style.swipe, style.game)
         }
     }
 }
@@ -663,8 +677,8 @@ object ThemeSpecParser {
 
     private val ASSET_KEYS = setOf("background", "foreground", "keys")
     private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
-        "sound", "effect", "game") + ASSET_KEYS
-    private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco" + "borderFx").toSet()
+        "sound", "effect", "swipe", "game") + ASSET_KEYS
+    private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco" + "borderFx" + "spaceDeco").toSet()
 
     fun parse(text: String): Outcome = when (val r = StrictJson.parse(text)) {
         is StrictJson.Result.Err -> Outcome(null, listOf(r.issue))
@@ -714,7 +728,7 @@ object ThemeSpecParser {
         if (c.failed) return Outcome(null, c.issues)
         val spec = ThemeSpec(id, vi, en, light, if (dark == light) null else dark, typo.corner, typo.fontScale,
             if (j["font"] != null && typo.assets.font == null) typo.font else null,
-            if (j["weight"] != null) typo.weight else null, typo.assets, typo.sound, typo.effect, typo.game)
+            if (j["weight"] != null) typo.weight else null, typo.assets, typo.sound, typo.effect, typo.swipe, typo.game)
         if (contrast) c.issues.addAll(contrastIssues(spec))
         return Outcome(if (c.failed) null else spec, c.issues)
     }
@@ -739,6 +753,14 @@ object ThemeSpecParser {
                     value !is SJ.Str -> c.err(ThemeIssue.Code.wrongType, path)
                     value.s !in ThemeSlots.BORDER_FX -> c.err(ThemeIssue.Code.badValue, path)
                     else -> s = s.copy(borderFx = value.s)
+                }
+                continue
+            }
+            if (k == "spaceDeco") {
+                when {
+                    value !is SJ.Str -> c.err(ThemeIssue.Code.wrongType, path)
+                    value.s !in ThemeSlots.SPACE_DECO -> c.err(ThemeIssue.Code.badValue, path)
+                    else -> s = s.copy(spaceDeco = value.s)
                 }
                 continue
             }
@@ -830,7 +852,7 @@ object ThemeSpecParser {
             else -> { c.err(ThemeIssue.Code.wrongType, k); null }
         }
         s = s.copy(sound = pick("sound", ThemeExtraIds.SOUNDS), effect = pick("effect", ThemeExtraIds.EFFECTS),
-            game = pick("game", ThemeExtraIds.GAMES))
+            swipe = pick("swipe", ThemeExtraIds.SWIPES), game = pick("game", ThemeExtraIds.GAMES))
         return s
     }
 
@@ -911,7 +933,7 @@ object ThemeSpecParser {
         if (j !is SJ.Obj) return null
         val c = Ctx()
         val allowed = setOf("label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark",
-            "sound", "effect", "game") + ASSET_KEYS
+            "sound", "effect", "swipe", "game") + ASSET_KEYS
         for ((k, _) in j.m) if (k !in allowed) c.err(ThemeIssue.Code.unknownKey, k)
         fun rgb(k: String): Int? {
             val v = j[k] ?: return null
@@ -1076,6 +1098,7 @@ object ThemeJsonActions {
                 b.spec?.weight?.let { if (st.weight == it) st = st.copy(weight = KeyLabelWeight.REGULAR) }
                 if (st.sound == b.spec?.sound) st = st.copy(sound = null)
                 if (st.effect == b.spec?.effect) st = st.copy(effect = null)
+                if (st.swipe == b.spec?.swipe) st = st.copy(swipe = null)
                 if (st.game == b.spec?.game) st = st.copy(game = null)
                 if (lostBg) warnings.add(ThemeIssue(ThemeIssue.Code.bgKept, "bg"))
                 Saved(true, warnings, s.withKeyStyle(st, b), store)

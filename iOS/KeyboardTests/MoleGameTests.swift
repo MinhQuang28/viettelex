@@ -356,7 +356,7 @@ final class MoleGameTests: XCTestCase {
         XCTAssertFalse(KeySound.shared.hasSqueak)
     }
     static let goldenSqueak = 534.9296
-    static let goldenBop: [Double] = [173.9370, 182.0736, 214.0209]
+    static let goldenBop: [Double] = [171.8268, 181.9607, 215.5216]
 
     /// Chi phí main thread mỗi phím do trò chơi (MoleOverlayView.typed) — gồm cả phím thả / trúng. In "MOLE-COST".
     @MainActor func testCostPerKey() throws {

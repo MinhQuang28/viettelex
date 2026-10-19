@@ -35,7 +35,7 @@ final class KeyEffectTests: XCTestCase {
 
     func testIdsMatchAndroidAndDefaultIsNone() {
         // Cùng id với android/keyboard/.../KeyEffect.kt (sao lưu chéo nền tảng).
-        XCTAssertEqual(KeyEffect.allCases.map(\.rawValue), ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "meteor", "lantern", "smoke"])
+        XCTAssertEqual(KeyEffect.allCases.map(\.rawValue), ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "meteor", "lantern", "smoke", "string"])
         XCTAssertEqual(KeyEffect.key, "keyEffect")
         XCTAssertEqual(KeyEffect.defaultValue, .none)
         XCTAssertEqual(KeyEffect.parse(nil), .none)
@@ -57,7 +57,7 @@ final class KeyEffectTests: XCTestCase {
 
     func testBackupSpecWhitelistsIds() {
         let spec = BackupSettings.all.first { $0.key == KeyEffect.key }
-        XCTAssertEqual(spec?.kind, .string("none", ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "meteor", "lantern", "smoke"]))
+        XCTAssertEqual(spec?.kind, .string("none", ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "meteor", "lantern", "smoke", "string"]))
     }
 
     func testTitlesBilingual() {
@@ -260,6 +260,7 @@ final class KeyEffectTests: XCTestCase {
                 case .flash: XCTAssertEqual(topLayers, 1, "một lớp nháy duy nhất")
                 case .lightning: XCTAssertEqual(topLayers, 3, "≤ 3 cú đánh dùng lại")
                 case .matrix: XCTAssertEqual(topLayers, 1, "một gốc Matrix")
+                case .string: XCTAssertEqual(topLayers, StringPluck.pool, "pool đoạn dây dùng lại")
                 default:
                     XCTAssertEqual(o.debugBurstCount, e.burstSlots, e.rawValue)
                     XCTAssertEqual(topLayers, e.burstSlots, "chùm dùng lại, không mọc thêm layer")
@@ -478,7 +479,7 @@ extension KeyEffectTests {
     }
 
     func testNewEffectsModel() {
-        XCTAssertEqual(KeyEffect.allCases.filter { $0.band == .belowKeys }, [.matrix, .ink, .wave])
+        XCTAssertEqual(KeyEffect.allCases.filter { $0.band == .belowKeys }, [.matrix, .ink, .wave, .string])
         for e in KeyEffect.allCases where e != .none { XCTAssertTrue(e.isPlus, e.rawValue) }
         XCTAssertEqual(KeyEffect.blossom.fixedColors, [0xFF8FB1, 0xFFC93C], "đào hồng + mai vàng, không theo màu nhấn")
         XCTAssertEqual(KeyEffect.snow.fixedColors, [0xFFFFFF])
@@ -617,7 +618,7 @@ extension KeyEffectTests {
     // MARK: Matrix / Mực loang / Sóng nước — dải dưới phím
 
     @MainActor func testBelowKeysBandZOrder() throws {
-        for id in ["matrix", "ink", "wave"] {
+        for id in ["matrix", "ink", "wave", "string"] {
             try withKeyboardFx(effect: id) { kb in
                 let o = try XCTUnwrap(kb.keyEffects, id)
                 let subs = kb.subviews
@@ -878,5 +879,82 @@ extension KeyEffectTests {
         print(line)
         XCTContext.runActivity(named: line) { _ in }
         XCTAssertLessThan(idle - base, 0.5, "nghỉ = 0 việc")
+    }
+}
+
+// MARK: - Rung dây (theme Ghi-ta, 10/2026) — số tham chiếu GIỐNG HỆT Android KeyEffectFxTests.stringPluckParity
+extension KeyEffectTests {
+    /// Sóng dừng tắt dần: khung 0 = biên độ đỉnh, khung cuối = 0 (dây đứng yên), hai đầu dây cố định; khe gần nhất.
+    func testStringPluckModel() {
+        XCTAssertEqual(KeyEffect.string.band, .belowKeys)
+        XCTAssertFalse(KeyEffect.string.isParticle)
+        XCTAssertTrue(KeyEffect.string.fixedColors.isEmpty, "màu nhấn theme (vàng hổ phách ở Ghi-ta)")
+        XCTAssertEqual(KeyEffect.string.burstSlots, StringPluck.pool)
+        XCTAssertEqual(L10n.en[KeyEffect.string.title], "String vibration")
+        XCTAssertEqual(StringPluck.amplitude(frame: 0), StringPluck.amplitude)
+        XCTAssertEqual(StringPluck.amplitude(frame: StringPluck.frames), 0)
+        let amps = (0...StringPluck.frames).map { StringPluck.amplitude(frame: $0) }
+        let golden = [3.0, 0.4329, -1.9465, -0.8606, 1.0957, 0.9104, -0.4938, -0.7711, 0.1184, 0.5666, 0.0818, -0.3676, -0.1626,
+                      0.2069, 0.1720, -0.0933, -0.1456, 0.0224, 0.0]
+        for (a, g) in zip(amps, golden) { XCTAssertEqual(a, g, accuracy: 1e-4) }
+        for f in 1..<StringPluck.frames {   // tắt dần: không vượt bao e^(−t/τ)
+            let t = Double(f) / Double(StringPluck.frames) * StringPluck.duration
+            XCTAssertLessThanOrEqual(abs(amps[f]), StringPluck.amplitude * exp(-t / StringPluck.decay) + 1e-9)
+        }
+        let s = StringPluck.shape(frame: 0)
+        XCTAssertEqual(s.count, StringPluck.points + 1)
+        XCTAssertEqual(s.first!.x, -50); XCTAssertEqual(s.last!.x, 50)
+        XCTAssertEqual(s.first!.y, 0, accuracy: 1e-12); XCTAssertEqual(s.last!.y, 0, accuracy: 1e-12)
+        XCTAssertEqual(s[StringPluck.points / 2].y, StringPluck.amplitude, accuracy: 1e-12, "bụng sóng giữa dây")
+        XCTAssertEqual(StringPluck.length(keyWidth: 33), 72.6, accuracy: 1e-9)
+        XCTAssertEqual(StringPluck.length(keyWidth: 10), StringPluck.minLength)
+        XCTAssertEqual(StringPluck.length(keyWidth: 200), StringPluck.maxLength)
+        typealias G = KeyboardDecoration.Gap
+        let gaps = [G(center: 93.5, height: 11), G(center: 146.5, height: 11), G(center: 199.5, height: 11)]
+        XCTAssertEqual(StringPluck.target(keyTop: 46, keyBottom: 88, gaps: gaps).index, 0, "hàng trên ⇒ khe dưới nó")
+        XCTAssertEqual(StringPluck.target(keyTop: 99, keyBottom: 141, gaps: gaps).index, 1, "giữa hai khe ⇒ khe dưới (dây trầm hơn)")
+        XCTAssertEqual(StringPluck.target(keyTop: 205, keyBottom: 247, gaps: gaps).index, 2, "hàng cuối ⇒ khe trên nó")
+        XCTAssertEqual(StringPluck.target(keyTop: 205, keyBottom: 247, gaps: gaps).y, 199.5)
+        XCTAssertEqual(StringPluck.sweepDelay(sinceLastPluck: 0), 0.35, accuracy: 1e-9)
+        XCTAssertLessThanOrEqual(StringPluck.sweepDelay(sinceLastPluck: 0.35), 0)
+        let none = StringPluck.target(keyTop: 10, keyBottom: 50, gaps: [])
+        XCTAssertEqual(none.y, 54); XCTAssertEqual(none.index, 0)
+    }
+
+    /// Bàn phím thật: overlay nhận khe hàng lúc layout; mỗi lần gảy = MỘT đoạn dây (pool 4) đặt đúng tâm khe, animation
+    /// TỰ GỠ khi xong (mô hình vô hình) ⇒ nghỉ gõ = 0 animation; ẩn ⇒ gỡ ngay; chi phí main < 0,3 ms/phím.
+    @MainActor func testStringEffectGapsPoolIdleAndCost() throws {
+        try withKeyboardFx(effect: "string") { kb in
+            let o = try XCTUnwrap(kb.keyEffects)
+            XCTAssertEqual(o.effect, .string)
+            XCTAssertGreaterThanOrEqual(o.stringGaps.count, 3, "4 hàng phím ⇒ ≥ 3 khe")
+            KeyEffectOverlay.debugCost = 0
+            let key = CGRect(x: 40, y: o.stringGaps[0].center + 6, width: 33, height: 42)
+            for i in 0..<10 { o.emit(key: key.offsetBy(dx: CGFloat(i * 30), dy: 0)); o.flush() }
+            let perKey = KeyEffectOverlay.debugCost * 1000 / 10
+            print(String(format: "KEYFX string emit+flush %.4f ms/phím", perKey))
+            XCTAssertLessThan(perKey, 0.3)
+            let layers = o.debugStringLayers
+            XCTAssertEqual(layers.count, StringPluck.pool, "pool: gõ nhanh không dồn layer")
+            let gapYs = Set(o.stringGaps.map { CGFloat($0.center) })
+            for l in layers {
+                XCTAssertTrue(gapYs.contains(l.position.y), "dây nằm đúng tâm khe")
+                XCTAssertEqual(l.opacity, 0, "mô hình vô hình — hết animation là không còn gì vẽ")
+                XCTAssertNil(l.fillColor)
+                XCTAssertNotNil(l.animation(forKey: "fx"))
+            }
+            let a = o.debugStringAnimation
+            XCTAssertTrue(a.isRemovedOnCompletion); XCTAssertEqual(a.fillMode, .removed)
+            XCTAssertEqual(a.duration, StringPluck.duration, accuracy: 1e-9)
+            XCTAssertEqual(a.repeatCount, 0)
+            XCTAssertEqual((a.animations?.first as? CAKeyframeAnimation)?.values?.count, StringPluck.frames + 1)
+            o.halt()
+            XCTAssertEqual(o.debugStringAnimationCount, 0, "ẩn bàn phím ⇒ gỡ ngay")
+            // Gảy rồi nghỉ: render server chạy xong 0,3 s ⇒ CA gỡ animation ⇒ 0 việc.
+            o.emit(key: key); o.flush()
+            XCTAssertEqual(o.debugStringAnimationCount, 1)
+            KeyboardBenchTests.spin(0.8)
+            XCTAssertEqual(o.debugStringAnimationCount, 0, "nghỉ gõ = 0 animation")
+        }
     }
 }

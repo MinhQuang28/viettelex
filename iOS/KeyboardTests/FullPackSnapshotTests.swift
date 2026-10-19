@@ -1,4 +1,4 @@
-// Ảnh bộ theme đủ món (Máy chữ cổ / Gaming RGB / Vũ trụ) — chỉ chạy khi có VT_THEME_SNAPSHOT_DIR
+// Ảnh bộ theme đủ món (Máy chữ cổ / Gaming RGB / Vũ trụ / Ghi-ta) — chỉ chạy khi có VT_THEME_SNAPSHOT_DIR
 // (xcodebuild: TEST_RUNNER_VT_THEME_SNAPSHOT_DIR=…). Vẽ cây layer (layer.render bỏ qua mask ⇒ viền cầu vồng vẽ
 // tay bằng RainbowBorderView.debugDraw). Máy chữ: cả khi CHƯA tải phông (offline ⇒ phông mặc định) và khi đã tải.
 import XCTest
@@ -63,6 +63,8 @@ final class FullPackSnapshotTests: XCTestCase {
         for t in [KeyboardTheme.typewriter, .rgb, .space] {
             for dark in [false, true] { try shot(t, dark: dark, name: "fullpack-\(t.rawValue)-\(dark ? "dark" : "light")") }
         }
+        // Ghi-ta: dây đàn + khảm ở khe hàng, lỗ thoát âm trên phím cách.
+        for dark in [false, true] { try shot(.guitar, dark: dark, name: "theme-guitar-\(dark ? "dark" : "light")") }
         // Máy chữ với phông đã tải (kho giả: chính tệp docs/fonts, đúng sha256).
         let font = try XCTUnwrap(KeyboardTheme.typewriter.spec?.assets.font)
         let repo = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()

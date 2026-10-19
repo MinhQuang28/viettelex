@@ -98,6 +98,11 @@ data class ThemePalette(
      * (ime/RainbowBorderView) — chỉ trượt màu khi đang gõ, nghỉ thì đứng yên. iOS `rainbowBorder` cùng ý nghĩa.
      */
     val rainbowBorder: Boolean = false,
+    /**
+     * Lỗ thoát âm trên phím cách (Ghi-ta, slot "spaceDeco":"soundhole"): hình tròn tối + hai vành hoa văn vẽ cùng
+     * nền phím cách (Canvas, hình học [Soundhole]) — 0 chi phí mỗi phím. iOS `spaceSoundhole` cùng ý nghĩa.
+     */
+    val spaceSoundhole: Boolean = false,
 ) {
     val keyInk: Int get() = keyLabel ?: ink
     /** Nền phím chức năng (⇧ ⌫ 123 🌐 😊…). */
@@ -253,6 +258,9 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     TRUNG_THU("trungthu", "Trung Thu", true), // l10n-key
     VALENTINE("valentine", "Valentine", true), // l10n-key
     HALLOWEEN("halloween", "Halloween", true), // l10n-key
+    // Bộ đủ món 10/2026: Ghi-ta (mặt đàn gỗ mật ong, phím gỗ hồng sắc, dây đàn + khảm, lỗ thoát âm trên phím cách,
+    // âm ghi-ta mộc + hiệu ứng rung dây) — id trùng iOS.
+    GUITAR("guitar", "Ghi-ta", true), // l10n-key
     // Trò chơi khi gõ 10/2026: Đập chuột (bãi cỏ + phím hang đất; "game":"mole" — [MoleGame]). Id trùng iOS.
     MOLE("mole", "Đập chuột", true); // l10n-key
 
@@ -312,6 +320,12 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
     /** Motif của vị trí thứ [k] (theo thứ tự [placements]). */
     fun motifAt(k: Int): String = if (k % 2 == 1) alt ?: motif else motif
 
+    /** Có dây đàn (motif chính hoặc alt = strings) ⇒ path thêm mỗi khe một dây ngang. */
+    val hasStrings: Boolean get() = motif == STRINGS || alt == STRINGS
+
+    /** Một dây đàn: hình chữ nhật mảnh [x0, x1] × [y − h/2, y + h/2]. */
+    data class StringLine(val x0: Double, val x1: Double, val y: Double, val h: Double)
+
     companion object {
         const val HEARTS = "hearts"
         const val FLOWERS = "flowers"
@@ -328,9 +342,30 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
         const val MOON = "moon"
         const val PUMPKIN = "pumpkin"
         const val BAT = "bat"
+        // Ghi-ta (10/2026): dây đàn kéo NGANG HẾT khe hàng (một lần mỗi khe, dày dần ở khe dưới) + chấm khảm xà cừ.
+        const val STRINGS = "strings"
+        const val INLAY = "inlay"
         /** Danh sách trắng motif (theme JSON chỉ nhận các id này) — iOS KeyboardDecoration.Motif y hệt. */
         val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES,
-            LOTUS, STARFIELD, LANTERN, MOON, PUMPKIN, BAT)
+            LOTUS, STARFIELD, LANTERN, MOON, PUMPKIN, BAT, STRINGS, INLAY)
+
+        /** Độ dày dây ở khe thứ [i] (0 = khe trên cùng; dp) — dây dưới dày hơn như dây trầm. iOS y hệt. */
+        fun stringThickness(i: Int): Double = minOf(0.6 + 0.3 * i, 1.5)
+        /** Lề hai đầu dây (dp). */
+        const val STRING_INSET = 6.0
+
+        /**
+         * Dây đàn: mỗi khe có motif (tâm y khác nhau của [placements]) một hình chữ nhật mảnh từ [STRING_INSET] tới
+         * [width] − [STRING_INSET] (null ⇒ motif xa nhất + [INSET]). iOS KeyboardDecoration.strings y hệt.
+         */
+        fun strings(placements: List<Placement>, width: Double?): List<StringLine> {
+            val ys = placements.map { it.y }.distinct().sorted()
+            if (ys.isEmpty()) return emptyList()
+            val right = width ?: ((placements.maxOfOrNull { it.x + it.size / 2 } ?: 0.0) + INSET)
+            val x0 = STRING_INSET; val x1 = right - STRING_INSET
+            if (x1 <= x0) return emptyList()
+            return ys.mapIndexed { i, y -> StringLine(x0, x1, y, stringThickness(i)) }
+        }
 
         /** Chấm sao nhỏ của motif "starfield": (x, y, bán kính) theo đơn vị motif — iOS starDots y hệt. */
         val STAR_DOTS = arrayOf(doubleArrayOf(-2.6, -0.3, 0.1), doubleArrayOf(-1.4, 0.34, 0.07), doubleArrayOf(1.5, -0.24, 0.08),
@@ -503,9 +538,27 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
                         d(0.32, -0.04, 0.26, -0.02, 0.22, 0.06), d(0.18, 0.0, 0.12, 0.02, 0.08, 0.1))),
                     MotifSub(-0.08, 0.1, listOf(d(-0.12, 0.02, -0.18, 0.0, -0.22, 0.06), d(-0.26, -0.02, -0.32, -0.04, -0.36, 0.02),
                         d(-0.4, -0.04, -0.44, -0.04, -0.48, -0.12), d(-0.36, -0.24, -0.18, -0.22, -0.06, -0.08))))
+                INLAY -> listOf(ell(0.0, 0.0, 0.22, 0.22))   // chấm khảm xà cừ tròn nhỏ
                 else -> emptyList()
             }
         }
+    }
+}
+
+/**
+ * Lỗ thoát âm trên phím cách (theme Ghi-ta, "spaceDeco":"soundhole") — hình học thuần, iOS Soundhole y hệt. Tâm =
+ * tâm phím; R = min(0.34 × cao, 0.18 × rộng); hai vành hoa văn đồng tâm vẽ nét (bán kính, độ dày theo bội R).
+ */
+object Soundhole {
+    const val HOLE_RATIO = 0.34
+    const val MAX_WIDTH_RATIO = 0.18
+    const val HOLE_ALPHA = 0.55
+    /** (bán kính / R, độ dày nét / R): vành ngoài (màu nhấn) rồi vành trong (màu chữ mờ). */
+    val RINGS = listOf(doubleArrayOf(1.28, 0.12), doubleArrayOf(1.13, 0.06))
+    fun radius(w: Double, h: Double): Double = maxOf(0.0, minOf(HOLE_RATIO * h, MAX_WIDTH_RATIO * w))
+    fun outerExtent(w: Double, h: Double): Double {
+        val r = radius(w, h)
+        return RINGS.maxOf { (it[0] + it[1] / 2) * r }
     }
 }
 
@@ -519,6 +572,8 @@ class MotifSub(val sx: Double, val sy: Double, val segs: List<DoubleArray>)
 object ThemeExtraIds {
     val SOUNDS: Set<String> get() = KeySoundStyle.PRESET_IDS.toSet()
     val EFFECTS: Set<String> get() = KeyEffect.entries.map { it.id }.toSet()
+    /** "swipe": kiểu nét vuốt cụ thể (không có "theme" — theme không trỏ về chính nó). */
+    val SWIPES: Set<String> get() = SwipeTrailStyle.THEME_IDS.toSet()
     /** "game": trò chơi khi gõ (iOS ThemeExtraIds.games y hệt). */
     val GAMES: Set<String> = setOf(MoleGame.THEME_GAME)
 }
@@ -650,6 +705,7 @@ data class ThemeSettings(
             if (s.weight == KeyLabelWeight.REGULAR) s = s.copy(weight = typography.weight)
             if (s.sound == null) s = s.copy(sound = typography.sound)
             if (s.effect == null) s = s.copy(effect = typography.effect)
+            if (s.swipe == null) s = s.copy(swipe = typography.swipe)
             if (s.game == null) s = s.copy(game = typography.game)
             var a = s.assets.mergedOver(typography.assets)
             if (userSystemFont) a = a.copy(font = null)

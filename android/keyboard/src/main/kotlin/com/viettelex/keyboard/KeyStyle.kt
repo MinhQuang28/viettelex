@@ -64,6 +64,8 @@ data class KeyStyle(
     /** Âm phím / hiệu ứng đi kèm theme ("sound" / "effect", [ThemeExtraIds]) — CHỈ áp lúc chọn theme ([ThemeExtras]). */
     val sound: String? = null,
     val effect: String? = null,
+    /** Nét vuốt theme ("swipe", [ThemeExtraIds.SWIPES]) — chỉ dùng khi chọn "Theo giao diện" ([SwipeTrailPolicy]). */
+    val swipe: String? = null,
     /** Trò chơi khi gõ của theme ("game", [ThemeExtraIds.GAMES]) — bàn phím đọc từ kiểu thực dùng ([MolePolicy]). */
     val game: String? = null,
 ) {
@@ -134,6 +136,7 @@ data class KeyStyle(
         s.trail?.let { q = q.copy(trail = it) }
         s.deco?.let { d -> q = q.copy(decoration = d.motif?.let { ThemeDecoration(it, d.color, d.density, d.alt) }) }
         s.borderFx?.let { q = q.copy(rainbowBorder = it == ThemeSlots.RAINBOW) }
+        s.spaceDeco?.let { q = q.copy(spaceSoundhole = it == ThemeSlots.SOUNDHOLE) }
         return q
     }
 
@@ -162,7 +165,7 @@ data class KeyStyle(
             val (d, lostD) = edited.slots(true).patchFrom(baseDark)
             return KeyStyle(corner = edited.corner, fontScale = edited.fontScale, font = edited.font ?: KeyLabelFont.DEFAULT,
                 weight = edited.weight ?: KeyLabelWeight.REGULAR, light = l, dark = d, assets = edited.assets,
-                sound = edited.sound, effect = edited.effect, game = edited.game) to (lostL || lostD)
+                sound = edited.sound, effect = edited.effect, swipe = edited.swipe, game = edited.game) to (lostL || lostD)
         }
 
         fun parseColor(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it in 0..0xFFFFFF }

@@ -33,6 +33,10 @@
 // - ĐÀN TRANH (theme Sen Việt, 19/10/2026): CÙNG đường Piano (pool 8 giọng, pedal, bộ ngân dựng lười, damper) —
 //   chỉ khác bảng nốt + bộ tổng hợp (KeyInstrument). Bộ nốt thường 1.0 s ⇒ ~2.45 MB Float32; bộ ngân ~2.76 MB như
 //   Piano. Đổi Piano ⇄ Đàn tranh: dựng lại bộ nốt, giữ node (cùng định dạng 22.05 kHz), bỏ bộ ngân cũ.
+// - VÒNG HỢP ÂM (10/2026): Piano / Ghi-ta có `map.progression` ⇒ mỗi hợp âm dựng MỘT lần lúc hiện (pianoExtra[4…]),
+//   phím cách phát `.chord(i)` (KeyboardView giữ ChordProgression). Đàn tranh: hợp âm cách cố định như cũ.
+// - GHI-TA (theme Ghi-ta): CÙNG đường Piano; nốt 1.2 s ⇒ bộ thường ~3.24 MB Float32 (25 nốt + 4 hợp âm + chủ + ⌫ +
+//   pedal); bộ ngân như Piano.
 import AVFoundation
 
 final class KeySound {
@@ -75,7 +79,7 @@ final class KeySound {
     /// Buffer theo số MIDI (0…127), nil = không có. Tra mỗi phím không cấp phát.
     private var pianoBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)
     private var sustainBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)
-    /// cách, Enter, ⌫, pedal.
+    /// cách, Enter, ⌫, pedal, rồi hợp âm vòng cách 0…n−1 (cách = hợp âm 0 dùng CHUNG buffer với nhạc cụ có vòng).
     private var pianoExtra: [AVAudioPCMBuffer] = []
     private var pianoPool = VoicePool(size: PianoSynth.voices)
     private var sustainPool = VoicePool(size: PianoSynth.voices)
@@ -236,6 +240,7 @@ final class KeySound {
             }
             if buf == nil { buf = pianoBuf[m] }
         case .space: buf = pianoExtra.count > 0 ? pianoExtra[0] : nil
+        case .chord(let i): buf = i >= 0 && 4 + i < pianoExtra.count ? pianoExtra[4 + i] : (pianoExtra.count > 0 ? pianoExtra[0] : nil)
         case .returnKey: buf = pianoExtra.count > 1 ? pianoExtra[1] : nil
         case .delete: buf = pianoExtra.count > 2 ? pianoExtra[2] : nil
         case .pedal:
@@ -260,6 +265,9 @@ final class KeySound {
         lastPianoVoice = v + (useSustain ? PianoSynth.voices : 0)
         return true
     }
+
+    /// Số buffer âm đặc biệt đang dựng (cách, Enter, ⌫, pedal + hợp âm vòng) — test.
+    var pianoExtraCount: Int { lock.lock(); defer { lock.unlock() }; return pianoExtra.count }
 
     /// Số giọng piano vừa bắt đầu trong cửa sổ hợp âm (test).
     var pianoSimultaneous: Int {
@@ -325,8 +333,13 @@ final class KeySound {
         guard let fmt = AVAudioFormat(standardFormatWithSampleRate: PianoSynth.sampleRate, channels: 1) else { return false }
         var nb = [AVAudioPCMBuffer?](repeating: nil, count: 128)
         for m in inst.map.notes { nb[m] = Self.pcm(inst.note(m), fmt) }
-        let extra = [inst.space(), inst.returnChord(), inst.delete(), inst.pedal()].compactMap { Self.pcm($0, fmt) }
-        guard extra.count == 4 else { return false }
+        // Nhạc cụ có vòng hợp âm: mỗi hợp âm một buffer; "cách" (không theo vòng) = hợp âm 0 (cùng object, không tốn thêm).
+        let chords = (0..<inst.map.progression.count).compactMap { Self.pcm(inst.chord($0), fmt) }
+        guard chords.count == inst.map.progression.count else { return false }
+        let space = chords.first ?? Self.pcm(inst.space(), fmt)
+        let rest = [inst.returnChord(), inst.delete(), inst.pedal()].compactMap { Self.pcm($0, fmt) }
+        guard let space, rest.count == 3 else { return false }
+        let extra = [space] + rest + chords
         if instrument != inst || !pianoMode {
             for n in sustainNodes { n.stop() }
             sustainBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)

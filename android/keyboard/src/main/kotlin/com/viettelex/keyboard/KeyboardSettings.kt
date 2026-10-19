@@ -90,6 +90,8 @@ data class KeyboardSettings(
     var keyPressHighlight: Boolean = true,
     /** "Hiệu ứng khi bấm phím" (Plus) — mặc định Không ⇒ IME không tạo overlay. */
     var keyEffect: KeyEffect = KeyEffect.DEFAULT,
+    /** "Hiệu ứng nét vuốt" — mặc định Đơn giản; Tắt ⇒ IME không gắn vệt vuốt. */
+    var swipeTrail: SwipeTrailStyle = SwipeTrailStyle.DEFAULT,
     /** [ROW_HEIGHT_MIN]…[ROW_HEIGHT_MAX] dp mỗi hàng (IME kẹp thêm phần trên +10 theo cao màn hình — KeyLayout.effectiveRowAdjust). */
     var rowHeightAdjust: Int = 0,
     /** Hàng phím số 1…0 trên hàng chữ — mặc định TẮT. */
@@ -194,6 +196,7 @@ data class KeyboardSettings(
             s.keyPreview = b(Keys.KEY_PREVIEW, s.keyPreview)
             s.keyPressHighlight = b(Keys.KEY_PRESS_HIGHLIGHT, s.keyPressHighlight)
             s.keyEffect = KeyEffect.of(get(Keys.KEY_EFFECT))
+            s.swipeTrail = SwipeTrailStyle.of(get(Keys.SWIPE_TRAIL))
             s.debugTouchLog = b(Keys.DEBUG_TOUCH_LOG, s.debugTouchLog)
             s.numberRow = b(Keys.NUMBER_ROW, s.numberRow)
             s.numberRowFullHeight = b(Keys.NUMBER_ROW_FULL_HEIGHT, s.numberRowFullHeight)

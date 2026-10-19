@@ -37,6 +37,8 @@ targets:
       - Keyboard/Wallpaper.swift
       # Hiệu ứng khi bấm phím: xem thử ở trang chọn (cùng overlay với bàn phím).
       - Keyboard/KeyEffects.swift
+      # Hiệu ứng nét vuốt: xem thử ở trang chọn (cùng renderer với bàn phím).
+      - Keyboard/SwipeTrailStyles.swift
       # Viền cầu vồng (Gaming RGB): thẻ xem trước dùng cùng dải màu.
       - Keyboard/RainbowBorder.swift
       # Đập chuột (theme "mole"): id "game" + thẻ "Hôm nay đập N con chuột".
@@ -184,6 +186,7 @@ targets:
       - App/ThemeAssetDownloader.swift
       - Keyboard/Wallpaper.swift
       - Keyboard/KeyEffects.swift
+      - Keyboard/SwipeTrailStyles.swift
       - Keyboard/RainbowBorder.swift
       - Keyboard/MoleGame.swift
       - Keyboard/MoleOverlay.swift

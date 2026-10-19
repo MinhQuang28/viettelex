@@ -867,6 +867,7 @@ final class ThemeSetTests: XCTestCase {
                                              .sen,
                                              .typewriter, .rgb, .space,
                                              .trungthu, .valentine, .halloween,
+                                             .guitar,
                                              .mole]
     static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
 
@@ -902,7 +903,7 @@ final class ThemeSetTests: XCTestCase {
         let f = try fixture()
         XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
         XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
-        XCTAssertEqual(f.rows.count, 48)
+        XCTAssertEqual(f.rows.count, 50)
         for r in f.rows {
             let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
             let p = t.palette(systemDark: r.dark)
@@ -1189,6 +1190,142 @@ final class ThemeSetTests: XCTestCase {
         XCTAssertEqual(ThemeSpec.palette(back.light).decoration, KeyboardTheme.halloween.palette(systemDark: false).decoration)
     }
 
+    // MARK: Ghi-ta (bộ đủ món 10/2026): mặt đàn gỗ mật ong, phím gỗ hồng sắc, dây đàn + khảm, lỗ thoát âm, âm + rung dây
+
+    /// Theme mang đủ màu + hoạ tiết (dây + khảm) + lỗ thoát âm + hiệu ứng + âm; Plus; tên vi + en; nhãn ≥ 4.5:1.
+    func testGuitarFullPackTheme() throws {
+        let t = KeyboardTheme.guitar
+        let spec = try XCTUnwrap(t.spec)
+        XCTAssertEqual(spec.sound, "guitar"); XCTAssertEqual(spec.effect, "string")
+        XCTAssertTrue(KeySoundStyle.presetIDs.contains("guitar")); XCTAssertEqual(KeyEffect(rawValue: "string"), .string)
+        XCTAssertTrue(t.isPlus)
+        XCTAssertEqual(spec.nameVi, "Ghi-ta"); XCTAssertEqual(spec.nameEn, "Guitar")
+        XCTAssertEqual(L10n.en[t.title], "Guitar")
+        XCTAssertEqual(KeyboardTheme.allCases[KeyboardTheme.allCases.firstIndex(of: .halloween)! + 1], .guitar, "thêm cuối danh sách (sau Halloween)")
+        for dark in [false, true] {
+            let p = t.palette(systemDark: dark)
+            let d = try XCTUnwrap(p.decoration)
+            XCTAssertEqual(d.motif, .strings); XCTAssertEqual(d.alt, .inlay)
+            XCTAssertTrue(p.spaceSoundhole, "lỗ thoát âm cả hai chế độ")
+            XCTAssertFalse(p.rainbowBorder)
+            let bg = try XCTUnwrap(p.background)
+            for (ink, fill, what) in [(p.keyInk, p.keyFill, "phím"), (p.fnInk, p.fnFill, "phím chức năng"),
+                                      (p.accentInk, p.accent, "Enter"), (p.ink, p.specialFill, "phím đè"),
+                                      (p.barInk, bg, "thanh gợi ý")] {
+                XCTAssertGreaterThanOrEqual(RGBA.contrast(ink, fill), 4.5, "\(what) dark=\(dark)")
+            }
+            // Phím gỗ hồng sắc TỐI hơn mặt đàn (sáng); phím chức năng sẫm hơn phím chữ.
+            XCTAssertLessThan(p.fnFill.luminance, p.keyFill.luminance)
+            if !dark { XCTAssertGreaterThan(bg.luminance, 3 * p.keyFill.luminance) }
+        }
+        XCTAssertNotEqual(t.palette(systemDark: false), t.palette(systemDark: true))
+        let yes: (String) -> Bool = { _ in true }
+        XCTAssertEqual(ThemeExtras.plan(ThemeSettings(theme: t).effectiveKeyStyle, soundOn: false, effectAllowed: yes, soundAllowed: yes),
+                       ThemeExtras.Outcome(effect: "string", sound: "guitar", soundHint: true), "âm không tự bật")
+        XCTAssertEqual(t.systemBackdropKey, "systemBackdropGuitar")
+    }
+
+    /// "spaceDeco": đọc / chép / dán / chuẩn hoá khứ hồi; giá trị lạ ⇒ lỗi; bản vá bỏ được ("none").
+    func testSpaceDecoJSONRoundTrip() throws {
+        let text = try XCTUnwrap(ThemeJSONActions.copyText(.builtin(.guitar), settings: ThemeSettings(theme: .guitar), store: [:]))
+        XCTAssertTrue(text.contains("\"spaceDeco\""), text)
+        let back = try XCTUnwrap(ThemeSpecParser.parse(text).spec)
+        XCTAssertEqual(back.light.spaceDeco, "soundhole")
+        XCTAssertTrue(ThemeSpec.palette(back.light).spaceSoundhole)
+        XCTAssertEqual(ThemeSpec.palette(back.light), KeyboardTheme.guitar.palette(systemDark: false))
+        XCTAssertEqual(ThemeSpecParser.parse(back.canonical).spec, back)
+        XCTAssertEqual(ThemeSpec.slots(from: ThemeSpec.palette(back.light)).spaceDeco, "soundhole")
+        let base = ##"{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","spaceDeco":%@}}"##
+        func issues(_ v: String) -> [ThemeIssue] { ThemeSpecParser.parse(String(format: base, v)).errors }
+        XCTAssertTrue(issues("\"soundhole\"").isEmpty)
+        XCTAssertTrue(issues("\"none\"").isEmpty)
+        XCTAssertEqual(issues("\"rosette\"").first?.code, .badValue)
+        XCTAssertEqual(issues("1").first?.code, .wrongType)
+        // Bản vá: bỏ lỗ thoát âm ⇒ "none" ⇒ palette không còn; vá lại ⇒ có.
+        let gl = try XCTUnwrap(KeyboardTheme.guitar.spec).light
+        var edited = gl; edited.spaceDeco = nil
+        let patch = edited.patch(from: gl).patch
+        XCTAssertEqual(patch.spaceDeco, "none")
+        var st = KeyStyle(); st.light = patch
+        XCTAssertFalse(st.applyPatch(to: KeyboardTheme.guitar.palette(systemDark: false), dark: false).spaceSoundhole)
+        XCTAssertTrue(gl.merged(with: ThemeSlots()).spaceDeco == "soundhole")
+        let raw = KeyStyleStore.serialize(["guitar": st])
+        XCTAssertEqual(KeyStyleStore.parse(raw)["guitar"], st)
+        // Theme khác không có lỗ thoát âm.
+        for t in KeyboardTheme.allCases where t != .guitar { XCTAssertFalse(t.palette(systemDark: false).spaceSoundhole, t.rawValue) }
+    }
+
+    /// Motif "inlay": một chấm tròn, cùng chiều quay, trong ô ±0.5, mốc chung Android. "strings": mỗi khe một dây ngang
+    /// kéo hết bề ngang (trừ lề), dày dần ở khe dưới; không có motif tại điểm (chỉ alt).
+    func testGuitarStringsAndInlayMotifs() {
+        typealias D = KeyboardDecoration
+        let subs = D.shape(.inlay)
+        XCTAssertEqual(subs.count, 1)
+        var sum = 0.0, area = 0.0
+        var pts = [[subs[0].start.0, subs[0].start.1]]
+        for g in subs[0].segs { var i = 0; while i < g.count { pts.append([g[i], g[i + 1]]); i += 2 } }
+        for i in 0..<pts.count {
+            let p = pts[i], q = pts[(i + 1) % pts.count]
+            area += p[0] * q[1] - q[0] * p[1]
+            XCTAssertLessThanOrEqual(abs(p[0]), 0.5); XCTAssertLessThanOrEqual(abs(p[1]), 0.5)
+            sum += p[0] * 3 + p[1] * 7
+        }
+        XCTAssertGreaterThan(area, 0)
+        XCTAssertEqual(sum, 0.66, accuracy: 1e-9)
+        XCTAssertTrue(D.shape(.strings).isEmpty)
+        // Ba khe bàn phím iPhone 402pt.
+        let gaps = [D.Gap(center: 93.5, height: 11), D.Gap(center: 146.5, height: 11), D.Gap(center: 199.5, height: 11)]
+        let placements = D.placements(width: 402, gaps: gaps)
+        let s = D.strings(placements, width: 402)
+        XCTAssertEqual(s.map(\.y), [93.5, 146.5, 199.5])
+        for (x, h) in zip(s, [0.6, 0.9, 1.2]) { XCTAssertEqual(x.h, h, accuracy: 1e-9, "dây dưới dày hơn") }
+        for x in s { XCTAssertEqual(x.x0, D.stringInset); XCTAssertEqual(x.x1, 402 - D.stringInset) }
+        XCTAssertEqual(D.stringThickness(9), 1.5, "trần độ dày")
+        let only = D(motif: .strings, color: .white), both = D(motif: .strings, color: .white, alt: .inlay)
+        XCTAssertTrue(only.hasStrings); XCTAssertTrue(both.hasStrings); XCTAssertFalse(D(motif: .inlay, color: .white).hasStrings)
+        let box = only.path(placements, width: 402).boundingBoxOfPath
+        XCTAssertEqual(box.minX, CGFloat(D.stringInset), accuracy: 1e-6)
+        XCTAssertEqual(box.maxX, CGFloat(402 - D.stringInset), accuracy: 1e-6)
+        XCTAssertEqual(box.minY, 93.5 - 0.3, accuracy: 1e-6); XCTAssertEqual(box.maxY, 199.5 + 0.6, accuracy: 1e-6)
+        // Có khảm (alt) ⇒ thêm chấm ở vị trí lẻ, không đổi dây.
+        XCTAssertNotEqual(both.path(placements, width: 402), only.path(placements, width: 402))
+        XCTAssertTrue(D.strings([], width: 402).isEmpty)
+        // Không truyền bề ngang ⇒ dây tới motif xa nhất + lề.
+        XCTAssertEqual(D.strings(placements, width: nil).first?.x1 ?? 0,
+                       (placements.map { $0.x + $0.size / 2 }.max() ?? 0) + D.inset - D.stringInset, accuracy: 1e-9)
+    }
+
+    /// Lỗ thoát âm: tâm phím, vành ngoài không chạm mép; bàn phím thật chỉ theme Ghi-ta có 3 lớp trên phím cách.
+    @MainActor func testSoundholeOnSpaceKey() {
+        for (w, h) in [(180.0, 42.0), (120.0, 38.0), (60.0, 42.0), (400.0, 50.0)] {
+            let r = Soundhole.radius(width: w, height: h)
+            XCTAssertLessThanOrEqual(Soundhole.outerExtent(width: w, height: h), 0.47 * h, "\(w)×\(h)")
+            XCTAssertLessThanOrEqual(2 * Soundhole.outerExtent(width: w, height: h), w)
+            XCTAssertGreaterThan(r, 0)
+        }
+        XCTAssertEqual(Soundhole.radius(width: 180, height: 42), 0.34 * 42, accuracy: 1e-9)
+        XCTAssertEqual(Soundhole.radius(width: 60, height: 42), 0.18 * 60, accuracy: 1e-9)
+        let d = UserDefaultsProvider.shared
+        let saved = d?.object(forKey: ThemeSettings.themeKey)
+        defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
+        for t in [KeyboardTheme.guitar, .piano] {
+            d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
+            let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }
+            kb.frame = CGRect(x: 0, y: 0, width: 402, height: 300)
+            kb.applyAppearance(.light, style: .light)
+            kb.setNeedsLayout(); kb.layoutIfNeeded()
+            let sh = kb.debugSoundhole
+            if t == .guitar {
+                XCTAssertEqual(sh.count, 3)
+                let box = try? XCTUnwrap(sh.hole).boundingBoxOfPath
+                XCTAssertNotNil(box)
+                XCTAssertGreaterThan(box?.width ?? 0, 4)
+            } else {
+                XCTAssertEqual(sh.count, 0, "theme khác: không lớp nào (0 chi phí)")
+            }
+        }
+    }
+
     /// Hình motif mới (đèn lồng, trăng, bí ngô, dơi): mọi đường con cùng chiều (diện tích có dấu > 0 — tô nonzero
     /// không thủng), nằm trong ô ±0.5; tổng toạ độ = mốc chung Android (ThemeSetTests.newMotifShapesParity).
     func testNewMotifShapesWindingBoundsAndParity() {
@@ -1341,6 +1478,7 @@ final class ThemeSetTests: XCTestCase {
                 case .trungthu: XCTAssertEqual(m, .lantern)
                 case .valentine: XCTAssertEqual(m, .hearts)
                 case .halloween: XCTAssertEqual(m, .pumpkin)
+                case .guitar: XCTAssertEqual(m, .strings)
                 case .mole: XCTAssertEqual(m, .flowers)
                 default: XCTAssertNil(m, t.rawValue)
                 }
@@ -1386,7 +1524,7 @@ final class ThemeSetTests: XCTestCase {
         let d = UserDefaultsProvider.shared
         let saved = d?.object(forKey: ThemeSettings.themeKey)
         defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
-        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano, .sen, .space, .trungthu, .halloween] {
+        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano, .sen, .space, .trungthu, .halloween, .guitar] {
             for dark in [false, true] {
                 d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
                 let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }

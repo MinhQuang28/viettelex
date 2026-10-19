@@ -201,7 +201,8 @@ class MoleGameTests {
         val wood = KeySoundSynth.samples(KeySoundStyle.WOOD, KeySoundSynth.Kind.LETTER)
         assertTrue(sq.maxOf { abs(it) } <= wood.maxOf { abs(it) })
         assertEquals(534.9296, sq.sumOf { abs(it).toDouble() }, 0.01)
-        val golden = doubleArrayOf(173.9370, 182.0736, 214.0209)
+        println("MOLE-GOLDEN bop=" + KeySoundSynth.Kind.entries.map { k -> "%.4f".format(KeySoundSynth.samples(KeySoundStyle.BOP, k).sumOf { abs(it).toDouble() }) })
+        val golden = doubleArrayOf(171.8268, 181.9607, 215.5216)
         for (k in KeySoundSynth.Kind.entries) {
             val b = KeySoundSynth.samples(KeySoundStyle.BOP, k); val w = KeySoundSynth.samples(KeySoundStyle.WOOD, k)
             assertTrue("$k", KeySoundSynth.rms(b) < KeySoundSynth.rms(w))

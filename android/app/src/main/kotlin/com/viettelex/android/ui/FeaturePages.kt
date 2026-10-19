@@ -107,6 +107,7 @@ internal data class FeatureSearchEntry(val viTitle: String, val keywords: String
             FeatureSearchEntry("Từ điển cá nhân", "dictionary tên riêng thuật ngữ", FeaturePage.GoiY), // l10n-key
             FeatureSearchEntry("Xóa từ đã học", "xoá học reset", FeaturePage.GoiY), // l10n-key
             FeatureSearchEntry("Gõ vuốt", "swipe vuốt thử nghiệm experimental", FeaturePage.GoVuot), // l10n-key
+            FeatureSearchEntry("Hiệu ứng nét vuốt", "swipe trail nét vuốt vệt hiệu ứng lửa fire điện electric lightning bút lông brush mực ink cầu vồng rainbow neon bụi sao stardust sparkle pháo hoa firework theo giao diện theme plus", FeaturePage.GoVuot), // l10n-key
             FeatureSearchEntry("Vuốt từ tiếng Anh", "swipe english", FeaturePage.GoVuot), // l10n-key
             FeatureSearchEntry("Mô hình neural gõ vuốt", "futo neural swipe", FeaturePage.GoVuot), // l10n-key
             FeatureSearchEntry("Luyện vuốt", "practice swipe", FeaturePage.GoVuot), // l10n-key
@@ -131,14 +132,14 @@ internal data class FeatureSearchEntry(val viTitle: String, val keywords: String
             FeatureSearchEntry("Phím sẫm khi bấm", "pressed key highlight darken", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Rung phím", "haptic rung vibrate", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Âm thanh phím", "sound click tiếng âm lượng volume kiểu style gỗ cơ máy chữ bong bóng custom", FeaturePage.Phim), // l10n-key
-            FeatureSearchEntry("Âm thanh gõ", "typing sound key sound style kiểu âm hệ thống system click gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc đàn tranh dan tranh zither việt nam viet nam bàn phím cơ mechanical máy chữ typewriter bong bóng bubble ding sci-fi scifi bíp beep vũ trụ space trống lân lion drum trung thu mid autumn ma quái spooky boo halloween búa gỗ mallet bop", FeaturePage.Phim), // l10n-key
+            FeatureSearchEntry("Âm thanh gõ", "typing sound key sound style kiểu âm hệ thống system click gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc đàn tranh dan tranh zither việt nam viet nam bàn phím cơ mechanical máy chữ typewriter bong bóng bubble ding sci-fi scifi bíp beep vũ trụ space trống lân lion drum trung thu mid autumn ma quái spooky boo halloween guitar ghi ta ghi-ta đàn ghi-ta acoustic hợp âm chord búa gỗ mallet bop", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Telex cho bàn phím cứng", "bluetooth usb dex chromebook hardware", FeaturePage.Phim), // l10n-key
-            FeatureSearchEntry("Theme & ảnh nền", "theme màu chủ đề wallpaper hình nền color tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm sen lotus hoa sen sen việt đàn tranh dan tranh zither việt nam viet nam máy chữ cổ typewriter vintage gaming rgb cầu vồng rainbow vũ trụ space sao star outer space trung thu mid autumn đèn lồng lantern trăng moon valentine tình yêu love tim heart halloween bí ngô pumpkin dơi bat đập chuột whack a mole", FeaturePage.GiaoDien), // l10n-key
+            FeatureSearchEntry("Theme & ảnh nền", "theme màu chủ đề wallpaper hình nền color tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm sen lotus hoa sen sen việt đàn tranh dan tranh zither việt nam viet nam máy chữ cổ typewriter vintage gaming rgb cầu vồng rainbow vũ trụ space sao star outer space trung thu mid autumn đèn lồng lantern trăng moon valentine tình yêu love tim heart halloween bí ngô pumpkin dơi bat guitar ghi ta ghi-ta đàn ghi-ta acoustic dây đàn strings đập chuột whack a mole", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Độ trong suốt phím", "trong suốt transparent", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Độ trong suốt ký tự", "trong suốt transparent chữ", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Tuỳ chỉnh nâng cao", "màu chữ màu phím màu nhấn accent color colour bo góc tròn vuông corner radius cỡ chữ size phông font độ đậm weight bold đặt lại reset mặc định giao diện theme", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Dán giao diện", "json theme giao diện chép copy paste dán sửa edit nhập import tự tạo custom chia sẻ share", FeaturePage.GiaoDien), // l10n-key
-            FeatureSearchEntry("Hiệu ứng khi bấm phím", "key press effect animation hoạt ảnh trái tim heart bong bóng bubble gợn sóng ripple cánh hoa petal pháo hoa firework nháy sáng flash matrix tia sét lightning emoji theo chữ emoji words hoa đào mai tết blossom lửa combo fire mực loang ink sóng nước water wave tuyết rơi snow giáng sinh christmas sao băng shooting star meteor vũ trụ space plus đèn lồng lantern glow trung thu mid autumn sương ma khói smoke spooky mist halloween", FeaturePage.GiaoDien), // l10n-key
+            FeatureSearchEntry("Hiệu ứng khi bấm phím", "key press effect animation hoạt ảnh trái tim heart bong bóng bubble gợn sóng ripple cánh hoa petal pháo hoa firework nháy sáng flash matrix tia sét lightning emoji theo chữ emoji words hoa đào mai tết blossom lửa combo fire mực loang ink sóng nước water wave tuyết rơi snow giáng sinh christmas sao băng shooting star meteor vũ trụ space plus đèn lồng lantern glow trung thu mid autumn sương ma khói smoke spooky mist halloween rung dây string vibration guitar ghi ta đàn ghi-ta", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Đập chuột", "đập chuột trò chơi game whack a mole chuột mouse theme giao diện vui fun plus", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Màu nhấn", "accent color colour nhập enter return shift tuỳ chỉnh nâng cao", FeaturePage.GiaoDien), // l10n-key
             FeatureSearchEntry("Khôi phục giao diện gốc", "reset mặc định default", FeaturePage.GiaoDien), // l10n-key
@@ -275,7 +276,7 @@ fun TinhNangTab(openRequest: FeaturePage? = null, onOpened: () -> Unit = {}, onO
         when (page) {
             FeaturePage.ChinhTa -> ChinhTaPage(back)
             FeaturePage.GoiY -> GoiYPage(back)
-            FeaturePage.GoVuot -> GoVuotPage(back)
+            FeaturePage.GoVuot -> GoVuotPage(back, onOpenPlus)
             FeaturePage.GoTat -> GoTatPage(back)
             FeaturePage.Phim -> PhimPage(back)
             FeaturePage.GiaoDien -> ThemePage(back, onOpenPlus)
@@ -469,9 +470,13 @@ private fun GoiYPage(onBack: () -> Unit) {
 }
 
 @Composable
-private fun GoVuotPage(onBack: () -> Unit) {
+private fun GoVuotPage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     val c = LocalVT.current
     val ctx = LocalContext.current
+    /** Trang con "Hiệu ứng nét vuốt" đang mở. */
+    var pickingTrail by remember { mutableStateOf(false) }
+    if (pickingTrail) { SwipeTrailPage(onOpenPlus = onOpenPlus, onBack = { pickingTrail = false }); return }
+    val trailRaw by rememberStringPref(Keys.SWIPE_TRAIL, com.viettelex.keyboard.SwipeTrailStyle.DEFAULT.id)
     SubPageHeader(FeaturePage.GoVuot.title, onBack)
     val swipeOn by rememberBoolPref(Keys.SWIPE_TYPING, Prefs.D.swipeTyping)
     VTSection(footer = tr("Tự tắt khi bật TalkBack và ở ô mật khẩu, email, địa chỉ web.")) {
@@ -490,6 +495,15 @@ private fun GoVuotPage(onBack: () -> Unit) {
             VTRow(onClick = { openUrl(ctx, "https://github.com/ptrinh/viettelex/blob/main/docs/DATA-SOURCES.md#futo-swipe") }) {
                 Text("powered by FUTO Swipe", style = VTType.caption2, color = c.tertiary)
             }
+        }
+    }
+    VTSection {
+        VTRow(onClick = { pickingTrail = true }) {
+            val plus = com.viettelex.keyboard.SwipeTrailGate.allows
+            Text(tr("Hiệu ứng nét vuốt") + if (plus) "" else " · Plus", style = VTType.body, color = c.label,
+                modifier = Modifier.weight(1f))
+            Text("${com.viettelex.keyboard.SwipeTrailStyle.displayed(trailRaw).title} ›", style = VTType.body,
+                color = c.secondary, maxLines = 1)
         }
     }
     if (swipeOn) {

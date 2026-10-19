@@ -12,6 +12,7 @@ import android.view.View
 import android.view.animation.DecelerateInterpolator
 import com.viettelex.android.R
 import com.viettelex.keyboard.CommaPopup
+import com.viettelex.keyboard.Soundhole
 import com.viettelex.keyboard.SpaceSideKey
 import com.viettelex.keyboard.KeyLabelSize
 import com.viettelex.keyboard.KeyLabelFitter
@@ -58,8 +59,8 @@ class KeyboardView(
     private val theme: ImeTheme,
     private val balloon: BalloonView,
     private val feedback: Feedback,
-    /** Vệt gõ vuốt (overlay cùng toạ độ); null = không vẽ. */
-    private val trail: SwipeTrailView? = null,
+    /** Vệt gõ vuốt (overlay cùng toạ độ); null = không vẽ ("Hiệu ứng nét vuốt" = Tắt — IME đặt lúc hiện). */
+    var trail: SwipeTrailView? = null,
 ) : View(context) {
 
     interface Listener {
@@ -512,7 +513,9 @@ class KeyboardView(
         val now = SystemClock.uptimeMillis()
         // Bàn số: space luôn literal (không double-space → ". ").
         val pad = plane == Plane.PHONE || plane == Plane.NUMPAD
-        emit(if (!pad && now - lastSpaceTap < DOUBLE_SPACE_MS) Key.DoubleSpacePeriod else Key.Space)
+        val dbl = !pad && now - lastSpaceTap < DOUBLE_SPACE_MS
+        if (dbl) feedback.sentenceEnd()           // ". " tự chèn = kết câu ⇒ vòng hợp âm cách (Piano / Ghi-ta) về đầu
+        emit(if (dbl) Key.DoubleSpacePeriod else Key.Space)
         lastSpaceTap = now
     }
     private val newlineFire: () -> Unit = { emit(Key.Newline) }
@@ -981,6 +984,28 @@ class KeyboardView(
         }
     }
 
+    /** Ghi-ta ("spaceDeco":"soundhole"): Paint cấp một lần; theme khác ⇒ null (một phép so mỗi lần vẽ phím). */
+    private val soundholePaint: Paint? = if (theme.palette.spaceSoundhole) Paint(Paint.ANTI_ALIAS_FLAG) else null
+
+    /** Lỗ thoát âm + hai vành hoa văn trên phím cách — hình học [Soundhole] (= iOS), vẽ cùng nền phím (display list). */
+    private fun drawSoundhole(c: Canvas, k: LaidKey) {
+        val p = soundholePaint ?: return
+        val r = Soundhole.radius(k.width.toDouble(), k.height.toDouble()).toFloat()
+        val a = theme.palette.surfaceAlpha
+        p.style = Paint.Style.FILL
+        p.color = android.graphics.Color.BLACK; p.alpha = (255 * Soundhole.HOLE_ALPHA * a).toInt()
+        c.drawCircle(k.centerX, k.centerY, r, p)
+        p.style = Paint.Style.STROKE
+        val rings = Soundhole.RINGS
+        p.color = theme.action; p.alpha = (255 * 0.85f * a).toInt()
+        p.strokeWidth = (rings[0][1] * r).toFloat(); c.drawCircle(k.centerX, k.centerY, (rings[0][0] * r).toFloat(), p)
+        p.color = theme.fnInk; p.alpha = (255 * 0.45f * a).toInt()
+        p.strokeWidth = (rings[1][1] * r).toFloat(); c.drawCircle(k.centerX, k.centerY, (rings[1][0] * r).toFloat(), p)
+    }
+
+    /** Test: phím cách có lỗ thoát âm (theme Ghi-ta). */
+    internal val hasSoundhole: Boolean get() = soundholePaint != null
+
     private fun drawKey(c: Canvas, k: LaidKey) {
         // Gboard: phím phẳng bo góc, KHÔNG bóng; phím chức năng tô màu phụ (secondary
         // container); enter là pill màu nhấn. Nhấn = state layer ink 12%.
@@ -1013,6 +1038,7 @@ class KeyboardView(
                 val h = bp.strokeWidth / 2
                 c.drawRoundRect(k.left + h, k.top + h, k.right - h, k.bottom - h, r, r, bp)
             }
+            if (soundholePaint != null && k.kind == KeyKind.SPACE && !trackpad) drawSoundhole(c, k)
         }
 
         // 0.2 khi trackpad; × độ trong suốt ký tự (alpha paint — không offscreen).
@@ -1781,6 +1807,9 @@ class KeyboardView(
         listener?.onSwipeTypingEnd(p, case)
         if (shift == Shift.ON) { shift = Shift.OFF; invalidate() }
     }
+
+    /** Controller đã chốt từ vuốt ⇒ "Pháo hoa cuối nét" ở chỗ nhấc tay (kiểu khác: 0 việc). */
+    fun swipeCommitted() { trail?.commitBurst() }
 
     /** Bỏ lượt vuốt đang dở (ẩn bàn phím / đổi layout / tắt tính năng). */
     private fun abortSwipe() {

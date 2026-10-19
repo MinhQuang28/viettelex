@@ -111,6 +111,7 @@ struct FeatureSearchEntry: Identifiable {
             .init(viTitle: LK("Từ điển cá nhân"), keywords: "dictionary tên riêng thuật ngữ", page: .goiY),
             .init(viTitle: LK("Xoá từ đã học"), keywords: "xoá học reset", page: .goiY),
             .init(viTitle: LK("Gõ vuốt"), keywords: "swipe vuốt thử nghiệm", page: .goVuot),
+            .init(viTitle: LK("Hiệu ứng nét vuốt"), keywords: "swipe trail nét vuốt vệt hiệu ứng lửa fire điện electric lightning bút lông brush mực ink cầu vồng rainbow neon bụi sao stardust sparkle pháo hoa firework theo giao diện theme plus", page: .goVuot),
             .init(viTitle: LK("Vuốt từ tiếng Anh"), keywords: "swipe english", page: .goVuot),
             .init(viTitle: LK("Mô hình neural gõ vuốt"), keywords: "futo neural swipe", page: .goVuot),
             .init(viTitle: LK("Luyện vuốt"), keywords: "practice swipe", page: .goVuot),
@@ -127,13 +128,13 @@ struct FeatureSearchEntry: Identifiable {
             .init(viTitle: LK("Phím sẫm khi bấm"), keywords: "pressed key highlight", page: .phim),
             .init(viTitle: LK("Rung phím"), keywords: "haptic rung vibrate", page: .phim),
             .init(viTitle: LK("Âm thanh phím"), keywords: "sound click tiếng âm lượng volume kiểu style gỗ cơ máy chữ bong bóng custom", page: .phim),
-            .init(viTitle: LK("Âm thanh gõ"), keywords: "typing sound key sound style kiểu âm iOS system click hệ thống gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc đàn tranh dan tranh zither việt nam viet nam bàn phím cơ mechanical máy chữ typewriter bong bóng bubble ding sci-fi scifi bíp beep vũ trụ space trống lân lion drum trung thu mid autumn ma quái spooky boo halloween búa gỗ mallet bop", page: .phim),
-            .init(viTitle: LK("Theme & ảnh nền"), keywords: "theme màu chủ đề wallpaper hình nền tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm sen lotus hoa sen sen việt đàn tranh dan tranh zither việt nam viet nam máy chữ cổ typewriter vintage gaming rgb cầu vồng rainbow vũ trụ space sao star outer space trung thu mid autumn đèn lồng lantern trăng moon valentine tình yêu love tim heart halloween bí ngô pumpkin dơi bat đập chuột whack a mole", page: .giaoDien),
+            .init(viTitle: LK("Âm thanh gõ"), keywords: "typing sound key sound style kiểu âm iOS system click hệ thống gỗ wood đá rock pop nước water cổ điển vintage pháo firecracker tết chuông jingle bell giáng sinh piano nốt nhạc đàn tranh dan tranh zither việt nam viet nam bàn phím cơ mechanical máy chữ typewriter bong bóng bubble ding sci-fi scifi bíp beep vũ trụ space trống lân lion drum trung thu mid autumn ma quái spooky boo halloween guitar ghi ta ghi-ta đàn ghi-ta acoustic hợp âm chord búa gỗ mallet bop", page: .phim),
+            .init(viTitle: LK("Theme & ảnh nền"), keywords: "theme màu chủ đề wallpaper hình nền tết tet năm mới lunar new year mai đào giáng sinh noel christmas xmas tuyết snow piano đàn dương cầm sen lotus hoa sen sen việt đàn tranh dan tranh zither việt nam viet nam máy chữ cổ typewriter vintage gaming rgb cầu vồng rainbow vũ trụ space sao star outer space trung thu mid autumn đèn lồng lantern trăng moon valentine tình yêu love tim heart halloween bí ngô pumpkin dơi bat guitar ghi ta ghi-ta đàn ghi-ta acoustic dây đàn strings đập chuột whack a mole", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt phím"), keywords: "trong suốt transparent", page: .giaoDien),
             .init(viTitle: LK("Độ trong suốt ký tự"), keywords: "trong suốt transparent chữ", page: .giaoDien),
             .init(viTitle: LK("Tuỳ chỉnh nâng cao"), keywords: "màu chữ màu phím màu nhấn accent color colour bo góc tròn vuông corner radius cỡ chữ size phông font độ đậm weight bold đặt lại reset mặc định giao diện theme", page: .giaoDien),
             .init(viTitle: LK("Dán giao diện"), keywords: "json theme giao diện chép copy paste dán sửa edit nhập import tự tạo custom chia sẻ share", page: .giaoDien),
-            .init(viTitle: LK("Hiệu ứng khi bấm phím"), keywords: "key press effect animation hoạt ảnh trái tim heart bong bóng bubble gợn sóng ripple cánh hoa petal pháo hoa firework nháy sáng flash matrix tia sét lightning emoji theo chữ emoji words hoa đào mai tết blossom lửa combo fire mực loang ink sóng nước water wave tuyết rơi snow giáng sinh christmas sao băng shooting star meteor vũ trụ space plus đèn lồng lantern glow trung thu mid autumn sương ma khói smoke spooky mist halloween", page: .giaoDien),
+            .init(viTitle: LK("Hiệu ứng khi bấm phím"), keywords: "key press effect animation hoạt ảnh trái tim heart bong bóng bubble gợn sóng ripple cánh hoa petal pháo hoa firework nháy sáng flash matrix tia sét lightning emoji theo chữ emoji words hoa đào mai tết blossom lửa combo fire mực loang ink sóng nước water wave tuyết rơi snow giáng sinh christmas sao băng shooting star meteor vũ trụ space plus đèn lồng lantern glow trung thu mid autumn sương ma khói smoke spooky mist halloween rung dây string vibration guitar ghi ta đàn ghi-ta", page: .giaoDien),
             .init(viTitle: LK("Đập chuột"), keywords: "đập chuột trò chơi game whack a mole chuột mouse theme giao diện vui fun plus", page: .giaoDien),
             .init(viTitle: LK("Màu nhấn"), keywords: "accent color colour nhập enter return shift tuỳ chỉnh nâng cao", page: .giaoDien),
             .init(viTitle: LK("Khôi phục giao diện gốc"), keywords: "reset mặc định", page: .giaoDien),
@@ -540,6 +541,8 @@ struct GoVuotPage: View {
     @AppStorage("swipeEnglish", store: featureDefaults) private var swipeEnglish = true
     /// Decoder FUTO Swipe — mặc định TẮT, xem KeyboardSettings.swipeFuto.
     @AppStorage("swipeFuto", store: featureDefaults) private var swipeFuto = false
+    /// "Hiệu ứng nét vuốt" (SwipeTrailStyle) — trang con SwipeTrailPickerView.
+    @AppStorage(SwipeTrailStyle.key, store: featureDefaults) private var swipeTrailRaw = SwipeTrailStyle.defaultValue.rawValue
 
     var body: some View {
         FeaturePageList(page: .goVuot) {
@@ -558,6 +561,19 @@ struct GoVuotPage: View {
                 }
             } footer: {
                 Text(L("Tự tắt khi dùng VoiceOver và ở ô email/mật khẩu/URL."))
+            }
+            Section {
+                NavigationLink {
+                    SwipeTrailPickerView()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(L("Hiệu ứng nét vuốt"))
+                        if !SwipeTrailGate.allows { SwipeTrailPlusBadge() }
+                        Spacer()
+                        Text(SwipeTrailStyle.displayed(swipeTrailRaw).title)
+                            .foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
             }
             if swipeTyping {
                 Section {

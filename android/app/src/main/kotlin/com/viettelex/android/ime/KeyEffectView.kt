@@ -25,6 +25,8 @@ import com.viettelex.keyboard.LightningShards
 import com.viettelex.keyboard.MatrixClock
 import com.viettelex.keyboard.MatrixRain
 import com.viettelex.keyboard.MeteorStreak
+import com.viettelex.keyboard.StringPluck
+import com.viettelex.keyboard.ThemeDecoration
 import com.viettelex.keyboard.WaveRings
 
 /**
@@ -96,6 +98,18 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
     private var blob: Bitmap? = null
     /** Đèn lồng / Sương ma: một bitmap đốm sáng mỗi màu cố định (dựng lúc đổi kiểu). */
     private var glows: Array<Bitmap> = emptyArray()
+    // Rung dây — pool đoạn dây (mảng cấp sẵn, một Path dùng lại); hết 0,3 s thì thôi hẹn khung hình (idle = 0).
+    /** Khe hàng phím (px, toạ độ view này) — ImeRootView đặt lúc layout, chỉ khi kiểu là Rung dây. */
+    internal var stringGaps: List<ThemeDecoration.Gap> = emptyList()
+        private set
+    fun setStringGaps(g: List<ThemeDecoration.Gap>) { if (g != stringGaps) stringGaps = g }
+    private val strStart = LongArray(StringPluck.POOL) { Long.MIN_VALUE / 2 }
+    private val strX = FloatArray(StringPluck.POOL)
+    private val strY = FloatArray(StringPluck.POOL)
+    private val strLen = FloatArray(StringPluck.POOL)
+    private val strWidth = FloatArray(StringPluck.POOL)
+    private var strCursor = 0
+    private val strPath = Path()
     // Matrix
     internal val matrixClock = MatrixClock()
     @Volatile private var strips: Array<Bitmap>? = null
@@ -184,6 +198,7 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
             KeyEffect.LIGHTNING -> fireLightning(x, y, if (w > 0f) w else DEFAULT_W * density, if (h > 0f) h else DEFAULT_H * density, now)
             KeyEffect.MATRIX -> pokeMatrix(now)
             KeyEffect.INK, KeyEffect.WAVE -> fireSlot(x, y, now, null)
+            KeyEffect.STRING -> fireString(x, y, if (w > 0f) w else DEFAULT_W * density, if (h > 0f) h else DEFAULT_H * density, now)
             KeyEffect.COMBO -> {
                 val lv = combo.press(now)
                 if (lv > 0) sim.spawn(x, y, now, lv, ComboMeter.SCALES[minOf(lv, 3)].toFloat())
@@ -198,6 +213,20 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
         slotCursor = (s + 1) % cap
         slotStart[s] = now; slotX[s] = x; slotY[s] = y; slotBmp[s] = b
     }
+
+    private fun fireString(x: Float, y: Float, w: Float, h: Float, now: Long) {
+        val s = strCursor
+        strCursor = (s + 1) % StringPluck.POOL
+        val (gy, gi) = if (stringGaps.isEmpty()) (y + h / 2 + StringPluck.FALLBACK_OFFSET * density).toDouble() to 0
+            else StringPluck.target((y - h / 2).toDouble(), (y + h / 2).toDouble(), stringGaps)
+        strStart[s] = now; strX[s] = x; strY[s] = gy.toFloat()
+        strLen[s] = (StringPluck.length((w / density).toDouble()) * density).toFloat()
+        strWidth[s] = ((ThemeDecoration.stringThickness(gi) + 0.4) * density).toFloat()
+    }
+
+    /** Test: số đoạn dây đang rung lúc [now] + vị trí y (px) đoạn thứ [i]. */
+    internal fun stringsAlive(now: Long): Int = strStart.count { now - it in 0 until STRING_MS }
+    internal fun stringY(i: Int): Float = strY[i]
 
     private fun fireLightning(x: Float, y: Float, w: Float, h: Float, now: Long) {
         val s = strikeCursor
@@ -243,6 +272,7 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
         sim.clear()
         strikeStart.fill(Long.MIN_VALUE / 2)
         slotStart.fill(Long.MIN_VALUE / 2)
+        strStart.fill(Long.MIN_VALUE / 2)
         flashStart = Long.MIN_VALUE / 2
         pendingEmoji = null
         pendN = 0
@@ -279,6 +309,7 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
             KeyEffect.MATRIX -> drawMatrix(canvas, now)
             KeyEffect.INK -> drawInk(canvas, now)
             KeyEffect.WAVE -> drawWave(canvas, now)
+            KeyEffect.STRING -> drawStrings(canvas, now)
             KeyEffect.EMOJIWORD -> drawEmoji(canvas, now)
             else -> drawParticles(canvas, now)
         }
@@ -392,6 +423,32 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
             canvas.drawBitmap(st[c.strip % st.size], x, top, bmpPaint)
         }
         return true
+    }
+
+    /** Đoạn dây rung: polyline sóng dừng (17 điểm) theo biên độ tắt dần — Path cấp sẵn, hết 0,3 s ⇒ false (thôi vẽ). */
+    private fun drawStrings(canvas: Canvas, now: Long): Boolean {
+        var any = false
+        stroke.color = color or (0xFF shl 24)
+        stroke.strokeCap = Paint.Cap.ROUND; stroke.strokeJoin = Paint.Join.ROUND
+        for (s in 0 until StringPluck.POOL) {
+            val t = now - strStart[s]
+            if (t < 0 || t >= STRING_MS) continue
+            any = true
+            val dt = t / 1000.0
+            val a = (StringPluck.amplitudeAt(dt) * density).toFloat()
+            stroke.alpha = (255 * StringPluck.alphaAt(dt)).toInt().coerceIn(0, 255)
+            stroke.strokeWidth = strWidth[s]
+            strPath.rewind()
+            val len = strLen[s]
+            for (i in 0..StringPluck.POINTS) {
+                val u = i.toFloat() / StringPluck.POINTS
+                val px = strX[s] + (u - 0.5f) * len
+                val py = strY[s] + a * Math.sin(Math.PI * u).toFloat()
+                if (i == 0) strPath.moveTo(px, py) else strPath.lineTo(px, py)
+            }
+            canvas.drawPath(strPath, stroke)
+        }
+        return any
     }
 
     private fun drawInk(canvas: Canvas, now: Long): Boolean {
@@ -609,6 +666,8 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
         const val SLOTS = 4
         const val EMOJI_MS = 1100L
         const val DEFAULT_W = 34f
+        /** Rung dây: thời lượng (ms) = StringPluck.DURATION. */
+        val STRING_MS = Math.round(StringPluck.DURATION * 1000)
         const val DEFAULT_H = 42f
     }
 }

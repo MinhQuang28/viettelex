@@ -7,6 +7,7 @@ import android.media.SoundPool
 import android.os.SystemClock
 import android.view.HapticFeedbackConstants
 import android.view.View
+import com.viettelex.keyboard.ChordProgression
 import com.viettelex.keyboard.HapticStrength
 import com.viettelex.keyboard.KeyInstrument
 import com.viettelex.keyboard.KeySoundCustom
@@ -45,6 +46,10 @@ import java.io.File
  *
  * Kiểu "Đàn tranh" (theme Sen Việt, 19/10/2026): CÙNG đường Piano ([KeyInstrument] chọn bảng nốt + bộ tổng hợp,
  * pool giọng / pedal / damper dùng chung). Bộ nốt thường 1.0 s ≈ 1.22 MB PCM16, bộ ngân ≈ 1.38 MB như Piano.
+ *
+ * Vòng hợp âm phím cách (10/2026): Piano / Ghi-ta có [NoteMap.progression] ⇒ mỗi hợp âm một WAV nạp sẵn
+ * ([PianoEvent.chord]), [progression] (thuần, như iOS) chọn hợp âm: tiến mỗi lần cách, nghỉ > 3 s / kết câu ⇒ về đầu,
+ * Enter ⇒ chủ rồi về đầu. Đàn tranh: hợp âm cách cố định. Ghi-ta (theme Ghi-ta): nốt 1.2 s ⇒ bộ thường ≈ 1.62 MB PCM16.
  */
 class Feedback(private val ctx: Context) {
     private val audio = ctx.getSystemService(Context.AUDIO_SERVICE) as AudioManager
@@ -90,7 +95,8 @@ class Feedback(private val ctx: Context) {
     private var noteMap: NoteMap = NoteMap.PIANO
     private val pianoIds = IntArray(128)
     private val sustainIds = IntArray(128)
-    private val pianoExtra = IntArray(4)
+    /** cách, Enter, ⌫, pedal, rồi hợp âm vòng 0…MAX_CHORDS−1 (thứ tự = [PianoEvent.extraIndex]). */
+    private val pianoExtra = IntArray(4 + PianoEvent.MAX_CHORDS)
     @Volatile private var pianoLoaded = BooleanArray(PIANO_MAX_SAMPLE_IDS)
     private var pianoPool = VoicePool(PianoSynth.VOICES)
     private var sustainPool = VoicePool(PianoSynth.VOICES)
@@ -102,6 +108,10 @@ class Feedback(private val ctx: Context) {
     private val main = android.os.Handler(android.os.Looper.getMainLooper())
     /** Pedal ngân (Shift/Caps người dùng bấm). */
     val pedal = PianoPedal()
+    /** Vòng hợp âm phím cách (count 0 = không vòng: Đàn tranh / kiểu khác). */
+    var progression = ChordProgression(0)
+        private set
+    private fun progressionClock(): Double = SystemClock.uptimeMillis() / 1000.0
     // --- "Éc" của theme Đập chuột ([com.viettelex.keyboard.MoleGame]) — chỉ nạp khi theme bật trò chơi ---
     private var squeakWanted = false
     private var squeakId = 0
@@ -123,6 +133,7 @@ class Feedback(private val ctx: Context) {
         soundStyle = style
         soundWorker = worker
         pedal.reset()
+        progression = ChordProgression(KeyInstrument.of(style)?.map?.progression?.size ?: 0)
         volumePercent = volume.coerceIn(0, 100)
         gain = KeySoundSynth.gain(volumePercent)
         if (!needsPool(enabled, volumePercent, style)) { releaseSound(); return }
@@ -181,7 +192,11 @@ class Feedback(private val ctx: Context) {
             main.post {
                 if (pool !== p) return@post
                 for ((m, f) in notes) if (f != null) pianoIds[m] = p.load(f.path, 1)
-                extras.forEachIndexed { i, f -> if (f != null) pianoExtra[i] = p.load(f.path, 1) }
+                // Cùng file (cách = hợp âm 0) ⇒ cùng sample id, không nạp đôi.
+                val loadedIds = HashMap<String, Int>()
+                extras.forEachIndexed { i, f ->
+                    if (f != null && i < pianoExtra.size) pianoExtra[i] = loadedIds.getOrPut(f.path) { p.load(f.path, 1) }
+                }
             }
         })
     }
@@ -251,9 +266,19 @@ class Feedback(private val ctx: Context) {
         if (!pianoMode) { click(kind, view); return }
         val route = KeySoundSynth.route(soundEnabled, volumePercent, ringerNormal(), soundStyle)
         lastRoute = route
+        if (progression.count > 0) progression.typed(progressionClock(), ChordProgression.isSentenceEnd(label))
         if (route == KeySoundSynth.Route.CUSTOM) playPiano(noteMap.midiForKey(label), pedal.noteTyped())
         haptic(view)
     }
+
+    /** Kết câu không qua phím "." (cách đúp ⇒ ". "): vòng hợp âm cách về đầu. */
+    fun sentenceEnd() {
+        if (pianoMode && progression.count > 0) progression.typed(progressionClock(), true)
+    }
+
+    /** Sự kiện piano của phím không nhãn — đi qua vòng hợp âm (cách / Enter / ⌫ cập nhật [progression]). */
+    private fun pianoEventFor(kind: Int): Int =
+        if (progression.count > 0) progressionEvent(kind, progression, progressionClock()) else pianoEvent(kind)
 
     /** Người dùng bấm Shift, [result] = trạng thái SAU khi bấm. Piano ⇒ pedal/damper; kiểu khác ⇒ tiếng chức năng. */
     fun shiftPressed(result: PianoPedal.Shift, view: View) {
@@ -287,7 +312,8 @@ class Feedback(private val ctx: Context) {
             }
             if (id == 0) id = pianoIds[ev]
         } else {
-            id = pianoExtra[PianoEvent.extraIndex(ev)]
+            val xi = PianoEvent.extraIndex(ev)
+            id = if (xi < pianoExtra.size && pianoExtra[xi] != 0) pianoExtra[xi] else pianoExtra[0]   // hợp âm lạ ⇒ cách
             if (ev == PianoEvent.PEDAL) kickSustain()
         }
         if (id <= 0 || id >= pianoLoaded.size || !pianoLoaded[id]) return
@@ -329,7 +355,7 @@ class Feedback(private val ctx: Context) {
                 RETURN -> AudioManager.FX_KEYPRESS_RETURN
                 else -> AudioManager.FX_KEYPRESS_STANDARD
             })
-            KeySoundSynth.Route.CUSTOM -> if (pianoMode) playPiano(pianoEvent(kind), false)
+            KeySoundSynth.Route.CUSTOM -> if (pianoMode) playPiano(pianoEventFor(kind), false)
             else if (kind == RETURN && returnLoaded) pool?.play(returnId, gain, gain, 1, 0, 1f)   // Máy chữ: "ding"
             else {
                 val i = soundKind(kind).ordinal
@@ -398,6 +424,19 @@ class Feedback(private val ctx: Context) {
             else -> PianoMap.MODIFIER_NOTE
         }
 
+        /**
+         * Phím không nhãn khi nhạc cụ có vòng hợp âm (thuần — test được): cách ⇒ hợp âm KẾ TIẾP ([PianoEvent.chord]);
+         * Enter ⇒ chủ ([PianoEvent.RETURN]) rồi vòng về đầu; ⌫ ⇒ tính là đang gõ; còn lại như [pianoEvent].
+         */
+        fun progressionEvent(kind: Int, prog: ChordProgression, now: Double): Int {
+            if (prog.count > 0) when (kind) {
+                SPACE -> return PianoEvent.chord(prog.space(now))
+                RETURN -> prog.returnKey(now)
+                DELETE -> prog.typed(now, false)
+            }
+            return pianoEvent(kind)
+        }
+
         /** Số sample id tối đa theo dõi (25 nốt + 4 âm + 25 nốt ngân < 128). */
         const val PIANO_MAX_SAMPLE_IDS = 128
 
@@ -407,12 +446,21 @@ class Feedback(private val ctx: Context) {
                 if (sustain) PianoSynth.SUSTAIN_SAMPLE_RATE else PianoSynth.SAMPLE_RATE) { inst.note(midi, sustain) }
         fun pianoNoteFile(dir: File, midi: Int, sustain: Boolean): File? = pianoNoteFile(dir, KeyInstrument.PIANO, midi, sustain)
 
-        /** WAV cách / Enter / ⌫ / pedal (thứ tự = [PianoEvent.extraIndex]). */
-        fun pianoExtraFiles(dir: File, inst: KeyInstrument = KeyInstrument.PIANO): List<File?> = listOf(
-            cachedWav(dir, "keysound-${inst.cacheTag}-space.wav", PianoSynth.SAMPLE_RATE) { inst.space() },
-            cachedWav(dir, "keysound-${inst.cacheTag}-return.wav", PianoSynth.SAMPLE_RATE) { inst.returnChord() },
-            cachedWav(dir, "keysound-${inst.cacheTag}-delete.wav", PianoSynth.SAMPLE_RATE) { inst.delete() },
-            cachedWav(dir, "keysound-${inst.cacheTag}-pedal.wav", PianoSynth.SAMPLE_RATE) { inst.pedal() })
+        /**
+         * WAV cách / Enter / ⌫ / pedal, rồi hợp âm vòng (thứ tự = [PianoEvent.extraIndex]). Nhạc cụ có vòng: "cách" =
+         * CÙNG file hợp âm 0 (không ghi / nạp thêm). Hợp âm Piano đổi (vòng 10/2026) ⇒ tên file mới "chordN".
+         */
+        fun pianoExtraFiles(dir: File, inst: KeyInstrument = KeyInstrument.PIANO): List<File?> {
+            val chords = inst.map.progression.indices.map { i ->
+                cachedWav(dir, "keysound-${inst.cacheTag}-chord$i.wav", PianoSynth.SAMPLE_RATE) { inst.chord(i) }
+            }
+            val space = if (chords.isNotEmpty()) chords[0]
+                else cachedWav(dir, "keysound-${inst.cacheTag}-space.wav", PianoSynth.SAMPLE_RATE) { inst.space() }
+            return listOf(space,
+                cachedWav(dir, "keysound-${inst.cacheTag}-return.wav", PianoSynth.SAMPLE_RATE) { inst.returnChord() },
+                cachedWav(dir, "keysound-${inst.cacheTag}-delete.wav", PianoSynth.SAMPLE_RATE) { inst.delete() },
+                cachedWav(dir, "keysound-${inst.cacheTag}-pedal.wav", PianoSynth.SAMPLE_RATE) { inst.pedal() }) + chords
+        }
 
         private fun cachedWav(dir: File, name: String, rate: Int, make: () -> FloatArray): File? = runCatching {
             val f = File(dir, name)

@@ -2,6 +2,7 @@ package com.viettelex.keyboard
 
 import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.exp
 import kotlin.math.sin
 
 /**
@@ -31,7 +32,9 @@ enum class KeyEffect(val id: String, val viTitle: String) {
     METEOR("meteor", "Sao băng"), // l10n-key
     // Bộ theme đủ món 10/2026: đốm sáng mềm dựng sẵn ([GlowSprite]) — Trung Thu, Halloween.
     LANTERN("lantern", "Đèn lồng"), // l10n-key
-    SMOKE("smoke", "Sương ma"); // l10n-key
+    SMOKE("smoke", "Sương ma"), // l10n-key
+    // Theme Ghi-ta (10/2026): đoạn dây ở khe hàng gần phím rung sóng dừng rồi đứng yên ([StringPluck]).
+    STRING("string", "Rung dây"); // l10n-key
 
     val title: String get() = tr(viTitle)
 
@@ -46,7 +49,7 @@ enum class KeyEffect(val id: String, val viTitle: String) {
 
     /** Dải z: Matrix / Mực loang / Sóng nước vẽ trên nền nhưng DƯỚI phím. */
     val band: KeyEffectBand get() = when (this) {
-        MATRIX, INK, WAVE -> KeyEffectBand.BELOW_KEYS
+        MATRIX, INK, WAVE, STRING -> KeyEffectBand.BELOW_KEYS
         else -> KeyEffectBand.ABOVE_KEYS
     }
 
@@ -119,6 +122,81 @@ enum class KeyEffect(val id: String, val viTitle: String) {
         val PARTICLES: Set<KeyEffect> = setOf(HEART, BUBBLE, RIPPLE, PETAL, FIREWORK, BLOSSOM, COMBO, SNOW, METEOR, LANTERN, SMOKE)
         /** Giá trị lạ / thiếu ⇒ [DEFAULT]. */
         fun of(raw: Any?): KeyEffect = entries.firstOrNull { it.id == raw } ?: DEFAULT
+    }
+}
+
+/**
+ * "Rung dây" (theme Ghi-ta, 10/2026): bấm phím ⇒ đoạn dây ngang ở khe hàng gần phím nhất rung sóng dừng tắt dần
+ * ~0.3 s rồi đứng yên. Hàm thuần — iOS StringPluck y hệt (test số chung). Path dựng cho chiều dài chuẩn
+ * [UNIT_LENGTH], co giãn ngang theo phím; biên độ khung f: A·cos(2π·cycles·t/T)·e^(−t/τ), khung cuối = 0.
+ */
+object StringPluck {
+    const val DURATION = 0.3
+    const val FRAMES = 18
+    const val AMPLITUDE = 3.0
+    const val CYCLES = 4.0
+    const val DECAY = 0.09
+    const val UNIT_LENGTH = 100.0
+    const val POINTS = 16
+    const val LENGTH_FACTOR = 2.2
+    const val MIN_LENGTH = 44.0
+    const val MAX_LENGTH = 150.0
+    /** Số đoạn dây rung cùng lúc (pool xoay vòng). */
+    const val POOL = 4
+    const val SWEEP_SLACK = 0.05
+    /** Không có khe (một hàng): dây nằm dưới phím cách mép này. */
+    const val FALLBACK_OFFSET = 4.0
+
+    fun length(keyWidth: Double): Double = (keyWidth * LENGTH_FACTOR).coerceIn(MIN_LENGTH, MAX_LENGTH)
+
+    /** Biên độ (dp) ở khung [f] (0…FRAMES). */
+    fun amplitude(f: Int): Double {
+        if (f <= 0) return AMPLITUDE
+        if (f >= FRAMES) return 0.0
+        val t = f.toDouble() / FRAMES * DURATION
+        return AMPLITUDE * cos(2 * Math.PI * CYCLES * t / DURATION) * exp(-t / DECAY)
+    }
+
+    /** Điểm dây ở khung [f] (chiều dài [UNIT_LENGTH], tâm tại gốc): [x, y] với y = a·sin(πu). */
+    fun shape(f: Int): List<DoubleArray> {
+        val a = amplitude(f)
+        return (0..POINTS).map { i ->
+            val u = i.toDouble() / POINTS
+            doubleArrayOf((u - 0.5) * UNIT_LENGTH, a * sin(Math.PI * u))
+        }
+    }
+
+    /** Biên độ hiện tại sau [dt] giây kể từ lúc gảy (nội suy tuyến tính giữa hai khung; ≥ DURATION ⇒ 0). */
+    fun amplitudeAt(dt: Double): Double {
+        if (dt <= 0) return AMPLITUDE
+        if (dt >= DURATION) return 0.0
+        val x = dt / DURATION * FRAMES
+        val f = x.toInt()
+        return amplitude(f) + (amplitude(f + 1) - amplitude(f)) * (x - f)
+    }
+
+    /** Độ mờ sau [dt] giây: 1 tới 70 % thời gian rồi tắt tuyến tính về 0 (iOS keyframe [1, 1, 0] @ [0, .7, 1]). */
+    fun alphaAt(dt: Double): Double = when {
+        dt < 0 || dt >= DURATION -> 0.0
+        dt <= 0.7 * DURATION -> 1.0
+        else -> 1 - (dt - 0.7 * DURATION) / (0.3 * DURATION)
+    }
+
+    /** Còn bao lâu nữa mới dọn (≤ 0 ⇒ dọn ngay). */
+    fun sweepDelay(sinceLastPluck: Double): Double = DURATION + SWEEP_SLACK - sinceLastPluck
+
+    /** Khe chứa dây gần phím nhất: (tâm y, chỉ số khe). Hoà ⇒ khe dưới. Không có khe ⇒ ngay dưới phím, chỉ số 0. */
+    fun target(keyTop: Double, keyBottom: Double, gaps: List<ThemeDecoration.Gap>): Pair<Double, Int> {
+        val mid = (keyTop + keyBottom) / 2
+        var best: Pair<Double, Int>? = null
+        var bestD = Double.POSITIVE_INFINITY
+        gaps.forEachIndexed { i, g ->
+            val d = abs(g.center - mid)
+            if (d < bestD - 1e-9 || (abs(d - bestD) <= 1e-9 && g.center > (best?.first ?: Double.NEGATIVE_INFINITY))) {
+                bestD = d; best = g.center to i
+            }
+        }
+        return best ?: ((keyBottom + FALLBACK_OFFSET) to 0)
     }
 }
 

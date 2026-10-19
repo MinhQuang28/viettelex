@@ -55,14 +55,18 @@ class PianoTests {
         assertEquals(27_563, PianoSynth.note(60, true).size)
     }
 
-    /** Bộ nhớ: bộ thường 492 818 mẫu (iOS Float32 1.97 MB ≤ 2 MB; Android PCM16 ≈ 0.99 MB); bộ ngân lười. */
+    /**
+     * Bộ nhớ: bộ thường 545 738 mẫu = 25 nốt + 4 hợp âm vòng cách (C Am F G; "cách" = hợp âm 0) + Enter + ⌫ + pedal
+     * (iOS Float32 2.18 MB ≤ 2.25 MB; Android PCM16 ≈ 1.09 MB); bộ ngân lười. iOS testPianoMemoryBound.
+     */
     @Test fun memoryBound() {
-        assertEquals(492_818, PianoSynth.normalBankSamples)
-        assertTrue(PianoSynth.normalBankSamples * 4 <= 2 * 1024 * 1024)
+        assertEquals(545_738, PianoSynth.normalBankSamples)
+        assertTrue(PianoSynth.normalBankSamples * 4 <= 9 * 1024 * 1024 / 4)
         assertEquals(689_075, PianoSynth.sustainBankSamples)
-        val real = PianoMap.NOTES.sumOf { PianoSynth.note(it).size } + PianoSynth.space().size +
+        val real = PianoMap.NOTES.sumOf { PianoSynth.note(it).size } + (0 until 4).sumOf { PianoSynth.chord(it).size } +
             PianoSynth.returnChord().size + PianoSynth.delete().size + PianoSynth.pedal().size
         assertEquals(PianoSynth.normalBankSamples, real)
+        assertEquals(PianoSynth.normalBankSamples, KeyInstrument.PIANO.normalBankSamples)
     }
 
     @Test fun pedalStateMachine() {
@@ -106,6 +110,8 @@ class PianoTests {
         assertEquals(1, PianoEvent.extraIndex(PianoEvent.RETURN))
         assertEquals(2, PianoEvent.extraIndex(PianoEvent.DELETE))
         assertEquals(3, PianoEvent.extraIndex(PianoEvent.PEDAL))
+        assertEquals((4..7).toList(), (0..3).map { PianoEvent.extraIndex(PianoEvent.chord(it)) })
+        assertTrue((0..3).all { PianoEvent.chord(it) < 0 })
     }
 
     // ---- Đàn tranh (theme Sen Việt) — chung iOS testDanTranh*
@@ -186,7 +192,6 @@ class PianoTests {
         val i = KeyInstrument.DANTRANH
         val real = i.map.notes.sumOf { i.note(it).size } + i.space().size + i.returnChord().size + i.delete().size + i.pedal().size
         assertEquals(i.normalBankSamples, real)
-        assertEquals(PianoSynth.normalBankSamples, KeyInstrument.PIANO.normalBankSamples)
     }
 
     /** Pedal dùng chung: đàn tranh không có máy trạng thái riêng — cùng PianoPedal (một-lần / Caps / damper). */

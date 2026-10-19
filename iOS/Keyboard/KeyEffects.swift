@@ -1,6 +1,6 @@
 // "Hiệu ứng khi bấm phím" (Plus, Phil 19/10/2026 — kiểu Laban Key): Trái tim, Bong bóng, Gợn sóng,
 // Cánh hoa, Pháo hoa, Nháy sáng, Matrix, Tia sét, Emoji theo chữ, Hoa đào / mai, Lửa combo, Mực loang,
-// Sóng nước, Tuyết rơi, Sao băng, Đèn lồng, Sương ma; "Không" = mặc định. Song sinh android/keyboard/.../KeyEffect.kt (cùng khoá
+// Sóng nước, Tuyết rơi, Sao băng, Đèn lồng, Sương ma, Rung dây; "Không" = mặc định. Song sinh android/keyboard/.../KeyEffect.kt (cùng khoá
 // `keyEffect`, cùng id, cùng quỹ đạo / cùng hàm thuần: tia sét, mảnh vỡ, combo, nháy sáng, emoji).
 //
 // Luật hiệu năng (feature-flags-perf-policy — gõ mượt là số 1):
@@ -11,7 +11,7 @@
 //  • Chỉ Core Animation: animation gắn MỘT lần lúc dựng layer (pool), bấm chỉ đổi vài thuộc tính +
 //    `beginTime` ⇒ render server chạy phần còn lại, không timer/display link, không vẽ CPU mỗi khung.
 //  • Hai dải z: TRÊN phím (zPosition 5, dưới ô phóng to 10) cho đa số kiểu; DƯỚI phím (trên nền / ảnh
-//    nền, `KeyEffectBand.belowKeys`) cho Matrix / Mực loang / Sóng nước.
+//    nền, `KeyEffectBand.belowKeys`) cho Matrix / Mực loang / Sóng nước / Rung dây (dây ở khe hàng, trên hoạ tiết).
 import UIKit
 
 /// Kiểu hiệu ứng (giá trị lưu App Group / sao lưu = rawValue).
@@ -24,6 +24,8 @@ enum KeyEffect: String, CaseIterable {
     case meteor
     // Bộ theme đủ món 10/2026: Đèn lồng (Trung Thu), Sương ma (Halloween) — đốm sáng mềm dựng sẵn (GlowSprite).
     case lantern, smoke
+    // Theme Ghi-ta (10/2026): Rung dây — đoạn dây ở khe hàng gần phím rung sóng dừng rồi đứng yên (StringPluck).
+    case string
 
     static let key = "keyEffect"
     static let defaultValue: KeyEffect = .none
@@ -54,6 +56,7 @@ enum KeyEffect: String, CaseIterable {
         case .meteor: return L("Sao băng")
         case .lantern: return L("Đèn lồng")
         case .smoke: return L("Sương ma")
+        case .string: return L("Rung dây")
         }
     }
 
@@ -70,7 +73,7 @@ enum KeyEffect: String, CaseIterable {
     /// Dải z: Matrix / Mực loang / Sóng nước vẽ trên nền nhưng DƯỚI phím.
     var band: KeyEffectBand {
         switch self {
-        case .matrix, .ink, .wave: return .belowKeys
+        case .matrix, .ink, .wave, .string: return .belowKeys
         default: return .aboveKeys
         }
     }
@@ -109,6 +112,7 @@ enum KeyEffect: String, CaseIterable {
         switch self {
         case .ink: return 4
         case .wave: return 3              // 3 vòng mỗi chùm ⇒ 9 layer
+        case .string: return StringPluck.pool
         case .emojiword: return 3
         default:
             guard particlesPerTap > 0 else { return 1 }
@@ -119,7 +123,7 @@ enum KeyEffect: String, CaseIterable {
     /// Số layer con mỗi chùm.
     var layersPerBurst: Int {
         switch self {
-        case .ink, .emojiword: return 1
+        case .ink, .emojiword, .string: return 1
         case .wave: return WaveRings.rings
         default: return particlesPerTap
         }
@@ -210,6 +214,66 @@ enum GlowSprite {
         case .lantern: return [(0, 1), (0.28, 0.9), (0.6, 0.35), (1, 0)]
         default: return [(0, 0.5), (0.45, 0.32), (1, 0)]      // sương: mờ, mép tan
         }
+    }
+}
+
+/// "Rung dây" (theme Ghi-ta, 10/2026): bấm phím ⇒ đoạn DÂY ngang ở khe hàng gần phím nhất (trên hoặc dưới) rung
+/// sóng dừng tắt dần ~0.3 s rồi đứng yên. Hàm thuần — Android StringPluck y hệt (test số chung).
+/// - Hình: đoạn dài L (theo bề ngang phím, kẹp 44…150) — path dựng cho chiều dài chuẩn `unitLength`, layer co giãn
+///   NGANG (transform) ⇒ một bộ khung hình (path keyframes) cho mọi phím, render server nội suy (GPU).
+/// - Biên độ khung f: A·cos(2π·cycles·t/T)·e^(−t/τ) (t = f/frames·T), khung cuối = 0 (dây đứng yên); dạng dây
+///   = sin(πx) (bụng giữa, hai đầu cố định).
+/// - Độ dày theo khe (dây dưới dày hơn) = KeyboardDecoration.stringThickness.
+enum StringPluck {
+    static let duration = 0.3
+    static let frames = 18
+    static let amplitude = 3.0
+    static let cycles = 4.0
+    static let decay = 0.09
+    static let unitLength = 100.0
+    static let points = 16
+    static let lengthFactor = 2.2
+    static let minLength = 44.0, maxLength = 150.0
+    /// Số đoạn dây rung cùng lúc (pool xoay vòng) — gõ nhanh hơn thì đoạn cũ nhất bị bắn lại.
+    static let pool = 4
+    /// Dọn sau lần gảy cuối: hết animation + chút dư.
+    static let sweepSlack = 0.05
+    /// Còn bao lâu nữa mới dọn (≤ 0 ⇒ dọn ngay) — thuần, test được.
+    static func sweepDelay(sinceLastPluck dt: Double) -> Double { duration + sweepSlack - dt }
+    /// Không có khe (một hàng): dây nằm dưới phím cách mép này.
+    static let fallbackOffset = 4.0
+
+    static func length(keyWidth w: Double) -> Double { min(max(w * lengthFactor, minLength), maxLength) }
+
+    /// Biên độ (pt) ở khung `f` (0…frames).
+    static func amplitude(frame f: Int) -> Double {
+        guard f > 0, f < frames else { return f == 0 ? amplitude : 0 }
+        let t = Double(f) / Double(frames) * duration
+        return amplitude * cos(2 * Double.pi * cycles * t / duration) * exp(-t / decay)
+    }
+
+    /// Điểm của dây ở khung `f` (đơn vị pt, chiều dài `unitLength`, tâm tại gốc): x −L/2…L/2, y = a·sin(πu).
+    static func shape(frame f: Int) -> [(x: Double, y: Double)] {
+        let a = amplitude(frame: f)
+        return (0...points).map { i in
+            let u = Double(i) / Double(points)
+            return (x: (u - 0.5) * unitLength, y: a * sin(Double.pi * u))
+        }
+    }
+
+    /// Khe chứa dây gần phím nhất: (tâm y, chỉ số khe từ trên xuống). Không có khe ⇒ ngay dưới phím, chỉ số 0.
+    static func target(keyTop: Double, keyBottom: Double, gaps: [KeyboardDecoration.Gap]) -> (y: Double, index: Int) {
+        let mid = (keyTop + keyBottom) / 2
+        var best: (y: Double, index: Int)?
+        var bestD = Double.infinity
+        for (i, g) in gaps.enumerated() {
+            let d = abs(g.center - mid)
+            // Hoà (phím giữa hai khe) ⇒ khe DƯỚI (dây trầm hơn).
+            if d < bestD - 1e-9 || (abs(d - bestD) <= 1e-9 && g.center > (best?.y ?? -Double.infinity)) {
+                bestD = d; best = (g.center, i)
+            }
+        }
+        return best ?? (keyBottom + fallbackOffset, 0)
     }
 }
 
@@ -625,6 +689,17 @@ final class KeyEffectOverlay: UIView {
     private var blob: CGImage?
     // Đèn lồng / Sương ma — một ảnh mỗi màu cố định
     private var glows: [CGImage] = []
+    // Rung dây — pool đoạn dây; animation (khung path + mờ) dựng MỘT lần, gắn mỗi lần gảy và TỰ GỠ khi xong
+    // (isRemovedOnCompletion) ⇒ nghỉ gõ = 0 animation trên cây layer.
+    /// Khe hàng phím (toạ độ overlay) — KeyboardView đặt lúc layout, chỉ khi kiểu là Rung dây.
+    var stringGaps: [KeyboardDecoration.Gap] = []
+    private var strings: [CAShapeLayer] = []
+    private var stringPool = KeyEffectPool(capacity: StringPluck.pool)
+    private var stringAnim: CAAnimationGroup?
+    /// Lần gảy cuối (giây máy) + đã hẹn dọn chưa: MỘT asyncAfter cho cả loạt gõ — nghỉ ⇒ gỡ chắc chắn mọi animation
+    /// (kể cả khi render server chưa kịp tự gỡ), không timer lặp.
+    private var stringLastFire: CFTimeInterval = 0
+    private var stringSweepScheduled = false
     // Matrix
     private var matrixRoot: CALayer?
     private var matrixColumns: [CALayer] = []
@@ -801,6 +876,10 @@ final class KeyEffectOverlay: UIView {
     var debugEmojiCacheCount: Int { emojiImages.count }
     /// Số ảnh đốm sáng dựng sẵn (Đèn lồng / Sương ma — mỗi màu một ảnh).
     var debugGlowCount: Int { glows.count }
+    /// Rung dây: các đoạn dây đã dựng (pool) + số animation đang gắn trên chúng.
+    var debugStringLayers: [CAShapeLayer] { strings }
+    var debugStringAnimationCount: Int { strings.reduce(0) { $0 + ($1.animationKeys()?.count ?? 0) } }
+    var debugStringAnimation: CAAnimationGroup { stringAnimation() }
     #else
     static let drawsOffscreen = false
     #endif
@@ -814,6 +893,7 @@ final class KeyEffectOverlay: UIView {
         case .flash: fireFlash(now: now, media: media)
         case .lightning: fireLightning(r, now: now)
         case .matrix: pokeMatrix(media: media)
+        case .string: fireString(r)
         case .combo:
             let lv = combo.press(at: media)
             guard lv > 0 else { return }
@@ -866,6 +946,78 @@ final class KeyEffectOverlay: UIView {
             flashLayer = l
         }
         l.beginTime = now
+    }
+
+    // MARK: Rung dây
+
+    private func fireString(_ r: CGRect) {
+        let slot = stringPool.next()
+        let l: CAShapeLayer
+        if slot < strings.count { l = strings[slot] } else { l = makeStringLayer(); strings.append(l) }
+        let size = r.size == .zero ? Self.defaultKeySize : r.size
+        let top = r.size == .zero ? r.midY - size.height / 2 : r.minY
+        let t = StringPluck.target(keyTop: Double(top), keyBottom: Double(top + size.height), gaps: stringGaps)
+        let len = StringPluck.length(keyWidth: Double(size.width))
+        l.position = CGPoint(x: r.midX, y: CGFloat(t.y))
+        l.transform = CATransform3DMakeScale(CGFloat(len / StringPluck.unitLength), 1, 1)
+        l.lineWidth = CGFloat(KeyboardDecoration.stringThickness(t.index) + 0.4)
+        l.add(stringAnimation(), forKey: "fx")      // gảy lại cùng đoạn ⇒ thay animation cũ
+        stringLastFire = CACurrentMediaTime()
+        scheduleStringSweep(after: StringPluck.duration + StringPluck.sweepSlack)
+    }
+
+    private func scheduleStringSweep(after s: Double) {
+        guard !stringSweepScheduled else { return }
+        stringSweepScheduled = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + s) { [weak self] in self?.sweepStrings() }
+    }
+
+    private func sweepStrings() {
+        stringSweepScheduled = false
+        let left = StringPluck.sweepDelay(sinceLastPluck: CACurrentMediaTime() - stringLastFire)
+        if left > 0 { scheduleStringSweep(after: left); return }
+        for l in strings { l.removeAnimation(forKey: "fx") }
+    }
+
+    private func makeStringLayer() -> CAShapeLayer {
+        let l = CAShapeLayer()
+        l.bounds = .zero
+        l.path = Self.stringPath(frame: StringPluck.frames)
+        l.fillColor = nil
+        l.strokeColor = color.cgColor
+        l.lineCap = .round
+        l.lineJoin = .round
+        l.opacity = 0                 // mô hình vô hình: animation xong (tự gỡ) ⇒ không còn gì vẽ
+        l.actions = ["position": NSNull(), "transform": NSNull(), "lineWidth": NSNull()]
+        layer.addSublayer(l)
+        return l
+    }
+
+    private static func stringPath(frame f: Int) -> CGPath {
+        let p = CGMutablePath()
+        for (i, q) in StringPluck.shape(frame: f).enumerated() {
+            let pt = CGPoint(x: q.x, y: q.y)
+            if i == 0 { p.move(to: pt) } else { p.addLine(to: pt) }
+        }
+        return p
+    }
+
+    /// Khung path sóng dừng + mờ dần — dựng một lần (CA chép khi gắn). Tự gỡ khi xong.
+    private func stringAnimation() -> CAAnimationGroup {
+        if let a = stringAnim { return a }
+        let wave = CAKeyframeAnimation(keyPath: "path")
+        wave.values = (0...StringPluck.frames).map { Self.stringPath(frame: $0) }
+        wave.calculationMode = .linear
+        let fade = CAKeyframeAnimation(keyPath: "opacity")
+        fade.values = [1, 1, 0]; fade.keyTimes = [0, 0.7, 1]
+        let g = CAAnimationGroup()
+        g.animations = [wave, fade]
+        g.duration = StringPluck.duration
+        wave.duration = StringPluck.duration; fade.duration = StringPluck.duration
+        g.fillMode = .removed
+        g.isRemovedOnCompletion = true
+        stringAnim = g
+        return g
     }
 
     // MARK: Tia sét
@@ -1103,6 +1255,7 @@ final class KeyEffectOverlay: UIView {
     func halt() {
         haltMatrix()
         pendingEmoji = nil
+        for l in strings { l.removeAllAnimations() }
     }
 
     // MARK: dựng
@@ -1226,11 +1379,15 @@ final class KeyEffectOverlay: UIView {
         CATransaction.setDisableActions(true)
         for b in bursts { b.removeFromSuperlayer() }
         for s in strikes { s.root.removeFromSuperlayer() }
+        for l in strings { l.removeFromSuperlayer() }
         flashLayer?.removeFromSuperlayer()
         matrixRoot?.removeFromSuperlayer()
         CATransaction.commit()
         bursts.removeAll()
         strikes.removeAll()
+        strings.removeAll()
+        stringPool = KeyEffectPool(capacity: StringPluck.pool)
+        stringAnim = nil
         flashLayer = nil
         matrixRoot = nil
         matrixColumns.removeAll()

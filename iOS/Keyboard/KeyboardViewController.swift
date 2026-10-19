@@ -436,11 +436,12 @@ final class KeyboardViewController: UIInputViewController {
     private func applyKeySound(_ settings: KeyboardSettings) {
         let on = Self.customKeySoundActive(setting: settings.keySound, style: settings.keySoundStyle, fullAccess: hasFullAccess)
         KeyboardView.customSoundEnabled = on
-        // Piano / Đàn tranh: nốt theo phím (resolve một lần lúc hiện, không mỗi phím); pedal về trạng thái nhả.
+        // Piano / Đàn tranh / Ghi-ta: nốt theo phím (resolve một lần lúc hiện, không mỗi phím); pedal về trạng thái nhả.
         let instrument = KeyInstrument.of(settings.keySoundStyle)
         KeyboardView.pianoEnabled = on && instrument != nil
         KeyboardView.pianoMap = instrument?.map ?? .piano
         KeyboardView.pianoPedal = PianoPedal()
+        KeyboardView.chordProgression = ChordProgression(count: instrument?.map.progression.count ?? 0)
         KeySound.shared.setVolume(percent: settings.keySoundVolume)
         KeySound.shared.setStyle(settings.keySoundStyle)
         if on && settings.keySoundVolume > 0 { KeySound.shared.prepare() } else { KeySound.shared.shutdown() }
@@ -2553,6 +2554,7 @@ extension KeyboardViewController {
                                bridge: bridge, proxy: Proxy(p: textDocumentProxy))
         if let out {
             if let c = out.committed { commitAndLearn(c.word, accepted: c.accepted) }
+            keyboard.swipeCommitted()          // "Pháo hoa cuối nét" (kiểu khác: 0 việc)
             swipeReviseUndo = out.revised
             if !out.scored.isEmpty, bridge.isSwipeWordOpen {
                 swipeRevisable = SwipeTyping.Revisable(word: out.word, scored: out.scored, sc: sc)

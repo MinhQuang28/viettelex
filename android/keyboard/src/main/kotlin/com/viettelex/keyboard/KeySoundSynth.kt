@@ -37,6 +37,8 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
     // Bộ theme đủ món 10/2026: Trống lân (Trung Thu), Ma quái (Halloween) — công thức đầu file Swift.
     TRONG("trong", "Trống lân"), // l10n-key
     BOO("boo", "Ma quái"), // l10n-key
+    /** Theme "Ghi-ta" (10/2026): mỗi phím một nốt ghi-ta mộc dây sắt ([KeyInstrument.GUITAR]), cách = quạt hợp âm theo vòng. */
+    GUITAR("guitar", "Ghi-ta mộc"), // l10n-key
     /** Theme "Đập chuột" (10/2026): búa gỗ bọc vải gõ nhẹ — công thức đầu file Swift. */
     BOP("bop", "Búa gỗ"); // l10n-key
 
@@ -49,8 +51,8 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
         /** Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức [KeySoundSynth.baseRecipe]. */
         val PRESETS = listOf(SUBTLE, WOOD, MECHANICAL, TYPEWRITER, BUBBLE, ROCK, POP, WATER, VINTAGE, PHAO, JINGLE, SCIFI,
             TRONG, BOO, BOP)
-        /** Mọi kiểu dựng sẵn (3 tiếng + nhạc cụ mỗi phím một nốt: Piano, Đàn tranh). */
-        val ALL_PRESETS = PRESETS + PIANO + DANTRANH
+        /** Mọi kiểu dựng sẵn (3 tiếng + nhạc cụ mỗi phím một nốt: Piano, Đàn tranh, Ghi-ta). */
+        val ALL_PRESETS = PRESETS + PIANO + DANTRANH + GUITAR
         /**
          * DANH SÁCH DUY NHẤT id hợp lệ cho trường "sound" của theme JSON (chọn theme ⇒ đặt
          * keySoundStyle). Không gồm "system"/"custom". iOS: KeySoundStyle.presetIDs — test chốt trùng.
@@ -96,7 +98,8 @@ object KeySoundSynth {
         Noise(amp, delay, hp, lp, tau)
 
     fun baseRecipe(s: KeySoundStyle): Recipe = when (s) {
-        KeySoundStyle.SUBTLE, KeySoundStyle.CUSTOM, KeySoundStyle.SYSTEM, KeySoundStyle.PIANO, KeySoundStyle.DANTRANH -> Recipe(
+        KeySoundStyle.SUBTLE, KeySoundStyle.CUSTOM, KeySoundStyle.SYSTEM, KeySoundStyle.PIANO, KeySoundStyle.DANTRANH,
+        KeySoundStyle.GUITAR -> Recipe(
             listOf(t(1.0, 500.0, 360.0, tau = 0.007), t(0.24, 1050.0, 900.0, tau = 0.0025)),
             listOf(n(0.30, lp = 1900.0, tau = 0.002)), 0.0016, 0.032, 2600.0, 0.80)
         KeySoundStyle.WOOD -> Recipe(

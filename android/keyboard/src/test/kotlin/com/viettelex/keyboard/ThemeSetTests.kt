@@ -47,7 +47,7 @@ class ThemeSetTests {
         assertEquals(lines.first { it[0] == "order" }[1].split(','), KeyboardTheme.entries.map { it.id })
         assertEquals(lines.first { it[0] == "plus" }[1].split(','), KeyboardTheme.entries.filter { it.isPlus }.map { it.id })
         val rows = lines.filter { it[0] != "order" && it[0] != "plus" }
-        assertEquals(48, rows.size)
+        assertEquals(50, rows.size)
         for (r in rows) {
             val t = KeyboardTheme.entries.first { it.id == r[0] }
             val p = t.palette(r[1] == "1")!!
@@ -68,8 +68,10 @@ class ThemeSetTests {
             // Piano: phím ngà chữ đen nhưng NỀN tối ⇒ vùng ngoài phím theo nhánh tối (surfaceDark).
             if (t in fixed) { assertEquals("$t", light, dark); assertTrue("$t", dark.surfaceDark ?: dark.isDark); continue }
             assertNotEquals("$t", light, dark)
-            assertFalse("$t", light.isDark)
-            assertTrue("$t bản tối", dark.isDark)
+            // Vùng ngoài phím (thanh gợi ý, emoji…) sáng ở bản sáng, tối ở bản tối. Ghi-ta: bản sáng phím gỗ tối chữ ngà
+            // (isDark) trên mặt đàn sáng ⇒ surfaceDark = false.
+            assertFalse("$t", light.surfaceDark ?: light.isDark)
+            assertTrue("$t bản tối", dark.surfaceDark ?: dark.isDark)
             if (t != KeyboardTheme.GLASS) assertEquals("$t giữ màu nhấn", light.action, dark.action)
         }
     }
@@ -399,7 +401,8 @@ class ThemeSetTests {
             KeyboardTheme.SEN to ThemeDecoration.LOTUS,
             KeyboardTheme.SPACE to ThemeDecoration.STARFIELD,
             KeyboardTheme.TRUNG_THU to ThemeDecoration.LANTERN, KeyboardTheme.VALENTINE to ThemeDecoration.HEARTS,
-            KeyboardTheme.HALLOWEEN to ThemeDecoration.PUMPKIN, KeyboardTheme.MOLE to ThemeDecoration.FLOWERS)
+            KeyboardTheme.HALLOWEEN to ThemeDecoration.PUMPKIN, KeyboardTheme.GUITAR to ThemeDecoration.STRINGS,
+            KeyboardTheme.MOLE to ThemeDecoration.FLOWERS)
         for ((t, m) in festive) for (dk in listOf(false, true)) assertEquals("$t", m, t.palette(dk)!!.decoration!!.motif)
         assertEquals(ThemeDecoration.SNOWFLAKE, KeyboardTheme.XMAS_SNOW.palette(false)!!.decoration!!.motif)
         assertEquals(ThemeDecoration.STAR, KeyboardTheme.XMAS_SNOW.palette(true)!!.decoration!!.motif)
