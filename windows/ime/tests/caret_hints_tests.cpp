@@ -68,6 +68,8 @@ TEST(hints_math_results_fixture) {
     for (const std::string& l : lines) {
         const auto p = split(l);
         if (p.size() != 3) continue;
+        // "implicit|…" = chip kết quả KHÔNG cần "=" — chỉ iOS/Android (thanh gợi ý); Windows dùng đường "=".
+        if (p[0] != "eval" && p[0] != "chip") continue;
         const std::u32string in = U(unmark(p[1]).c_str());
         const std::string got = p[0] == "eval" ? S(mathResult(in)) : S(mathChip(in));
         if (got != p[2]) std::printf("  math %s|%s: got [%s] want [%s]\n", p[0].c_str(), p[1].c_str(), got.c_str(), p[2].c_str());
