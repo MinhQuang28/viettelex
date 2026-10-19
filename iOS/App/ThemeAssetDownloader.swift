@@ -341,6 +341,10 @@ final class ThemeAssetCenter: ObservableObject {
     /// Lỗi / cảnh báo lần tải gần nhất, theo URL.
     @Published private(set) var errors: [String: ThemeAssetError] = [:]
     @Published private(set) var warnings: [String: ThemeAssetWarning] = [:]
+    /// Tăng mỗi lần kho đổi (tải xong) — ô xem trước (ThemePreview quan sát center) vẽ lại bằng tệp mới.
+    @Published private(set) var storeVersion = 0
+    /// Phông xem trước đã giải theo khoá tệp (kể cả "chưa có" = nil) — xoá khi kho đổi.
+    private var previewFonts: [String: CTFontDescriptor?] = [:]
 
     var dir: URL? { ThemeAssetStore.defaultDir }
     var transport: ThemeAssetTransport = URLSessionAssetTransport()
@@ -369,21 +373,40 @@ final class ThemeAssetCenter: ObservableObject {
         Binding(get: { self.pending?.context == context }, set: { if !$0 { self.pending = nil } })
     }
 
-    /// Người dùng đồng ý.
-    func accept(_ r: Request) {
+    /// Người dùng đồng ý. Trả về lượt tải (test chờ được); nil = không tải.
+    @discardableResult
+    func accept(_ r: Request) -> Task<Void, Never>? {
         pending = nil
-        guard let dir, !busy else { return }
+        guard let dir, !busy else { return nil }
         busy = true
         let d = ThemeAssetDownloader(transport: transport, dir: dir,
                                      screenLongSidePx: ThemeAssetDownloader.deviceScreenLongSidePx)
-        Task {
+        return Task {
             let out = await d.download(r.files)
             for f in out.done { errors[f.ref.url] = nil }
             for (f, e) in out.failed { errors[f.ref.url] = e }
             for (f, w) in out.warnings { warnings[f.ref.url] = w }
+            storeChanged()
             busy = false
             Self.touchKeyboard()
         }
+    }
+
+    /// Kho vừa đổi ⇒ bỏ phông xem trước đã giải + báo ô xem trước vẽ lại.
+    func storeChanged() {
+        previewFonts.removeAll()
+        storeVersion += 1
+    }
+
+    /// Phông tải về `f` cho ô xem trước trong app: đã có trong kho ⇒ mô tả từ tệp (cùng tệp bàn phím dùng);
+    /// chưa tải ⇒ nil (ô xem trước dùng phông hệ thống như bàn phím). Giải một lần mỗi tệp tới lần kho đổi kế.
+    func previewFont(_ f: ThemeFontAsset?) -> CTFontDescriptor? {
+        guard let f else { return nil }
+        let k = ThemeAssetFile(cls: .font, ref: f.ref).key
+        if let c = previewFonts[k] { return c }
+        let d = ThemeAssetLoader.fontDescriptor(f, dir: dir)
+        previewFonts[k] = d
+        return d
     }
 
     func errors(for a: ThemeAssetSpec) -> [(String, ThemeAssetError)] {

@@ -118,6 +118,22 @@ object ThemeAssetFlow {
     }
 }
 
+/**
+ * Phông nhãn của ô xem trước trong app (thuần, test JVM). Bug 19/10/2026: chọn phông "Vt" tải về, tải xong ô xem trước
+ * vẫn y cũ — KeyboardPreview không vẽ chữ (chỉ chấm) và không đọc phông tải về. Nay: bản lớn vẽ chữ khi chữ được tuỳ
+ * chỉnh, phông = tệp trong kho (đọc lại khi [ThemeAssetFlow.storeVersion] đổi), cùng luật bàn phím ([keyLabelTypeface]).
+ */
+object PreviewLabelFont {
+    /** Vẽ nhãn chữ: chỉ bản lớn và khi chữ được tuỳ chỉnh (phông / độ đậm / cỡ / phông tải về); mặc định giữ chấm. */
+    fun showsLabels(large: Boolean, style: com.viettelex.keyboard.KeyStyle): Boolean = large && style.customizesLabels
+
+    /** Tệp phông tải về của [style] đã có trong kho (mục lục + tệp); chưa tải / thiếu ⇒ null (phông hệ thống). */
+    fun downloadedFile(style: com.viettelex.keyboard.KeyStyle, dir: File): File? {
+        val f = style.assets.font ?: return null
+        return ThemeAssetStore.locate(ThemeAssetClass.font, f.ref, ThemeAssetStore.readIndex(dir), dir)?.first
+    }
+}
+
 /** Câu hỏi trước khi tải: [offer] khi theme có tệp còn thiếu; host hiện hộp thoại + tiến trình. */
 class AssetPromptState {
     var files by mutableStateOf<List<ThemeAssetFile>>(emptyList())

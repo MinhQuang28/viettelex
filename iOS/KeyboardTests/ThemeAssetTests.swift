@@ -5,6 +5,7 @@
 // Schema + kế hoạch dùng chung Android nằm ở ThemeJSONTests (fixture theme-json-cases.txt, dòng CASE / PLAN).
 import XCTest
 import ImageIO
+import CoreText
 import UniformTypeIdentifiers
 
 final class ThemeAssetTests: XCTestCase {
@@ -620,5 +621,81 @@ final class ThemeAssetTests: XCTestCase {
         #if DEBUG
         XCTAssertEqual(ThemeAssetLoader.loadCount, loads0)
         #endif
+    }
+
+    // MARK: Bug 19/10/2026 — chọn phông "Vt" tải về, tải xong ô xem trước trong app vẫn phông hệ thống
+
+    /// Phil (iPhone 13 mini, Debug): Tuỳ chỉnh nâng cao → Phông chữ → chọn phông tải về → đồng ý tải ⇒ ô xem trước
+    /// KHÔNG đổi phông. Gốc: ThemePreview chỉ đọc `keyStyle.font` (= .standard khi chọn phông tải về) và không quan
+    /// sát lượt tải. Khoá: tải xong (transport giả) ⇒ center báo kho đổi, phông xem trước = đúng tệp vừa tải; bàn phím
+    /// hiện lần kế cũng dùng phông đó (trước khi tải: dự phòng phông hệ thống).
+    @MainActor func testDownloadCompletionUpdatesPreviewAndKeyboardFont() async throws {
+        let e = try XCTUnwrap(BuiltinFonts.list.first { $0.id == "lobster" }, "phông đã đổi tên VT …")
+        let data = try Data(contentsOf: Self.repo.appendingPathComponent("docs/fonts/" + URL(string: e.ref.url)!.lastPathComponent))
+        let center = ThemeAssetCenter.shared
+        let savedTransport = center.transport
+        defer { center.transport = savedTransport; center.storeChanged() }
+        center.transport = FakeTransport(files: [e.ref.url: .success(data)])
+        center.storeChanged()
+
+        var style = KeyStyle()
+        style.assets.font = e.asset
+        var s = ThemeSettings(theme: .mint)
+        s.keyStyle = style
+        s.save(UserDefaultsProvider.shared)
+
+        // Trước khi tải: chưa có tệp ⇒ phông hệ thống (ô xem trước + bàn phím).
+        XCTAssertNil(center.previewFont(e.asset))
+        let before = try XCTUnwrap(KeyLabelFonts.previewFont(style, custom: center.previewFont(e.asset), size: 15))
+        XCTAssertNotEqual(before.familyName, e.name)
+        _ = makeKB()
+        XCTAssertNil(KeyboardView.labelFonts.custom)
+
+        // Chọn ⇒ hỏi ⇒ đồng ý ⇒ tải xong.
+        center.offer(style.assets, context: "test")
+        let req = try XCTUnwrap(center.pending, "phông chưa tải ⇒ hỏi trước khi tải")
+        let v0 = center.storeVersion
+        await center.accept(req)?.value
+        XCTAssertFalse(center.busy)
+        XCTAssertEqual(center.storeVersion, v0 + 1, "ô xem trước (quan sát storeVersion) vẽ lại")
+        XCTAssertTrue(center.missing(style.assets).isEmpty)
+
+        let custom = try XCTUnwrap(center.previewFont(e.asset), "tải xong ⇒ phông xem trước có tệp")
+        let after = try XCTUnwrap(KeyLabelFonts.previewFont(style, custom: custom, size: 15))
+        XCTAssertEqual(after.familyName, e.name)
+        XCTAssertEqual(after.fontName, "VTLobster-Regular")
+
+        // Bàn phím hiện lần kế: phông tải về.
+        _ = makeKB()
+        let kbCustom = try XCTUnwrap(KeyboardView.labelFonts.custom)
+        XCTAssertEqual(CTFontCopyPostScriptName(CTFontCreateWithFontDescriptor(kbCustom, 20, nil)) as String, "VTLobster-Regular")
+        XCTAssertEqual(KeyboardView.keyFont(20).fontName, "VTLobster-Regular")
+    }
+
+    /// Cả 12 phông có sẵn: tên trong builtin-fonts.json = họ phông trong tệp (bản đầy đủ docs/fonts + bản xem trước
+    /// "Vt" trong app), tên PostScript = tên bỏ dấu cách + "-Regular"/"-Medium"; 4 phông đổi tên (RFN) mang "VT ".
+    func testBuiltinFontNamesMatchFiles() throws {
+        let manifest = try JSONSerialization.jsonObject(with: Data(contentsOf: Self.repo.appendingPathComponent("docs/fonts/manifest.json"))) as? [String: Any]
+        let renamed = Dictionary(uniqueKeysWithValues: ((manifest?["fonts"] as? [[String: Any]]) ?? []).compactMap { d -> (String, Bool)? in
+            guard let id = d["id"] as? String, let r = d["renamed"] as? Bool else { return nil }
+            return (id, r)
+        })
+        XCTAssertEqual(BuiltinFonts.list.count, 12)
+        XCTAssertEqual(renamed.values.filter { $0 }.count, 4)
+        for e in BuiltinFonts.list {
+            XCTAssertEqual(e.name.hasPrefix("VT "), renamed[e.id], e.id)
+            let full = Self.repo.appendingPathComponent("docs/fonts/" + URL(string: e.ref.url)!.lastPathComponent)
+            let preview = Self.repo.appendingPathComponent("iOS/App/FontPreviews/\(e.id).ttf")
+            for u in [full, preview] {
+                let d = try XCTUnwrap(ThemeAssetLoader.fontDescriptor(at: u), u.lastPathComponent)
+                let f = CTFontCreateWithFontDescriptor(d, 20, nil)
+                XCTAssertEqual(CTFontCopyFamilyName(f) as String, e.name, u.lastPathComponent)
+                let ps = CTFontCopyPostScriptName(f) as String
+                let stem = e.name.replacingOccurrences(of: " ", with: "")
+                XCTAssertTrue(ps == stem + "-Regular" || ps == stem + "-Medium", "\(u.lastPathComponent): \(ps)")
+                XCTAssertEqual(KeyLabelFonts.previewFont({ var st = KeyStyle(); st.assets.font = e.asset; return st }(),
+                                                         custom: d, size: 15)?.fontName, ps)
+            }
+        }
     }
 }
