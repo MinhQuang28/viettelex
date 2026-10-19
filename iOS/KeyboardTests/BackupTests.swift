@@ -219,6 +219,38 @@ final class BackupTests: XCTestCase {
         XCTAssertEqual(b.learnedWords(), a.learnedWords())
     }
 
+    /// Thứ tự gõ tắt "mới nhất trước" (ShortcutOrder) đi qua file sao lưu; file cũ không có mốc vẫn đọc được.
+    func testShortcutOrderSurvivesBackup() throws {
+        let (a, _) = makeStore(); let (b, _) = makeStore()
+        a.setShortcuts(["ko": "không", "mn": "mọi người", "cty": "công ty"])
+        a.setShortcutTimes(["mn": 2_000, "ko": 1_000, "gone": 5])
+        let p = a.snapshot(includeLearned: false)
+        XCTAssertEqual(p.shortcutsAdded, ["mn": 2_000, "ko": 1_000])     // khoá đã xoá không ra file
+        let decoded = try BackupCodec.decode(BackupCodec.encode(p))
+        XCTAssertEqual(decoded.shortcutsAdded, ["mn": 2_000, "ko": 1_000])
+        b.apply(decoded)
+        XCTAssertEqual(ShortcutOrder.sorted(b.shortcuts().keys, times: b.shortcutTimes()), ["mn", "ko", "cty"])
+        // file không có mục shortcutsAdded (bản cũ / Android cũ) ⇒ nil, nhập vẫn chạy
+        var old = p; old.shortcutsAdded = nil
+        XCTAssertNil(try BackupCodec.decode(BackupCodec.encode(old)).shortcutsAdded)
+    }
+
+    /// iCloud: mục kéo về từ máy khác lên đầu danh sách; mục bị xoá bỏ mốc.
+    func testSyncPulledShortcutsGoToTop() {
+        let cloud = FakeCloud()
+        let (a, _) = makeStore(); let (b, _) = makeStore()
+        b.setShortcuts(["aa": "cũ"])
+        SyncEngine.run(local: b, cloud: cloud, now: 1000)
+        a.setShortcuts(["zz": "mới"])
+        SyncEngine.run(local: a, cloud: cloud, now: 2000)
+        SyncEngine.run(local: b, cloud: cloud, now: 3000)
+        XCTAssertEqual(ShortcutOrder.sorted(b.shortcuts().keys, times: b.shortcutTimes()), ["zz", "aa"])
+        a.setShortcuts(["aa": "cũ"])          // A xoá "zz"
+        SyncEngine.run(local: a, cloud: cloud, now: 4000)
+        SyncEngine.run(local: b, cloud: cloud, now: 5000)
+        XCTAssertNil(b.shortcutTimes()["zz"])
+    }
+
     /// Từ thêm tay (Từ điển cá nhân) đi qua sao lưu và KHÔNG mất khi nhập gộp.
     func testManualWordsSurviveBackupImport() throws {
         let (a, _) = makeStore(); let (b, _) = makeStore()

@@ -59,6 +59,8 @@ object Keys {
     /** Gõ tắt: bật/tắt (mặc định BẬT) + bảng (String YAML phẳng như macOS, xem [ShortcutFile]). */
     const val SHORTCUTS_ENABLED = "shortcutsEnabled"
     const val SHORTCUTS = "shortcuts"
+    /** Mốc thêm/sửa từng gõ tắt (ms) — thứ tự "mới nhất trước" ([ShortcutOrder]); IME không đọc. */
+    const val SHORTCUTS_ADDED = "shortcutsAdded"
 
     /** Key ảnh hưởng engine/EngineBridge — đổi lúc bàn phím đang mở thì áp ngay. */
     val ENGINE_KEYS = setOf(SIMPLE_TELEX, FREE_MARKING, QUICK_TELEX, MODERN_TONE, CONTEXTUAL_ENGLISH,

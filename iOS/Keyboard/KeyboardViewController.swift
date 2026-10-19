@@ -1651,13 +1651,18 @@ final class KeyboardViewController: UIInputViewController {
                 let slip = fix == nil && wantFix ? AdjacentKeyFixer.lexiconToneSlip(raw: raw, bridge: b) : nil
                 // trigram/bigram âm tiết tĩnh theo 1–2 từ trước (mmap dùng chung với gõ vuốt; tra ~µs)
                 let pmi = english ? nil : SuggestRank.inlinePmi(pool, prev: prev, prev2: prev2)
+                // Từ tiếng Anh giữa câu Việt (EnglishAssist): hoàn thành / sửa chính tả theo phím
+                // thô; từ rõ là tiếng Việt ⇒ nil trước khi chạm lexicon tiếng Anh.
+                let en = english || !EnglishAssist.eligible(raw: raw) ? nil
+                    : EnglishAssist.suggest(raw: raw, composed: composed, pool: pool,
+                                            typedFreq: VNSuggest.frequency(of: composed))
                 DispatchQueue.main.async {
                     guard let self, req == self.suggestReq, gen == self.suggestionGen,
                           self.bridge === b, b.composedWord == composed,
                           self.suggestionsActive, self.keyboard?.isBarCollapsed != true
                     else { return }
                     self.showComposingSuggestions(composed: composed, raw: raw, predicted: predicted,
-                                                  pool: pool, pmi: pmi, fix: fix, slip: slip)
+                                                  pool: pool, pmi: pmi, fix: fix, slip: slip, english: en)
                 }
             }
             return
@@ -1749,7 +1754,7 @@ final class KeyboardViewController: UIInputViewController {
     /// Phần main của gợi ý khi đang gõ dở: pool (VNSuggest) + fix đã tính nền.
     private func showComposingSuggestions(composed: String, raw: String, predicted: String,
                                           pool: [VNSuggest.Match], pmi: [Float]?, fix: String?,
-                                          slip: String? = nil) {
+                                          slip: String? = nil, english: EnglishAssist.Result? = nil) {
         var set = KeyboardView.SuggestionSet()
         // Slot "nguyên văn" = phương án mà boundary SẼ KHÔNG cho ra —
         // lối thoát cho cả hai chiều collision (user chốt 2026-07-24):
@@ -1791,17 +1796,24 @@ final class KeyboardViewController: UIInputViewController {
                 SuggestRank.rankInline(pool, pmi: pmi, typedLen: composed.count,
                                        count: { lm.count(of: $0) }, ctx: ctxCache),
                 after: lastWord, prev2: lastWord2, enabled: filterSensitive)
-            set.word = ranked.first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
-            set.word2 = ranked.dropFirst().first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
+            let words = EnglishAssist.merge(vietnamese: ranked, english: englishWords(english))
+            set.word = words.first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
+            set.word2 = words.dropFirst().first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
             // "Số từ gợi ý" 4–5: ứng viên hạng 3… (ô 1 = nguyên văn, ô 2–3 = word/word2)
             if slotWant > 3 {
-                set.moreWords = ranked.dropFirst(2).prefix(slotWant - 3)
+                set.moreWords = words.dropFirst(2).prefix(slotWant - 3)
                     .map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
             }
-        } else if let fix {
+        } else if fix != nil || english != nil {
             // Thử nghiệm: không từ nào khớp → nghi chạm trượt phím kề; đưa bản sửa
-            // lên slot chính (tap để thay, không tự thay).
-            set.word = caseForContext(fix, typed: composed)
+            // lên slot chính (tap để thay, không tự thay). Từ tiếng Anh (EnglishAssist) sau nó.
+            let words = EnglishAssist.merge(vietnamese: fix.map { [$0] } ?? [], english: englishWords(english))
+            set.word = words.first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
+            set.word2 = words.dropFirst().first.map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
+            if slotWant > 3 {
+                set.moreWords = words.dropFirst(2).prefix(slotWant - 3)
+                    .map { caseForContext(displayCase($0, after: lastWord), typed: composed) }
+            }
         }
         // Trượt vào phím thanh mà vẫn ra từ ("casn" → cán, ý là cân): bản sửa vào slot 3.
         let slip = slip.map { caseForContext($0, typed: composed) }
@@ -1843,6 +1855,11 @@ final class KeyboardViewController: UIInputViewController {
             set.word = preview
         }
         keyboard.showSuggestions(set)
+    }
+
+    /// Từ tiếng Anh (EnglishAssist) sau "Lọc từ nhạy cảm" — cùng bộ lọc như gợi ý tiếng Việt.
+    private func englishWords(_ r: EnglishAssist.Result?) -> EnglishAssist.Result? {
+        EnglishAssist.filtered(r, after: lastWord, prev2: lastWord2, enabled: filterSensitive)
     }
 
     // MARK: Nút Dán (maintainer 25/09/2026, như bàn phím stock/Gboard)

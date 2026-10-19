@@ -228,6 +228,7 @@ targets:
       - App/Backup/SyncCore.swift
       - App/Backup/BackupStore.swift
       - Keyboard/SwipeEnglish.swift
+      - Keyboard/EnglishAssist.swift
       - Keyboard/AddTones.swift
       - Keyboard/CuratedPairs.swift
       - Keyboard/SyllableLM.swift

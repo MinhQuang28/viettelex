@@ -383,4 +383,52 @@ final class ShortcutTests: XCTestCase {
         XCTAssertEqual(SystemTextReplacement.readSnapshot(d), .init(count: 2, sample: ["a", "b"]))
         XCTAssertNil(SystemTextReplacement.readSnapshot(nil))
     }
+
+    // MARK: thứ tự danh sách — mới nhất trước (góp ý người dùng 19/10/2026)
+
+    func testOrderNewestFirstThenLegacyAlphabetical() {
+        let keys = ["ko", "cty", "dc", "mn", "vs"]
+        // bảng cũ (chưa có mốc): giữ thứ tự cũ = chữ cái
+        XCTAssertEqual(ShortcutOrder.sorted(keys, times: [:]), ["cty", "dc", "ko", "mn", "vs"])
+        // thêm "zz" rồi "aa" ⇒ "aa" (mới nhất) đầu, "zz" sau, rồi bảng cũ nguyên thứ tự
+        var table = Dictionary(uniqueKeysWithValues: keys.map { ($0, $0) })
+        var times: [String: Int64] = [:]
+        var old = table; table["zz"] = "z"
+        times = ShortcutOrder.updated(times, from: old, to: table, now: 100)
+        old = table; table["aa"] = "a"
+        times = ShortcutOrder.updated(times, from: old, to: table, now: 200)
+        XCTAssertEqual(ShortcutOrder.sorted(table.keys, times: times), ["aa", "zz", "cty", "dc", "ko", "mn", "vs"])
+        // sửa nội dung một mục cũ ⇒ lên đầu; đổi tên ⇒ khoá mới lên đầu, mốc khoá cũ bị bỏ
+        old = table; table["mn"] = "mọi người"
+        times = ShortcutOrder.updated(times, from: old, to: table, now: 300)
+        XCTAssertEqual(ShortcutOrder.sorted(table.keys, times: times).prefix(3), ["mn", "aa", "zz"])
+        old = table; table.removeValue(forKey: "zz"); table["zz2"] = "z"
+        times = ShortcutOrder.updated(times, from: old, to: table, now: 400)
+        XCTAssertNil(times["zz"])
+        XCTAssertEqual(ShortcutOrder.sorted(table.keys, times: times).first, "zz2")
+        // không đổi gì ⇒ mốc giữ nguyên
+        XCTAssertEqual(ShortcutOrder.updated(times, from: table, to: table, now: 999), times)
+        // hoà mốc (nhập cả loạt) ⇒ chữ cái trong loạt
+        XCTAssertEqual(ShortcutOrder.sorted(["b", "a", "c"], times: ["b": 5, "a": 5, "c": 1]), ["a", "b", "c"])
+    }
+
+    func testOrderTimesPersistInDefaults() {
+        let d = UserDefaults(suiteName: "vt.shortcut.order.\(UUID().uuidString)")!
+        XCTAssertEqual(ShortcutOrder.times(from: d), [:])           // di trú: chưa có ⇒ rỗng
+        ShortcutOrder.setTimes(["ko": 1_760_860_800_123], in: d)
+        XCTAssertEqual(ShortcutOrder.times(from: d), ["ko": 1_760_860_800_123])
+    }
+
+    func testOrderImportKeepsFileTimes() {
+        let cur = ["ko": "không", "dc": "được"]
+        let file = ["ko": "khum", "mn": "mọi người", "vs": "với"]
+        let table = cur.merging(file) { _, n in n }
+        let t = ShortcutOrder.imported(["dc": 10], fileTimes: ["mn": 50], old: cur, file: file, table: table, now: 100)
+        // file có mục mốc: khoá của file theo đúng file (ko/vs không mốc ⇒ mục cũ, cuối theo chữ cái)
+        XCTAssertEqual(t, ["dc": 10, "mn": 50])
+        XCTAssertEqual(ShortcutOrder.sorted(table.keys, times: t), ["mn", "dc", "ko", "vs"])
+        // file bản cũ (không có mốc): mục mới/đổi nội dung lên đầu
+        let legacy = ShortcutOrder.imported(["dc": 10], fileTimes: nil, old: cur, file: file, table: table, now: 100)
+        XCTAssertEqual(legacy, ["dc": 10, "mn": 100, "ko": 100, "vs": 100])
+    }
 }

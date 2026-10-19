@@ -278,6 +278,67 @@ enum ShortcutFile {
     static let enabledKey = "shortcutsEnabled"
 }
 
+/// Thứ tự hiển thị bảng gõ tắt — MỚI THÊM / VỪA SỬA LÊN ĐẦU (góp ý người dùng 19/10/2026: "phần
+/// thêm mới nên đẩy lên đầu sẽ tiện hơn"). Bảng vẫn là dict [khoá: nội dung] như cũ (bàn phím,
+/// YAML, sao lưu, iCloud không đổi); thứ tự nằm ở một dict RIÊNG [khoá: mốc thêm/sửa (ms epoch)]
+/// (`storeKey`, App Group). Mục chưa có mốc (bảng có từ trước bản này) xếp SAU mọi mục có mốc,
+/// giữ đúng thứ tự cũ (chữ cái) ⇒ di trú không đảo gì. Song sinh Android ShortcutOrder (Shortcuts.kt).
+enum ShortcutOrder {
+    static let storeKey = "shortcutsAdded"
+
+    static func times(from d: UserDefaults?) -> [String: Int64] {
+        (d?.dictionary(forKey: storeKey) ?? [:]).compactMapValues { ($0 as? NSNumber)?.int64Value }
+    }
+    static func setTimes(_ t: [String: Int64], in d: UserDefaults?) {
+        d?.set(t.mapValues { NSNumber(value: $0) }, forKey: storeKey)
+    }
+
+    static func nowMs(_ d: Date = Date()) -> Int64 { Int64((d.timeIntervalSince1970 * 1000).rounded()) }
+
+    /// Mới nhất trước (mốc giảm dần, hoà ⇒ chữ cái); mục không mốc sau cùng theo chữ cái.
+    static func sorted<S: Sequence>(_ keys: S, times: [String: Int64]) -> [String] where S.Element == String {
+        keys.sorted { a, b in
+            switch (times[a], times[b]) {
+            case let (x?, y?): return x != y ? x > y : a < b
+            case (.some, nil): return true
+            case (nil, .some): return false
+            case (nil, nil): return a < b
+            }
+        }
+    }
+
+    /// Khoá mới thêm hoặc đổi nội dung từ `old` sang `new`.
+    static func changedKeys(from old: [String: String], to new: [String: String]) -> [String] {
+        new.compactMap { old[$0.key] == $0.value ? nil : $0.key }
+    }
+
+    /// Đóng dấu `keys` = `now`, bỏ mốc của khoá không còn trong `table`.
+    static func stamped<S: Sequence>(_ times: [String: Int64], keys: S, now: Int64,
+                                     table: [String: String]) -> [String: Int64] where S.Element == String {
+        var out = times.filter { table[$0.key] != nil }
+        for k in keys where table[k] != nil { out[k] = now }
+        return out
+    }
+
+    /// Bảng đổi từ `old` sang `new` (thêm/sửa/xoá/nhập/đồng bộ): khoá mới hoặc đổi nội dung ⇒ mốc
+    /// `now`; khoá đã xoá ⇒ bỏ mốc; còn lại giữ nguyên.
+    static func updated(_ times: [String: Int64], from old: [String: String], to new: [String: String],
+                        now: Int64) -> [String: Int64] {
+        stamped(times, keys: changedKeys(from: old, to: new), now: now, table: new)
+    }
+
+    /// Gộp mốc nhập từ file sao lưu. File CÓ mục mốc (`fileTimes` ≠ nil) ⇒ khoá của file lấy đúng mốc
+    /// trong file (không có ⇒ không mốc = mục cũ, giữ chỗ cũ); file bản cũ (nil) ⇒ khoá mới/đổi nội
+    /// dung lấy `now`. Chỉ giữ khoá còn trong `table` (bảng sau khi gộp).
+    static func imported(_ times: [String: Int64], fileTimes: [String: Int64]?, old: [String: String],
+                         file: [String: String], table: [String: String], now: Int64) -> [String: Int64] {
+        var out = updated(times, from: old, to: table, now: now)
+        guard let fileTimes else { return out }
+        for k in file.keys where table[k] != nil { out[k] = fileTimes[k] }
+        return out
+    }
+}
+
 /// Học từ nội dung đã bung (không học chữ tắt).
 enum ShortcutLearning {
     /// Tách theo khoảng trắng: "mọi người" → ["mọi", "người"]; một từ → [chính nó].

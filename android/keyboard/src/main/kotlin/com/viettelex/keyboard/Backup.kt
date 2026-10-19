@@ -170,6 +170,8 @@ data class BackupPayload(
     val shortcuts: Map<String, String>? = null,
     val templates: List<TemplateItem>? = null,
     val learnedWords: LearnedWords? = null,
+    /** Mốc thêm/sửa gõ tắt (ms, [ShortcutOrder]) — null = file không có (bản cũ). */
+    val shortcutsAdded: Map<String, Long>? = null,
 )
 
 class BackupException(val reason: Reason, val fileVersion: Int = 0) : Exception(reason.name) {
@@ -193,6 +195,7 @@ object BackupCodec {
         p.platform?.let { root["platform"] = it }
         p.settings?.let { root["settings"] = it }
         p.shortcuts?.let { root["shortcuts"] = it }
+        p.shortcutsAdded?.takeIf { it.isNotEmpty() }?.let { root["shortcutsAdded"] = it }
         p.templates?.let { t -> root["templates"] = t.map { mapOf("label" to it.label, "text" to it.text) } }
         p.learnedWords?.let {
             val lw = mutableMapOf<String, Any>("uni" to it.uni, "bi" to it.bi, "tri" to it.tri)
@@ -233,6 +236,14 @@ object BackupCodec {
             }
             out
         }
+        val shortcutsAdded = (root["shortcutsAdded"] as? Map<*, *>)?.let { m ->
+            val out = LinkedHashMap<String, Long>()
+            for ((k, v) in m) {
+                val t = when (v) { is Long -> v; is Double -> if (v.isFinite() && v == Math.rint(v)) v.toLong() else null; else -> null }
+                if (t != null && t > 0 && (k as String).isNotEmpty()) out[k] = t
+            }
+            out
+        }
         val templates = (root["templates"] as? List<*>)?.let { arr ->
             val out = ArrayList<TemplateItem>()
             for (e in arr) {
@@ -248,7 +259,7 @@ object BackupCodec {
                 (it["manual"] as? List<*>)?.mapNotNull { w -> (w as? String)?.let(UserLangModel::normalizeManual) } ?: emptyList())
         }
         val createdAt = (root["createdAt"] as? String)?.let { runCatching { Instant.parse(it) }.getOrNull() }
-        return BackupPayload(createdAt, root["platform"] as? String, settings, shortcuts, templates, learned)
+        return BackupPayload(createdAt, root["platform"] as? String, settings, shortcuts, templates, learned, shortcutsAdded)
     }
 
     /** Số nguyên JSON (không nhận bool/chuỗi/số lẻ). */
@@ -320,14 +331,18 @@ object BackupPrefs {
     fun shortcutsFromPref(raw: Any?): Map<String, String> = ShortcutFile.parse(raw as? String)
     fun shortcutsToPref(m: Map<String, String>): String = ShortcutFile.exportYAML(m)
 
-    fun snapshot(read: (String) -> Any?, templates: List<TemplateItem>, learned: LearnedWords?, now: Instant = Instant.now()) =
-        BackupPayload(now, "android", settings(read), shortcutsFromPref(read(SHORTCUTS_KEY)), templates, learned)
+    fun snapshot(read: (String) -> Any?, templates: List<TemplateItem>, learned: LearnedWords?, now: Instant = Instant.now()): BackupPayload {
+        val sc = shortcutsFromPref(read(SHORTCUTS_KEY))
+        return BackupPayload(now, "android", settings(read), sc, templates, learned,
+            ShortcutOrder.fromPref(read(Keys.SHORTCUTS_ADDED)).filterKeys { it in sc })
+    }
 
     /** Kết quả nhập: các pref cần ghi (Boolean/Int/String), danh sách mẫu câu mới, từ đã học để gộp. */
     class ImportPlan(val writes: Map<String, Any>, val templates: List<TemplateItem>?,
                      val learnedWords: LearnedWords?, val summary: String)
 
-    fun plan(p: BackupPayload, read: (String) -> Any?, currentTemplates: List<TemplateItem>): ImportPlan {
+    fun plan(p: BackupPayload, read: (String) -> Any?, currentTemplates: List<TemplateItem>,
+             now: Long = System.currentTimeMillis()): ImportPlan {
         val writes = LinkedHashMap<String, Any>()
         // File từ bản cũ: bộ "Tuỳ chỉnh nâng cao" chung ⇒ vào theme đang chọn trên máy này.
         p.settings?.let { writes.putAll(BackupSettings.migrateLegacyStyle(it, read(Keys.KEYBOARD_THEME) as? String,
@@ -336,7 +351,10 @@ object BackupPrefs {
         p.shortcuts?.let { sc ->
             val cur = shortcutsFromPref(read(SHORTCUTS_KEY))
             changed = sc.count { cur[it.key] != it.value }
-            writes[SHORTCUTS_KEY] = shortcutsToPref(BackupMerge.shortcuts(cur, sc))
+            val merged = BackupMerge.shortcuts(cur, sc)
+            writes[SHORTCUTS_KEY] = shortcutsToPref(merged)
+            writes[Keys.SHORTCUTS_ADDED] = ShortcutOrder.toPref(ShortcutOrder.imported(
+                ShortcutOrder.fromPref(read(Keys.SHORTCUTS_ADDED)), p.shortcutsAdded, cur, sc, merged, now))
         }
         val tpl = p.templates?.let { BackupMerge.templates(currentTemplates, it) }
         val added = tpl?.let { it.size - currentTemplates.size } ?: 0

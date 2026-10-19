@@ -243,14 +243,20 @@ class SuggestJob internal constructor(
 ) {
     class Result(val pool: List<VNSuggest.Match>, val fix: String?, val pmi: FloatArray? = null,
                  /** Trượt vào phím thanh mà vẫn ra từ ("casn" → cân) — slot 3. */
-                 val slip: String? = null)
+                 val slip: String? = null,
+                 /** Từ tiếng Anh giữa câu Việt ([EnglishAssist]) — null khi từ rõ là tiếng Việt. */
+                 val english: EnglishAssist.Result? = null)
     fun compute(): Result {
         // Chế độ Tiếng Anh: hoàn thành từ enlexicon, không sửa chạm trượt / bigram Việt.
         if (bridge.englishMode) return Result(SwipeEnglish.completions(composed, 24), null)
         val pool = VNSuggest.matches(composed, poolLimit = 24, excluding = composed.lowercase())
         val fix = if (pool.isEmpty() && wantFix) AdjacentKeyFixer.lexiconCorrection(raw, bridge) else null
         val slip = if (fix == null && wantFix) AdjacentKeyFixer.lexiconToneSlip(raw, bridge) else null
-        return Result(pool, fix, SuggestRank.inlinePmi(pool, prev, prev2 = prev2), slip)
+        // Từ tiếng Anh giữa câu Việt: hoàn thành / sửa chính tả theo phím thô; từ rõ là tiếng Việt ⇒
+        // null trước khi chạm lexicon tiếng Anh.
+        val english = if (EnglishAssist.eligible(raw))
+            EnglishAssist.suggest(raw, composed, pool, VNSuggest.frequency(composed)) else null
+        return Result(pool, fix, SuggestRank.inlinePmi(pool, prev, prev2 = prev2), slip, english)
     }
 }
 
@@ -1267,7 +1273,8 @@ class KeyboardSession(
     fun completeSuggestions(job: SuggestJob, result: SuggestJob.Result): SuggestionSet? {
         if (job.req != suggestReq || job.gen != generation || bridge !== job.bridge ||
             job.bridge.composedWord != job.composed || !suggestionsActive || barCollapsed) return null
-        return composingSuggestions(job.composed, job.raw, job.predicted, result.pool, result.fix, result.pmi, result.slip)
+        return composingSuggestions(job.composed, job.raw, job.predicted, result.pool, result.fix, result.pmi, result.slip,
+            result.english)
             .copy(number = job.number, math = job.math)
     }
 
@@ -1279,7 +1286,8 @@ class KeyboardSession(
 
     private fun composingSuggestions(composed: String, raw: String, predicted: String,
                                      pool: List<VNSuggest.Match>, fix: String?,
-                                     pmi: FloatArray? = null, slip: String? = null): SuggestionSet {
+                                     pmi: FloatArray? = null, slip: String? = null,
+                                     english: EnglishAssist.Result? = null): SuggestionSet {
         val literal = if (predicted == composed) raw else composed
         var word: String? = null
         var word2: String? = null
@@ -1308,12 +1316,17 @@ class KeyboardSession(
             val ranked = SensitiveWords.filter(
                 SuggestRank.rankInline(pool, pmi, Cp.count(composed), langModel::count, ctx), filterSensitive, after = lastWord,
                 prev2 = lastWord2)
-            word = ranked.firstOrNull()?.let { caseForContext(displayCase(it, lastWord), composed) }
-            word2 = ranked.getOrNull(1)?.let { caseForContext(displayCase(it, lastWord), composed) }
+            val words = EnglishAssist.merge(ranked, EnglishAssist.filtered(english, lastWord, lastWord2, filterSensitive))
+            word = words.firstOrNull()?.let { caseForContext(displayCase(it, lastWord), composed) }
+            word2 = words.getOrNull(1)?.let { caseForContext(displayCase(it, lastWord), composed) }
             // "Số từ gợi ý" 4–5: ứng viên hạng 3… (ô 1 = nguyên văn, ô 2–3 = word/word2)
-            if (slotWant > 3) more = ranked.drop(2).take(slotWant - 3).map { caseForContext(displayCase(it, lastWord), composed) }
-        } else if (fix != null) {
-            word = caseForContext(fix, composed)
+            if (slotWant > 3) more = words.drop(2).take(slotWant - 3).map { caseForContext(displayCase(it, lastWord), composed) }
+        } else if (fix != null || english != null) {
+            // Không âm tiết Việt nào khớp: bản sửa chạm trượt (nếu có) rồi từ tiếng Anh ([EnglishAssist]).
+            val words = EnglishAssist.merge(listOfNotNull(fix), EnglishAssist.filtered(english, lastWord, lastWord2, filterSensitive))
+            word = words.firstOrNull()?.let { caseForContext(displayCase(it, lastWord), composed) }
+            word2 = words.getOrNull(1)?.let { caseForContext(displayCase(it, lastWord), composed) }
+            if (slotWant > 3) more = words.drop(2).take(slotWant - 3).map { caseForContext(displayCase(it, lastWord), composed) }
         }
         // Trượt vào phím thanh mà vẫn ra từ ("casn" → cán, ý là cân): bản sửa vào slot 3.
         val slip = slip?.let { caseForContext(it, composed) }

@@ -328,6 +328,7 @@ object L10nTable {
         put("%s mục  ›", "%s items  ›")
         put("Bảng gõ tắt (%s)", "Shortcut table (%s)")
         put("Chạm một dòng để sửa hoặc xoá.", "Tap a row to edit or delete it.")
+        put("Mới thêm hoặc vừa sửa ở đầu danh sách. Chạm một dòng để sửa hoặc xoá.", "Newest and recently edited first. Tap a row to edit or delete it.")
         put("Tìm chữ tắt hoặc nội dung…", "Search shortcuts or text…")
         put("Chữ tắt", "Shortcut")
         put("Nội dung", "Text")

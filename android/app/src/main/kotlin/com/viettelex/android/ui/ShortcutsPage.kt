@@ -4,7 +4,11 @@ import android.content.Context
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +17,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -27,6 +32,7 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import com.viettelex.keyboard.Keys
 import com.viettelex.keyboard.ShortcutFile
+import com.viettelex.keyboard.ShortcutOrder
 import com.viettelex.keyboard.ShortcutTable
 import com.viettelex.keyboard.tr
 
@@ -36,8 +42,15 @@ import com.viettelex.keyboard.tr
  */
 object ShortcutsStore {
     fun load(ctx: Context): Map<String, String> = ShortcutFile.parse(Prefs.of(ctx).getString(Keys.SHORTCUTS, null))
-    fun save(ctx: Context, t: Map<String, String>) {
-        Prefs.of(ctx).edit().putString(Keys.SHORTCUTS, ShortcutFile.exportYAML(t)).apply()
+    /** Mốc thêm/sửa ([ShortcutOrder]) — danh sách "mới nhất trước". */
+    fun loadTimes(ctx: Context): Map<String, Long> = ShortcutOrder.fromPref(Prefs.of(ctx).getString(Keys.SHORTCUTS_ADDED, null))
+
+    /** Ghi bảng + mốc: khoá mới / đổi nội dung so với bảng đang lưu ⇒ lên đầu; khoá đã xoá ⇒ bỏ mốc. */
+    fun save(ctx: Context, t: Map<String, String>): Map<String, Long> {
+        val times = ShortcutOrder.updated(loadTimes(ctx), load(ctx), t, System.currentTimeMillis())
+        Prefs.of(ctx).edit().putString(Keys.SHORTCUTS, ShortcutFile.exportYAML(t))
+            .putString(Keys.SHORTCUTS_ADDED, ShortcutOrder.toPref(times)).apply()
+        return times
     }
 }
 
@@ -58,12 +71,16 @@ fun ShortcutsSection(onOpen: () -> Unit) {
     }
 }
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun ShortcutsPage(onBack: () -> Unit) {
     val c = LocalVT.current
     val ctx = LocalContext.current
     BackHandler(onBack = onBack)
     var table by remember { mutableStateOf(ShortcutsStore.load(ctx)) }
+    var times by remember { mutableStateOf(ShortcutsStore.loadTimes(ctx)) }
+    /** Mục vừa thêm/sửa: cuộn tới + tô nền một lúc. */
+    var highlight by remember { mutableStateOf<String?>(null) }
     var query by rememberSaveable { mutableStateOf("") }
     var newKey by rememberSaveable { mutableStateOf("") }
     var newValue by rememberSaveable { mutableStateOf("") }
@@ -71,13 +88,13 @@ fun ShortcutsPage(onBack: () -> Unit) {
     var editKey by remember { mutableStateOf("") }
     var editValue by remember { mutableStateOf("") }
     var notice by remember { mutableStateOf<String?>(null) }
-    fun persist(t: Map<String, String>) { table = t; ShortcutsStore.save(ctx, t) }
+    fun persist(t: Map<String, String>) { times = ShortcutsStore.save(ctx, t); table = t }
 
     VTRow(onClick = onBack) { Text(tr("‹ Tính Năng"), style = VTType.body, color = c.accent) }
 
     val q = query.trim().lowercase()
-    val rows = table.keys.sorted().filter { q.isEmpty() || it.lowercase().contains(q) || table.getValue(it).lowercase().contains(q) }
-    VTSection(header = tr("Bảng gõ tắt (%s)", table.size), footer = tr("Chạm một dòng để sửa hoặc xoá.")) {
+    val rows = ShortcutOrder.sorted(table.keys, times).filter { q.isEmpty() || it.lowercase().contains(q) || table.getValue(it).lowercase().contains(q) }
+    VTSection(header = tr("Bảng gõ tắt (%s)", table.size), footer = tr("Mới thêm hoặc vừa sửa ở đầu danh sách. Chạm một dòng để sửa hoặc xoá.")) {
         VTRow { VTTextField(query, { query = it }, tr("Tìm chữ tắt hoặc nội dung…"), capitalization = KeyboardCapitalization.None) }
         rows.forEach { k ->
             key(k) {
@@ -93,7 +110,7 @@ fun ShortcutsPage(onBack: () -> Unit) {
                                     !ShortcutTable.isValidKey(nk) -> notice = tr("Chữ tắt không được chứa khoảng trắng.")
                                     nv.isEmpty() -> {}
                                     nk != k && table.containsKey(nk) -> notice = tr("“%s” đã có.", nk)
-                                    else -> { persist(table - k + (nk to nv)); editing = null; notice = null }
+                                    else -> { persist(table - k + (nk to nv)); editing = null; notice = null; highlight = nk }
                                 }
                             })
                             Text(tr("Xoá"), style = VTType.body, color = c.red, modifier = Modifier.padding(start = 24.dp).clickable {
@@ -104,7 +121,15 @@ fun ShortcutsPage(onBack: () -> Unit) {
                         }
                     }
                 } else {
-                    VTRow(onClick = { editKey = k; editValue = table.getValue(k); editing = k }) {
+                    val req = remember { BringIntoViewRequester() }
+                    if (highlight == k) LaunchedEffect(k) {
+                        req.bringIntoView()
+                        kotlinx.coroutines.delay(1600)
+                        if (highlight == k) highlight = null
+                    }
+                    VTRow(onClick = { editKey = k; editValue = table.getValue(k); editing = k },
+                        modifier = Modifier.bringIntoViewRequester(req)
+                            .then(if (highlight == k) Modifier.background(c.accent.copy(alpha = 0.18f)) else Modifier)) {
                         Text(k, style = VTType.body.copy(fontFamily = FontFamily.Monospace), color = c.label)
                         Text("→", style = VTType.footnote, color = c.secondary, modifier = Modifier.padding(horizontal = 8.dp))
                         Text(table.getValue(k), style = VTType.body, color = c.label, maxLines = 3, modifier = Modifier.weight(1f))
@@ -133,7 +158,7 @@ fun ShortcutsPage(onBack: () -> Unit) {
             when {
                 !ShortcutTable.isValidKey(k) -> notice = tr("Chữ tắt không được chứa khoảng trắng.")
                 table.containsKey(k) -> notice = tr("“%s” đã có — chạm dòng đó để sửa.", k)
-                else -> { persist(table + (k to v)); newKey = ""; newValue = ""; notice = null }
+                else -> { persist(table + (k to v)); newKey = ""; newValue = ""; notice = null; query = ""; highlight = k }
             }
         }) else null) {
             GlyphIcon(Glyph.Plus, if (canAdd) c.accent else c.tertiary, 20.dp)
