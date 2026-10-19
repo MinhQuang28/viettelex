@@ -152,6 +152,17 @@ object L10nTable {
         put("Gợn sóng", "Ripple")
         put("Cánh hoa", "Petals")
         put("Pháo hoa", "Fireworks")
+        put("Nháy sáng", "Flash")
+        put("Matrix", "Matrix")
+        put("Tia sét", "Lightning")
+        put("Emoji theo chữ", "Emoji words")
+        put("Hoa đào / mai", "Tết blossoms")
+        put("Lửa combo", "Combo fire")
+        put("Mực loang", "Ink bloom")
+        put("Sóng nước", "Water ripples")
+        put("Tuyết rơi", "Snowfall")
+        put("Matrix, Mực loang, Sóng nước chạy dưới phím; Matrix chỉ chạy khi đang gõ. Nháy sáng được giới hạn nhịp và độ sáng cho dịu mắt. Emoji theo chữ hiện khi vừa gõ xong từ như \"haha\", \"cảm ơn\", \"chúc mừng\".",
+            "Matrix, Ink bloom and Water ripples play beneath the keys; Matrix only runs while you type. Flash is rate- and brightness-limited to stay easy on the eyes. Emoji words appear right after words like \"haha\", \"thanks\", \"congrats\".")
         put("Chạm một ô để chọn và xem thử.", "Tap a tile to choose and preview it.")
         put("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Trình tiết kiệm pin.",
             "Small shapes float out of the key you press, in the theme's accent color. Drawn after the character is typed, so typing never slows down; turns itself off with Battery Saver.")

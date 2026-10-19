@@ -343,14 +343,24 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         val fx = if (setting == com.viettelex.keyboard.KeyEffect.NONE) setting else com.viettelex.keyboard.KeyEffectPolicy.active(
             setting, com.viettelex.keyboard.KeyEffectGate.allows(setting),
             powerSave = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
+        session.trackBoundaryWord = fx == com.viettelex.keyboard.KeyEffect.EMOJIWORD
         if (fx == com.viettelex.keyboard.KeyEffect.NONE) {
+            r.effects?.halt()
             r.effects = null; kb.effects = null
             return
         }
         val v = r.effects ?: KeyEffectView(this, th.density)
-        v.configure(fx, th.action)
-        r.effects = v
+        v.configure(fx, th.action, th.keyFill, th.dark)
+        r.effects = v          // dải dưới / trên phím theo kiểu vừa cấu hình
         kb.effects = v
+    }
+
+    /** "Emoji theo chữ": phím ranh giới vừa chốt từ ⇒ tra bảng O(1) (chỉ khi chọn kiểu này). */
+    private fun fxBoundaryEmoji() {
+        val fx = root?.effects ?: return
+        if (fx.effect != com.viettelex.keyboard.KeyEffect.EMOJIWORD) return
+        val w = session.boundaryWord ?: return
+        com.viettelex.keyboard.EmojiWords.lookup(w, session.boundaryPrev)?.let { fx.queueEmoji(it) }
     }
 
     /** Theme từ cài đặt hiện tại (rẻ: vài lần đọc màu resource, không giải ảnh). */
@@ -541,6 +551,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         clearSwipeUndo()
         strip?.onHidden()
         root?.balloon?.hide()
+        root?.effects?.halt()                  // Matrix…: ẩn bàn phím ⇒ dừng hẳn, không còn khung hình
         session.finishInput()
     }
 
@@ -797,6 +808,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         clearSwipeUndo()
         if (!proxy.begin()) return
         val out = try { session.handle(key, proxy, touch) } finally { proxy.end() }
+        if (session.trackBoundaryWord) fxBoundaryEmoji()
         if (key is Key.MoveCursor) {
             if (key.vertical) proxy.moveCursorVertical(key.delta) else proxy.moveCursor(key.delta)
         }

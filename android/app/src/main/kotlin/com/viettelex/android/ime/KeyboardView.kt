@@ -510,6 +510,8 @@ class KeyboardView(
     private var fxPending = false
     private var fxX = 0f
     private var fxY = 0f
+    private var fxW = 0f
+    private var fxH = 0f
 
     private fun fxMark(k: LaidKey) {
         val fx = effects ?: return
@@ -520,6 +522,8 @@ class KeyboardView(
         // Toạ độ overlay (cùng khung balloon: gốc view cha) = toạ độ phím + vị trí view này.
         fxX = (k.left + k.right) / 2f + left - fx.left
         fxY = (k.top + k.bottom) / 2f + top - fx.top
+        // Chỉ TOẠ ĐỘ + cỡ phím: hiệu ứng (vd mảnh vỡ Tia sét) vẽ trên overlay, không đụng phím thật.
+        fxW = k.right - k.left; fxH = k.bottom - k.top
     }
 
     /** Sau khi phím đã tới IME: chữ / ký tự / dấu cách mới mang hiệu ứng. */
@@ -527,7 +531,7 @@ class KeyboardView(
         if (!fxPending) return
         fxPending = false
         val fx = effects ?: return
-        if (k is Key.Letter || k is Key.Text || k == Key.Space || k == Key.DoubleSpacePeriod) fx.burst(fxX, fxY)
+        if (k is Key.Letter || k is Key.Text || k == Key.Space || k == Key.DoubleSpacePeriod) fx.burst(fxX, fxY, fxW, fxH)
     }
 
     /** Mọi phím đi qua đây: plane tìm emoji giữ phím cho ô tìm, còn lại tới IME. */

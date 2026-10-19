@@ -360,16 +360,22 @@ class ImeRootView(
         loadThemeBgFor(pw, ph)
     }
     /**
-     * "Hiệu ứng khi bấm phím" ([KeyEffectView], Plus) — cùng khung với balloon, ngay DƯỚI balloon;
-     * null = tắt (mặc định: không có view, 0 chi phí). IME gắn/gỡ mỗi lần hiện.
+     * "Hiệu ứng khi bấm phím" ([KeyEffectView], Plus) — cùng khung với balloon. Dải trên phím: ngay DƯỚI
+     * balloon; dải dưới phím (Matrix / Mực loang / Sóng nước): ngay TRƯỚC KeyboardView — trên nền + ảnh nền
+     * (vẽ trong onDraw của view này), dưới phím. null = tắt (mặc định: không có view, 0 chi phí). IME
+     * gắn/gỡ mỗi lần hiện (cấu hình kiểu TRƯỚC khi gán để biết dải).
      */
     var effects: KeyEffectView? = null
         set(v) {
-            if (field === v) return
+            if (field === v && (v == null || effectsBand == v.effect.band)) return
             field?.let { removeView(it) }
             field = v
-            if (v != null) addView(v, indexOfChild(balloon))
+            if (v != null) {
+                effectsBand = v.effect.band
+                addView(v, com.viettelex.keyboard.KeyEffectBand.insertIndex(effectsBand, indexOfChild(keyboard), indexOfChild(balloon)))
+            }
         }
+    private var effectsBand = com.viettelex.keyboard.KeyEffectBand.ABOVE_KEYS
 
     /** Bảng phủ đúng vùng phím (lịch sử clipboard); null = không có. Thêm lười khi mở lần đầu. */
     var overlay: android.view.View? = null

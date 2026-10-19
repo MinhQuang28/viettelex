@@ -900,6 +900,7 @@ final class KeyboardViewController: UIInputViewController {
                 // VNI: số trong lúc soạn từ (hàng số / plane 123) mang dấu — phím của từ
             } else {
                 let final = bridge.boundary(s, proxy: proxy)
+                fxWordBoundary(final, prev: lastWord)
                 commitAndLearn(final, accepted: openAccepted)
                 lastWord = nil; lastWord2 = nil            // dấu câu/ký hiệu = ngắt câu
                 typedCommit = (final, s)
@@ -915,6 +916,7 @@ final class KeyboardViewController: UIInputViewController {
                            && !bridge.expandedAtLastBoundary)
                 ? (raw: committed, composed: composedBefore) : nil
             undoOfferActive = false
+            fxWordBoundary(committed, prev: lastWord)
             commitAndLearn(committed, accepted: openAccepted)
             typedCommit = (committed, " ")
         case .doubleSpacePeriod:
@@ -1423,6 +1425,14 @@ final class KeyboardViewController: UIInputViewController {
         for _ in 0..<max(count, 1) { textDocumentProxy.deleteBackward() }
         updateAutoShift()
         updateSuggestions()
+    }
+
+    /// "Emoji theo chữ" (KeyEffects.swift): CHỈ ở ranh giới từ, bằng từ vừa chốt — tra bảng O(1).
+    /// Kiểu khác / tắt ⇒ một phép so sánh, không tra gì. Emoji bắn ở lượt vẽ kế của phím ranh giới.
+    private func fxWordBoundary(_ word: String, prev: String?) {
+        guard let fx = keyboard?.keyEffects, fx.effect == .emojiword, !word.isEmpty,
+              let e = EmojiWords.lookup(word: word, prev: prev) else { return }
+        fx.queueEmoji(e)
     }
 
     /// Từ vừa chốt: nạp vào model cá nhân + trượt cửa sổ context (prev2, prev1).

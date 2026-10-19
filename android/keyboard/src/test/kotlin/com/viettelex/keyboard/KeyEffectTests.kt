@@ -24,7 +24,7 @@ class KeyEffectTests {
     }
 
     @Test fun idsMatchIosAndDefaultIsNone() {
-        assertEquals(listOf("none", "heart", "bubble", "ripple", "petal", "firework"), KeyEffect.entries.map { it.id })
+        assertEquals(listOf("none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow"), KeyEffect.entries.map { it.id })
         assertEquals("keyEffect", Keys.KEY_EFFECT)
         assertEquals(KeyEffect.NONE, KeyEffect.DEFAULT)
         assertEquals(KeyEffect.NONE, KeyEffect.of(null))
@@ -42,7 +42,7 @@ class KeyEffectTests {
 
     @Test fun backupSpecWhitelistsIds() {
         val spec = BackupSettings.all.first { it.key == Keys.KEY_EFFECT }
-        assertEquals(SettingKind.Choice("none", setOf("none", "heart", "bubble", "ripple", "petal", "firework")), spec.kind)
+        assertEquals(SettingKind.Choice("none", setOf("none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow")), spec.kind)
     }
 
     @Test fun titlesBilingual() {
@@ -93,8 +93,7 @@ class KeyEffectTests {
 
     /** Cùng số với iOS KeyEffectTests.testTrajectoriesDistinctAndBounded. */
     @Test fun trajectoriesDistinctAndBounded() {
-        for (e in KeyEffect.entries) {
-            if (e == KeyEffect.NONE) continue
+        for (e in KeyEffect.PARTICLES) {
             assertTrue(e.particlesPerTap <= KeyEffectPool.CAP / 2)
             assertEquals(e.particlesPerTap * 2, e.variantCount)
             for (seed in 0 until 5) {
@@ -105,7 +104,7 @@ class KeyEffectTests {
             for (v in 0 until e.variantCount) {
                 val t = e.trajectory(v)
                 assertTrue("${e.id} #$v", hypot(t.dx, t.dy) <= 72)
-                assertTrue(t.duration > 0.2 && t.duration <= 1.0)
+                assertTrue(t.duration > 0.2 && t.duration <= 1.2)
                 assertTrue(t.scaleTo > 0)
             }
         }
@@ -140,8 +139,7 @@ class KeyEffectTests {
     @Test fun burstOf200KeysCappedAndAllocationFree() {
         val bean = ManagementFactory.getThreadMXBean() as com.sun.management.ThreadMXBean
         val tid = Thread.currentThread().id
-        for (e in KeyEffect.entries) {
-            if (e == KeyEffect.NONE) continue
+        for (e in KeyEffect.PARTICLES) {
             val sim = KeyEffectParticles()
             sim.configure(e)
             // làm nóng (JIT) rồi đo cấp phát
@@ -165,8 +163,7 @@ class KeyEffectTests {
      */
     @Test fun perKeyAndPerFrameCost() {
         val sim = KeyEffectParticles()
-        for (e in KeyEffect.entries) {
-            if (e == KeyEffect.NONE) continue
+        for (e in KeyEffect.PARTICLES) {
             sim.configure(e)
             repeat(20_000) { sim.spawn(1f, 2f, it.toLong()); for (s in 0 until sim.capacity) sim.sample(s, it.toLong(), 3f) }
             val n = 20_000

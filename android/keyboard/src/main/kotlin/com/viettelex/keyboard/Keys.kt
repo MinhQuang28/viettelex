@@ -98,7 +98,7 @@ object Keys {
     const val KEY_SOUND_VOLUME = "keySoundVolume"
     /** String — kiểu âm phím ([KeySoundStyle.id]): subtle|wood|mechanical|typewriter|bubble|custom, mặc định subtle. */
     const val KEY_SOUND_STYLE = "keySoundStyle"
-    /** String — "Hiệu ứng khi bấm phím" ([KeyEffect.id], Plus): none|heart|bubble|ripple|petal|firework, mặc định none. Tên như iOS App Group. */
+    /** String — "Hiệu ứng khi bấm phím" ([KeyEffect.id], Plus): none|heart|bubble|ripple|petal|firework|flash|matrix|lightning|emojiword|blossom|combo|ink|wave|snow, mặc định none. Tên như iOS App Group. */
     const val KEY_EFFECT = "keyEffect"
     /** Int −10…18 (dp mỗi hàng; [KeyboardSettings.ROW_HEIGHT_MAX], trên +10 còn kẹp theo cao màn hình). */
     const val ROW_HEIGHT_ADJUST = "rowHeightAdjust"
