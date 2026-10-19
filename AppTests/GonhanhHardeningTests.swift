@@ -13,6 +13,15 @@ final class GonhanhHardeningTests: XCTestCase {
         super.tearDown()
     }
 
+    /// Issue #128: VM / remote còn thiếu (VirtualBox, Horizon, Parsec, Jump, Parallels Coherence).
+    func testVirtualMachinePassthroughRouting() {
+        for id in ["org.virtualbox.app.VirtualBoxVM", "com.vmware.horizon", "tv.parsec.www",
+                   "com.p5sys.jump.mac.viewer", "com.parallels.desktop.console", "com.vmware.fusion",
+                   "com.parallels.winapp.12345.notepad"] {
+            XCTAssertEqual(AppState.shared.autoResolvedMode(id), .passthrough, id)
+        }
+    }
+
     func testRemoteDesktopPassthroughRouting() {
         for id in ["com.carriez.rustdesk", "com.philandro.anydesk"] {
             XCTAssertEqual(AppState.shared.autoResolvedMode(id), .passthrough, id)
