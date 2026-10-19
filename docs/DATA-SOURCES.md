@@ -917,6 +917,18 @@ thường. `--check` so file đã commit. 1.222 unigram / 1.281 bigram. Sau đó
 "như heo", "như bò", "như lợn" (nghĩa đen quá thường): "con chó" còn từ corpus, "óc chó" (hạt) thành cặp [bigram]
 thường, bốn cặp còn lại bỏ khỏi seed ⇒ 1.222 unigram / 1.277 bigram.
 
+19/10/2026: khối `[sensitive-trigram]` / `[trigram]` của seed-curated.txt — chuỗi chửi BA từ (địt con mẹ, ngu như chó,
+óc bã đậu, bố tiên sư, thằng/con/đồ mất dạy, tiên sư bố, mẹ kiếp mày, đồ ăn hại, im mồm đi…). KHÔNG vào SeedData; generator
+sinh vào cùng khối GENERATED hai bảng: `SensitiveWords.chains` ("từ1 từ2" → từ3, trọng-số > 0 — chỉ khi thanh gợi ý
+iOS người dùng mới + máy tính, TẮT lọc, chưa đoán từ3 ở hạng ≤ 3) và `SensitiveWords.triples` (bộ ba của
+[sensitive-trigram] mà lọc theo từ / cặp chưa chặn); Windows `kSeedChains` / `kSensitiveTriples` trong
+sensitive_pairs.inc. Từ kế tiếp: chuỗi đứng ngay sau bộ ba người dùng đã gõ (`SuggestRank.nextFill(chain:)`,
+WordPrediction / Predict.swift / word_prediction.cpp); chuỗi cũng vào tập ngữ cảnh (xếp gợi ý đang gõ, vuốt). BẬT lọc ⇒
+`SensitiveWords.filter(_:after:prev2:enabled:)` / `dropPairs(…prev2:)` bỏ từ3 sau đúng hai từ (từ kế tiếp, hoàn thành
+từ, phương án vuốt, ngữ cảnh vuốt) — cặp cuối là cụm thường nên vẫn hiện ("như chó", "mất dạy", "bã đậu", "khốn nạn").
+"như chó" vì thế bỏ khỏi [sensitive-bigram] và khỏi seed (⇒ 1.276 bigram). Thêm dấu không đổi (chỉ cặp). `--check`
+so cả hai bảng.
+
 ### Đo trước / sau giai đoạn 2 (tập KIỂM THỬ, JVM; "trước" = main 18/10/2026 sau giai đoạn 1)
 
 | | trước | sau |

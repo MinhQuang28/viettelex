@@ -244,7 +244,7 @@ class SeedDataTests {
     @Test fun testSeedSizesMatchIOS() {
         val s = SeedData.load()
         assertEquals(1222, s.unigrams.size)
-        assertEquals(1277, s.bigrams.size)
+        assertEquals(1276, s.bigrams.size)
     }
 }
 
@@ -322,6 +322,59 @@ class SensitivePairsTests {
     private fun model() = UserLangModel().also {
         it.isKnownWord = { w -> VNSuggest.contains(w) }
         it.seedIfEmpty(SeedData.unigrams, SeedData.bigrams)
+    }
+
+    /** Chuỗi chửi BA từ ([sensitive-trigram], 19/10/2026) — = iOS SensitiveWordsTests.testSensitiveTrigramChains. */
+    @Test fun testSensitiveTrigramChains() {
+        val m = model()
+        fun next(p2: String, p: String, fs: Boolean, need: Int = 3): List<String> {
+            val personal = SensitiveWords.filter(m.nextWords(p, p2, 6), fs, after = p, prev2 = p2)
+            val chain = SensitiveWords.filter(SensitiveWords.chain(p, p2), fs, after = p, prev2 = p2)
+            return SuggestRank.nextFill(p, p2, personal, { m.trigramCount(p2, p, it) },
+                { SensitiveWords.filter(it, fs, after = p, prev2 = p2) }, need = need, chain = chain)
+        }
+        val chains = listOf(
+            "địt mẹ mày", "địt con mẹ", "con mẹ mày", "lồn mẹ mày", "thằng mặt lồn", "ngu như chó", "óc bã đậu",
+            "bố tiên sư", "thằng mất dạy", "con mất dạy", "cái máu lồn", "đồ mất dạy", "con đĩ mẹ", "đĩ mẹ mày",
+            "đụ má mày", "đụ mẹ mày", "đù má mày", "địt cụ mày", "đéo hiểu sao", "đéo quan tâm", "đéo ai thèm",
+            "vãi cả lồn", "đồ mặt lồn", "đm cuộc đời", "đcm thằng này", "vcl thật sự", "mặt lồn ra", "mẹ kiếp mày",
+            "tiên sư bố", "tổ cha mày", "mả cha mày", "mả mẹ mày", "cha mày chứ", "cút mẹ mày", "cút con mẹ",
+            "thằng chó chết", "đồ chó má", "đồ con lợn", "đồ ăn hại", "đồ khốn nạn", "thằng khốn nạn", "ngu như bò",
+            "ngu như lợn", "mặt dày vãi", "thằng ất ơ", "câm mồm lại", "im mồm đi", "bố mày đây", "ông mày đây",
+        )
+        for (phrase in chains) {
+            val (a, b, c) = phrase.split(" ")
+            assertTrue("tắt lọc: $phrase — ${next(a, b, false)}", c in next(a, b, false))
+            assertFalse("bật lọc: $phrase — ${next(a, b, true, 5)}", c in next(a, b, true, 5))
+            assertTrue(phrase, SensitiveWords.filter(listOf(c), true, after = b, prev2 = a).isEmpty())
+            // vuốt: chuỗi seed thưởng ngữ cảnh khi tắt lọc; bật lọc ⇒ bộ ba nhạy cảm không thưởng
+            if (SensitiveWords.isTriple(a, b, c) && c in SensitiveWords.chain(b, a)) {
+                val ctxOn = SwipeSuggest.context(m, b, a, lm = null, filterSensitive = true)
+                val ctxOff = SwipeSuggest.context(m, b, a, lm = null, filterSensitive = false)
+                assertEquals("vuốt: $phrase", SwipeSuggest.NEXT_BONUS, ctxOff.word(c) - ctxOn.word(c), 1e-4f)
+            }
+        }
+        for ((k, ws) in SensitiveWords.triples) {
+            val p = k.split(" ")
+            assertEquals(2, p.size)
+            for (w in ws) {
+                assertFalse("$k $w", w in SensitiveWords.set)
+                assertFalse("$k $w", SensitiveWords.isPair(p[1], w))
+                assertTrue(SensitiveWords.isTriple(p[0].uppercase(), p[1], w.uppercase()))
+                assertEquals(listOf("và"), SensitiveWords.dropPairs(listOf(w, "và"), p[1], true, p[0]))
+                assertEquals(listOf(w), SensitiveWords.dropPairs(listOf(w), p[1], false, p[0]))
+            }
+        }
+        for ((p, w) in listOf("như" to "chó", "mất" to "dạy", "bã" to "đậu", "tiên" to "sư", "khốn" to "nạn", "con" to "lợn",
+                              "ăn" to "hại", "như" to "bò", "mồm" to "đi")) {
+            assertFalse("$p $w", SensitiveWords.isPair(p, w))
+            assertEquals("$p $w", listOf(w), SensitiveWords.filter(listOf(w), true, after = p))
+            assertEquals("anh $p $w", listOf(w), SensitiveWords.filter(listOf(w), true, after = p, prev2 = "anh"))
+        }
+        assertTrue("dạy" in SensitiveWords.filter(m.nextWords("mất", limit = 24), true, after = "mất"))
+        assertFalse("như chó bỏ khỏi seed", SeedData.bigrams.any { it.first == "như" && it.second == "chó" })
+        assertEquals("chưởng", next("vãi", "cả", true).first())
+        assertEquals("vàng", next("não", "cá", true).first())
     }
 
     @Test fun testSensitivePairsGated() {

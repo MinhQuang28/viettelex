@@ -283,6 +283,51 @@ final class WordPredictionTests: XCTestCase {
         XCTAssertEqual(SensitiveWords.dropPairs(["chó", "lồn"], after: "thằng", enabled: true), ["lồn"])
     }
 
+    /// Chuỗi chửi BA từ ([sensitive-trigram], 19/10/2026) — = iOS SensitiveWordsTests.testSensitiveTrigramChains.
+    /// Tắt lọc: từ thứ ba trong 3 hạng đầu sau "từ1 từ2 ␣"; bật lọc: không gợi ý (từ kế tiếp, hoàn thành từ);
+    /// cặp thường cuối ("như chó", "mất dạy") vẫn hiện khi bật lọc.
+    func testSensitiveTrigramChainsGatedByFilter() {
+        func c(_ before: String, _ typed: String = "", _ raw: String = "", on: Bool) -> [String] {
+            guard let r = L.request(before: before, typed: typed, english: false) else { return [] }
+            return PredictionModel.shared.candidates(r, raw: raw, filterSensitive: on).map { $0.lowercased() }
+        }
+        let chains = [
+            "địt mẹ mày", "địt con mẹ", "con mẹ mày", "lồn mẹ mày", "thằng mặt lồn", "ngu như chó", "óc bã đậu",
+            "bố tiên sư", "thằng mất dạy", "con mất dạy", "cái máu lồn", "đồ mất dạy", "con đĩ mẹ", "đĩ mẹ mày",
+            "đụ má mày", "đụ mẹ mày", "đù má mày", "địt cụ mày", "đéo hiểu sao", "đéo quan tâm", "đéo ai thèm",
+            "vãi cả lồn", "đồ mặt lồn", "đm cuộc đời", "đcm thằng này", "vcl thật sự", "mặt lồn ra", "mẹ kiếp mày",
+            "tiên sư bố", "tổ cha mày", "mả cha mày", "mả mẹ mày", "cha mày chứ", "cút mẹ mày", "cút con mẹ",
+            "thằng chó chết", "đồ chó má", "đồ con lợn", "đồ ăn hại", "đồ khốn nạn", "thằng khốn nạn", "ngu như bò",
+            "ngu như lợn", "mặt dày vãi", "thằng ất ơ", "câm mồm lại", "im mồm đi", "bố mày đây", "ông mày đây",
+        ]
+        for phrase in chains {
+            let w = phrase.split(separator: " ").map(String.init)
+            let before = w[0] + " " + w[1] + " "
+            XCTAssertTrue(c(before, on: false).contains(w[2]), "tắt lọc: \(phrase) — \(c(before, on: false))")
+            XCTAssertFalse(c(before, on: true).contains(w[2]), "bật lọc: \(phrase) — \(c(before, on: true))")
+        }
+        XCTAssertEqual(c("ngu như ", on: false), ["chó", "lợn", "bò"])
+        XCTAssertEqual(c("óc bã ", on: false), ["đậu"])
+        XCTAssertEqual(c("óc bã ", on: true), [])
+        // hoàn thành từ: bộ ba chặn, cặp thường hiện
+        XCTAssertEqual(c("thằng mất dạ", "dạ", "daj", on: false).first, "dạy")
+        XCTAssertFalse(c("thằng mất dạ", "dạ", "daj", on: true).contains("dạy"))
+        XCTAssertEqual(c("mất dạ", "dạ", "daj", on: true).first, "dạy", "mất dạy: từ thường")
+        XCTAssertEqual(c("óc bã đậ", "đậ", "ddaaj", on: false).first, "đậu")
+        XCTAssertFalse(c("óc bã đậ", "đậ", "ddaaj", on: true).contains("đậu"))
+        XCTAssertTrue(c("ngu như lợ", "lợ", "lowj", on: false).contains("lợn"))
+        XCTAssertFalse(c("ngu như lợ", "lợ", "lowj", on: true).contains("lợn"))
+        XCTAssertTrue(c("như lợ", "lợ", "lowj", on: true).contains("lợn"))
+        // cặp "như chó" không còn là cặp nhạy cảm (chặn ở bộ ba "ngu như chó")
+        XCTAssertFalse(SensitiveWords.isPair("như", "chó"))
+        XCTAssertEqual(SensitiveWords.filter(["chó"], after: "như", enabled: true), ["chó"])
+        XCTAssertEqual(SensitiveWords.filter(["chó"], after: "như", prev2: "ngu", enabled: true), [])
+        XCTAssertEqual(SensitiveWords.filter(["chó"], after: "như", prev2: "ngu", enabled: false), ["chó"])
+        // lóng vui hiện cho mọi người
+        XCTAssertEqual(c("vãi cả ", on: true).first, "chưởng")
+        XCTAssertEqual(c("não cá ", on: true).first, "vàng")
+    }
+
     /// Lô tiếng lóng / chửi 18/10/2026 trên máy tính: từ kế tiếp seed hiện đúng, cặp lọc chỉ khi tắt lọc.
     func testSlangBatchesOnDesktop() {
         func c(_ before: String, _ typed: String = "", on: Bool = true) -> [String] {

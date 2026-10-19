@@ -278,7 +278,8 @@ TEST(prediction_sensitive_pairs_gated_by_filter) {
     std::stringstream ss;
     ss << f.rdbuf();
     const std::string sw = ss.str();
-    const size_t a = sw.find("static let pairs"), b = sw.find("END GENERATED SensitivePairs", a);
+    // the pairs literal only (chains / triples follow it in the generated block)
+    const size_t a = sw.find("static let pairs"), b = sw.find("static let chains", a);
     CHECK(a != std::string::npos && b != std::string::npos);
     std::vector<std::pair<std::string, std::string>> pairs;
     for (size_t line = sw.find("\n", a) + 1; line < b; line = sw.find("\n", line) + 1) {
@@ -322,6 +323,76 @@ TEST(prediction_sensitive_pairs_gated_by_filter) {
 }
 
 // = macOS testSlangBatchesOnDesktop.
+// [sensitive-trigram] (19/10/2026) = macOS testSensitiveTrigramChainsGatedByFilter: filter off — the third
+// word in the top 3 after "w1 w2 "; filter on — never (next word, completion); the trailing ordinary pair
+// ("như chó", "mất dạy") stays visible with the filter on.
+TEST(prediction_sensitive_trigram_chains) {
+    const char* chains[] = {
+        "địt mẹ mày", "địt con mẹ", "con mẹ mày", "lồn mẹ mày", "thằng mặt lồn", "ngu như chó", "óc bã đậu",
+        "bố tiên sư", "thằng mất dạy", "con mất dạy", "cái máu lồn", "đồ mất dạy", "con đĩ mẹ", "đĩ mẹ mày",
+        "đụ má mày", "đụ mẹ mày", "đù má mày", "địt cụ mày", "đéo hiểu sao", "đéo quan tâm", "đéo ai thèm",
+        "vãi cả lồn", "đồ mặt lồn", "đm cuộc đời", "đcm thằng này", "vcl thật sự", "mặt lồn ra", "mẹ kiếp mày",
+        "tiên sư bố", "tổ cha mày", "mả cha mày", "mả mẹ mày", "cha mày chứ", "cút mẹ mày", "cút con mẹ",
+        "thằng chó chết", "đồ chó má", "đồ con lợn", "đồ ăn hại", "đồ khốn nạn", "thằng khốn nạn", "ngu như bò",
+        "ngu như lợn", "mặt dày vãi", "thằng ất ơ", "câm mồm lại", "im mồm đi", "bố mày đây", "ông mày đây",
+    };
+    auto has = [](const std::string& joined, const std::string& w) {
+        for (const auto& x : split(joined, '|'))
+            if (x == w) return true;
+        return false;
+    };
+    for (const char* c : chains) {
+        const auto w = split(c, ' ');
+        const std::string before = w[0] + " " + w[1] + " ";
+        CHECK(has(cands(before, "", "", false, false), w[2]));
+        CHECK(!has(cands(before), w[2]));
+    }
+    CHECK_EQ(cands("ngu như ", "", "", false, false), std::string("chó|lợn|bò"));
+    CHECK_EQ(cands("óc bã ", "", "", false, false), std::string("đậu"));
+    CHECK_EQ(cands("óc bã "), std::string());
+    CHECK(split(cands("thằng mất dạ", "dạ", "daj", false, false), '|')[0] == "dạy");
+    CHECK(!has(cands("thằng mất dạ", "dạ", "daj"), "dạy"));
+    CHECK(split(cands("mất dạ", "dạ", "daj"), '|')[0] == "dạy");
+    CHECK(!predict::isSensitivePair(U("như"), U("chó")));
+    CHECK(predict::isSensitiveTriple(U("Ngu"), U("như"), U("CHÓ")) && !predict::isSensitiveTriple(U("anh"), U("như"), U("chó")));
+    CHECK(predict::isSensitiveTriple(U("thằng"), U("mất"), U("dạy")) && !predict::isSensitiveTriple(U(""), U("mất"), U("dạy")));
+    CHECK(predict::seedChain(U("óc"), U("bã")).size() == 1 && predict::seedChain(U("óc"), U("bã"))[0] == U("đậu"));
+    CHECK(predict::seedChain(U(""), U("bã")).empty());
+    // parity with the generated Swift block (SensitiveWords.triples / chains): every row is in the .inc
+    std::ifstream f(VTX_KB_RESOURCES "/../SensitiveWords.swift");
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string sw = ss.str();
+    for (const char* table : {"static let chains", "static let triples"}) {
+        const size_t a = sw.find(table), b = sw.find("\n    ]", a);
+        CHECK(a != std::string::npos && b != std::string::npos);
+        int rows = 0;
+        for (size_t line = sw.find("\n", a) + 1; line < b; line = sw.find("\n", line) + 1) {
+            const std::string row = sw.substr(line, sw.find("\n", line) - line);
+            const size_t k0 = row.find('"');
+            if (k0 == std::string::npos) continue;
+            const size_t k1 = row.find('"', k0 + 1);
+            const std::string key = row.substr(k0 + 1, k1 - k0 - 1);
+            const size_t sp = key.find(' ');
+            const std::u32string p2 = U(key.substr(0, sp)), p1 = U(key.substr(sp + 1));
+            const auto chain = predict::seedChain(p2, p1);
+            size_t i = 0;
+            for (size_t p = row.find('"', row.find('[', k1)); p != std::string::npos; p = row.find('"', p + 1)) {
+                const size_t q = row.find('"', p + 1);
+                const std::u32string w = U(row.substr(p + 1, q - p - 1));
+                if (table[11] == 'c') CHECK(i < chain.size() && chain[i] == w);  // same order
+                else CHECK(predict::isSensitiveTriple(p2, p1, w));
+                ++i;
+                ++rows;
+                p = q;
+            }
+        }
+        CHECK(rows >= 20);
+    }
+    CHECK(split(cands("vãi cả "), '|')[0] == "chưởng");
+    CHECK(split(cands("não cá "), '|')[0] == "vàng");
+}
+
 TEST(prediction_slang_batches) {
     CHECK_EQ(cands("giang "), std::string());  // giang hồ: already in vnlm.bin => not seeded
     CHECK(split(cands("gen "), '|')[0] == "Z");

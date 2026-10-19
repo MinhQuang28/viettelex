@@ -23,7 +23,8 @@ Usage:
   python3 Scripts/gen-seed-data.py --corpus-from-seed   (chỉ sửa seed-curated.txt / SensitiveWords, không có
        U.tsv/B.tsv: giữ nguyên khối corpus của SeedData.swift hiện có; dừng nếu từ mới lọc nằm trong khối đó)
   python3 Scripts/gen-seed-data.py --corpus-from-seed --check   (so với file đã commit; khác ⇒ exit 1)
-  Cũng ghi bảng SensitivePairs (khối [sensitive-bigram]) vào iOS/Keyboard/SensitiveWords.swift,
+  Cũng ghi bảng SensitivePairs (khối [sensitive-bigram]) + chuỗi/bộ ba (khối [trigram] / [sensitive-trigram]:
+  SensitiveWords.chains / .triples, Windows kSeedChains / kSensitiveTriples) vào iOS/Keyboard/SensitiveWords.swift,
   android/…/SensitiveWords.kt (giữa dòng BEGIN/END GENERATED) và windows/app/core/sensitive_pairs.inc.
   rồi: python3 android/keyboard/scripts/export-ios-data.py . (seed.tsv), Scripts/gen-seed-next.sh,
        python3 windows/app/tools/gen_seed_unigrams.py, windows/app/tools/gen_prediction_golden.sh
@@ -58,12 +59,16 @@ def read_tsv(path, n_key):
 
 
 SENSITIVE_PAIRS = "sensitive-bigram"
+TRIGRAM = "trigram"
+SENSITIVE_TRIGRAM = "sensitive-trigram"
 
 
 def read_curated(path):
     """→ pins {w: c}, groups [(kind, title|None, [(key tuple, c)])], loại {từ | "a b"}, cặp nhạy cảm
-    [(a, b)] (khối [sensitive-bigram]: vào seed như [bigram] + bảng SensitivePairs)."""
-    pins, groups, kind, excl, spairs = {}, [], None, set(), []
+    [(a, b)] (khối [sensitive-bigram]: vào seed như [bigram] + bảng SensitivePairs), bộ ba
+    [(a, b, c, trọng-số, nhạy cảm?)] (khối [trigram] / [sensitive-trigram]: KHÔNG vào SeedData — sinh
+    bảng SensitiveWords.chains / .triples)."""
+    pins, groups, kind, excl, spairs, tris = {}, [], None, set(), [], []
     for raw in open(path, encoding="utf-8"):
         line = raw.strip()
         if not line or (line.startswith("#") and not line.startswith("##")): continue
@@ -76,12 +81,15 @@ def read_curated(path):
         *ws, c = unicodedata.normalize("NFC", line).split()
         if kind == "pin": pins[ws[0]] = int(c)
         elif kind == "exclude": excl.add(" ".join(ws + [c]))
+        elif kind in (TRIGRAM, SENSITIVE_TRIGRAM):
+            assert len(ws) == 3 and all(w == w.lower() for w in ws) and int(c) >= 0, line
+            tris.append((*ws, int(c), kind == SENSITIVE_TRIGRAM))
         else:
             groups[-1][2].append((tuple(ws), int(c)))
             if kind == SENSITIVE_PAIRS:
                 assert len(ws) == 2 and all(w == w.lower() for w in ws), line
                 spairs.append(tuple(ws))
-    return pins, groups, excl, spairs
+    return pins, groups, excl, spairs, tris
 
 
 def swift_lines(items, per_line, fmt):
@@ -110,12 +118,15 @@ def main():
     a = ap.parse_args()
 
     sens = sensitive_words()
-    pins, groups, excl, spairs = read_curated(a.curated)
+    pins, groups, excl, spairs, tris = read_curated(a.curated)
     # từ SAU là từ thường (từ tục đã lọc theo từ); từ TRƯỚC có thể tục ("fuck boy": người dùng tự gõ "fuck",
     # lọc theo từ không chặn được "boy" sau nó)
     bad = [p for p in spairs if p[1] in sens]
     assert not bad, f"[sensitive-bigram]: từ sau đã lọc theo từ (SensitiveWords) — để ở [bigram]: {bad}"
     assert len(set(spairs)) == len(spairs), "cặp nhạy cảm trùng"
+    assert len({t[:3] for t in tris}) == len(tris), "bộ ba trùng"
+    bad = [t for t in tris if not t[4] and any(w in sens for w in t[:3])]
+    assert not bad, f"[trigram] chứa từ nhạy cảm — để ở [sensitive-trigram]: {bad}"
     if a.corpus_from_seed:
         corpus_uni, corpus_bi = corpus_from_seed(a.out)
         bad = [w for w in corpus_uni if w in sens or w in excl] + \
@@ -125,7 +136,7 @@ def main():
         assert a.unigrams and a.bigrams, "cần --unigrams/--bigrams (hoặc --corpus-from-seed)"
         corpus_uni, corpus_bi = corpus_from_tsv(a, sens, pins, excl)
     outs = {a.out: seed_swift(a, pins, groups, corpus_uni, corpus_bi)}
-    outs.update(sensitive_pair_outputs(spairs))
+    outs.update(sensitive_pair_outputs(spairs, tris, sens))
     stale = []
     for path, text in outs.items():
         cur = open(path, encoding="utf-8").read() if os.path.exists(path) else None
@@ -137,7 +148,7 @@ def main():
             print("lỗi thời — chạy lại Scripts/gen-seed-data.py: " + ", ".join(stale), file=sys.stderr); sys.exit(1)
         print("SeedData + SensitivePairs khớp seed-curated.txt", file=sys.stderr)
     else:
-        print(f"SensitivePairs: {len(spairs)} cặp; ghi lại: {', '.join(stale) or '(không đổi)'}", file=sys.stderr)
+        print(f"SensitivePairs: {len(spairs)} cặp, {len(tris)} bộ ba; ghi lại: {', '.join(stale) or '(không đổi)'}", file=sys.stderr)
 
 
 BEGIN = "BEGIN GENERATED SensitivePairs"
@@ -151,27 +162,66 @@ def splice(path, body, comment):
     b = next(i for i, l in enumerate(lines) if BEGIN in l)
     e = next(i for i, l in enumerate(lines) if END in l)
     indent = lines[b][:len(lines[b]) - len(lines[b].lstrip())]
-    head = f"{indent}{comment} {BEGIN} — Scripts/gen-seed-data.py từ Scripts/seed-curated.txt [sensitive-bigram]; KHÔNG sửa tay."
+    head = f"{indent}{comment} {BEGIN} — Scripts/gen-seed-data.py từ Scripts/seed-curated.txt [sensitive-bigram] / [trigram] / [sensitive-trigram]; KHÔNG sửa tay."
     return "\n".join(lines[:b] + [head] + [indent + x if x else x for x in body] + [lines[e]] + lines[e + 1:])
 
 
-def sensitive_pair_outputs(spairs):
+def sensitive_pair_outputs(spairs, tris, sens):
+    """Bảng cặp (SensitivePairs) + bộ ba: `chains` = chuỗi seed (prev2 prev → từ, trọng-số > 0, nặng trước),
+    `triples` = bộ ba [sensitive-trigram] mà lọc theo từ / theo cặp CHƯA chặn (từ3 thường, (từ2, từ3) không
+    phải cặp nhạy cảm) ⇒ lọc bật thì từ3 không gợi ý sau (từ1, từ2)."""
+    def u8(k): return k.encode("utf-8")
     by = {}
     for x, y in spairs: by.setdefault(x, []).append(y)
-    keys = sorted(by, key=lambda k: k.encode("utf-8"))
+    keys = sorted(by, key=u8)
+    pairset = set(spairs)
+    chains, triples = {}, {}
+    # nặng trước; hoà ⇒ thứ tự file (sort ổn định)
+    for x, y, z, c, s in sorted(tris, key=lambda t: -t[3]):
+        k = f"{x} {y}"
+        if c > 0: chains.setdefault(k, []).append(z)
+        if s and z not in sens and (y, z) not in pairset: triples.setdefault(k, []).append(z)
     def q(s): return '"' + s + '"'
     sw = ["static let pairs: [String: Set<String>] = ["]
     sw += [f"    {q(k)}: [{', '.join(q(v) for v in sorted(by[k]))}]," for k in keys]
+    sw += ["]",
+           "/// Chuỗi seed BA từ (\"prev2 prev\" → từ kế tiếp, nặng trước; [trigram] + [sensitive-trigram] trọng-số > 0):",
+           "/// từ kế tiếp đứng đầu sau đúng hai từ đó (`chain`) — gọi qua `filter(_:after:prev2:enabled:)`.",
+           "static let chains: [String: [String]] = ["]
+    sw += [f"    {q(k)}: [{', '.join(q(v) for v in chains[k])}]," for k in sorted(chains, key=u8)]
+    sw += ["]",
+           "/// Bộ ba nhạy cảm (\"prev2 prev\" → từ): lọc bật ⇒ không gợi ý từ đó sau đúng hai từ (cặp prev → từ vẫn hiện).",
+           "static let triples: [String: Set<String>] = ["]
+    sw += [f"    {q(k)}: [{', '.join(q(v) for v in sorted(triples[k], key=u8))}]," for k in sorted(triples, key=u8)]
     sw += ["]"]
     kt = ["val pairs: Map<String, Set<String>> = hashMapOf("]
     kt += [f"    {q(k)} to hashSetOf({', '.join(q(v) for v in sorted(by[k]))})," for k in keys]
+    kt += [")",
+           "/** Chuỗi seed BA từ (\"prev2 prev\" → từ kế tiếp, nặng trước) — = iOS SensitiveWords.chains. */",
+           "val chains: Map<String, List<String>> = hashMapOf("]
+    kt += [f"    {q(k)} to listOf({', '.join(q(v) for v in chains[k])})," for k in sorted(chains, key=u8)]
+    kt += [")",
+           "/** Bộ ba nhạy cảm (\"prev2 prev\" → từ): lọc bật ⇒ không gợi ý — = iOS SensitiveWords.triples. */",
+           "val triples: Map<String, Set<String>> = hashMapOf("]
+    kt += [f"    {q(k)} to hashSetOf({', '.join(q(v) for v in sorted(triples[k], key=u8))})," for k in sorted(triples, key=u8)]
     kt += [")"]
-    rows = sorted((f"{x} {y}" for x, y in spairs), key=lambda r: r.encode("utf-8"))
-    inc = ["// GENERATED by Scripts/gen-seed-data.py from Scripts/seed-curated.txt [sensitive-bigram]. Do not edit.",
+    rows = sorted((f"{x} {y}" for x, y in spairs), key=u8)
+    trows = sorted((f"{k} {z}" for k, zs in triples.items() for z in zs), key=u8)
+    crows = [f"{k} {z}" for k in sorted(chains, key=u8) for z in chains[k]]
+    inc = ["// GENERATED by Scripts/gen-seed-data.py from Scripts/seed-curated.txt [sensitive-bigram] /",
+           "// [trigram] / [sensitive-trigram]. Do not edit.",
            f"// SensitivePairs: {len(rows)} \"prev word\" pairs of two ordinary words, sorted by UTF-8 bytes —",
            "// with \"Lọc từ nhạy cảm\" on, `word` is never suggested after `prev` (isSensitivePair).",
            "const char* const kSensitivePairs[] = {"]
-    inc += [f"    {q(r)}," for r in rows] + ["};", ""]
+    inc += [f"    {q(r)}," for r in rows] + ["};",
+            f"// SensitiveTriples: {len(trows)} \"prev2 prev word\" rows sorted by UTF-8 bytes — filter on ⇒ `word` is",
+            "// never suggested after exactly (prev2, prev) (isSensitiveTriple; SensitiveWords.triples).",
+            "const char* const kSensitiveTriples[] = {"]
+    inc += [f"    {q(r)}," for r in trows] + ["};",
+            f"// SeedChains: {len(crows)} \"prev2 prev word\" rows, grouped by UTF-8-sorted \"prev2 prev\", heaviest first",
+            "// within a group — the next word leads after exactly (prev2, prev) (seedChain; SensitiveWords.chains).",
+            "const char* const kSeedChains[] = {"]
+    inc += [f"    {q(r)}," for r in crows] + ["};", ""]
     sw_path = os.path.join(ROOT, "iOS/Keyboard/SensitiveWords.swift")
     kt_path = os.path.join(ROOT, "android/keyboard/src/main/kotlin/com/viettelex/keyboard/SensitiveWords.kt")
     return {
