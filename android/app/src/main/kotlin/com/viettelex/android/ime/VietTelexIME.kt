@@ -353,6 +353,28 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         v.configure(fx, th.action, th.keyFill, th.dark)
         r.effects = v          // dải dưới / trên phím theo kiểu vừa cấu hình
         kb.effects = v
+        r.refreshStringGaps()  // Rung dây: khe hàng cho overlay (đã layout thì đặt ngay)
+    }
+
+    /**
+     * "Hiệu ứng nét vuốt": kiểu + cổng Plus + Trình tiết kiệm pin; "Theo giao diện" ⇒ "swipe" của theme đang dùng —
+     * đọc MỘT lần mỗi lần hiện. Tắt ⇒ KeyboardView không giữ vệt (không add/vẽ gì), view ẩn.
+     */
+    private fun applySwipeTrail(setting: com.viettelex.keyboard.SwipeTrailStyle, th: ImeTheme, kb: KeyboardView) {
+        val r = root ?: return
+        val style = if (!setting.isPlus) setting else com.viettelex.keyboard.SwipeTrailPolicy.active(
+            setting, com.viettelex.keyboard.SwipeTrailGate.allows(setting),
+            themeSwipe = if (setting == com.viettelex.keyboard.SwipeTrailStyle.THEME) th.settings.effectiveKeyStyle.swipe else null,
+            powerSave = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
+        if (style == com.viettelex.keyboard.SwipeTrailStyle.NONE) {
+            r.trail.clear()
+            r.trail.visibility = View.GONE
+            kb.trail = null
+            return
+        }
+        r.trail.configure(style)
+        r.trail.visibility = View.VISIBLE
+        kb.trail = r.trail
     }
 
     /**
@@ -486,6 +508,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         kb.keyPressHighlight = settings.keyPressHighlight
         applyKeyEffect(settings.keyEffect, th, kb)
         applyBuddy(settings.buddy, th, st)
+        applySwipeTrail(settings.swipeTrail, th, kb)
         kb.configureSpaceFlick(settings.spaceSwipeLanguage, session.language)
         if (session.language == com.viettelex.keyboard.KeyboardLanguage.EN) warmEnglish()
         // Plus + công tắc "Công cụ văn bản" (mặc định bật) + không phải ô mật khẩu.
@@ -1035,6 +1058,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
             (System.nanoTime() - t0) / 1e6, path.count, cands.size))
         if (res == null || !proxy.begin()) { applyAutoShift(); refreshBar(); return }
         val out = try { session.commitSwipe(res, proxy) } finally { proxy.end() }
+        keyboard?.swipeCommitted()          // "Pháo hoa cuối nét" (kiểu khác: 0 việc)
         resetIfEditFailed()
         strip?.hidePasteCard()
         pendingGen = out.generation

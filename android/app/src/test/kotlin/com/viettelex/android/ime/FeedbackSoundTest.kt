@@ -69,8 +69,58 @@ class FeedbackSoundTest {
             val stamp = f.lastModified()
             assertEquals(f, Feedback.pianoNoteFile(dir, 60, sustain = false)); assertEquals(stamp, f.lastModified())
             assertEquals(11_025.0, KeySoundSynth.parseWav(Feedback.pianoNoteFile(dir, 60, sustain = true)!!.readBytes())!!.second, 0.0)
-            assertEquals(4, Feedback.pianoExtraFiles(dir).filterNotNull().size)
+            // cách (= hợp âm 0, CÙNG file) + Enter + ⌫ + pedal + 4 hợp âm vòng.
+            val extras = Feedback.pianoExtraFiles(dir)
+            assertEquals(8, extras.filterNotNull().size)
+            assertEquals(extras[0], extras[4])
+            assertEquals("keysound-piano-v1-chord1.wav", extras[5]!!.name)
+            assertEquals("7 file khác nhau", 7, extras.filterNotNull().map { it.name }.toSet().size)
         } finally { dir.deleteRecursively() }
+    }
+
+    /** Ghi-ta: WAV riêng (guitar-v1), 4 hợp âm vòng + chủ; Đàn tranh không có hợp âm vòng. */
+    @Test fun guitarWavCache() {
+        val dir = Files.createTempDirectory("keysound").toFile()
+        try {
+            val inst = com.viettelex.keyboard.KeyInstrument.GUITAR
+            assertTrue(Feedback.isPiano("guitar"))
+            assertEquals("keysound-guitar-v1-n-64.wav", Feedback.pianoNoteFile(dir, inst, 64, sustain = false)!!.name)
+            val extras = Feedback.pianoExtraFiles(dir, inst)
+            assertEquals(8, extras.size)
+            assertEquals(listOf("keysound-guitar-v1-chord0.wav", "keysound-guitar-v1-return.wav", "keysound-guitar-v1-delete.wav",
+                "keysound-guitar-v1-pedal.wav", "keysound-guitar-v1-chord0.wav", "keysound-guitar-v1-chord1.wav",
+                "keysound-guitar-v1-chord2.wav", "keysound-guitar-v1-chord3.wav"), extras.map { it!!.name })
+            val (s, rate) = KeySoundSynth.parseWav(extras[6]!!.readBytes())!!
+            assertEquals(22_050.0, rate, 0.0)
+            assertEquals(com.viettelex.keyboard.GuitarSynth.chord(2).size, s.size)
+            assertEquals(4, Feedback.pianoExtraFiles(dir, com.viettelex.keyboard.KeyInstrument.DANTRANH).size)
+        } finally { dir.deleteRecursively() }
+    }
+
+    /**
+     * Phím không nhãn với vòng hợp âm (Piano / Ghi-ta): cách ⇒ hợp âm kế tiếp, Enter ⇒ chủ rồi về đầu, ⌫ = đang gõ;
+     * Đàn tranh (count 0) ⇒ như cũ. Phiên thật trên CÙNG một trạng thái — iOS testSpaceProgressionRoute.
+     */
+    @Test fun spaceProgressionRoute() {
+        val ev = com.viettelex.keyboard.PianoEvent
+        val p = com.viettelex.keyboard.ChordProgression(4)
+        var now = 100.0
+        fun space(): Int { now += 0.4; return Feedback.progressionEvent(Feedback.SPACE, p, now) }
+        assertEquals((0..4).map { ev.chord(it % 4) }, (0..4).map { space() })
+        now += 0.2; assertEquals(ev.DELETE, Feedback.progressionEvent(Feedback.DELETE, p, now))
+        assertEquals(ev.chord(1), space())
+        now += 0.2; p.typed(now, com.viettelex.keyboard.ChordProgression.isSentenceEnd("."))
+        assertEquals("kết câu ⇒ về đầu", ev.chord(0), space())
+        assertEquals(ev.chord(1), space())
+        now += 3.5
+        assertEquals("nghỉ > 3 s ⇒ về đầu", ev.chord(0), space())
+        space()
+        now += 0.2; assertEquals(ev.RETURN, Feedback.progressionEvent(Feedback.RETURN, p, now))
+        assertEquals("Enter ⇒ chủ rồi về đầu", ev.chord(0), space())
+        assertEquals(60, Feedback.progressionEvent(Feedback.LETTER, p, now))
+        // Đàn tranh: không vòng.
+        val z = com.viettelex.keyboard.ChordProgression(0)
+        for (i in 0 until 3) assertEquals(ev.SPACE, Feedback.progressionEvent(Feedback.SPACE, z, i.toDouble()))
     }
 
     /** Đàn tranh: WAV cache riêng (tên khác Piano — đổi kiểu không dùng nhầm nốt piano), cùng tần số mẫu. */

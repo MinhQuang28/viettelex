@@ -4,8 +4,8 @@
 # Màu: AARRGGBB (alpha cắt cụt a*255); '-' = không có. fn = nền phím chức năng + phím cách riêng;
 # fnInk = chữ/icon phím chức năng riêng; deco = hoạ tiết nền motif[+alt]:màu (alt = motif thứ hai xen kẽ). Hệ thống / Kính khác nhau theo
 # nền tảng (backdrop) nên không có ở đây.
-order	system,oled,contrast,peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,sen,typewriter,rgb,space,trungthu,valentine,halloween
-plus	peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,sen,typewriter,rgb,space,trungthu,valentine,halloween
+order	system,oled,contrast,peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,sen,typewriter,rgb,space,trungthu,valentine,halloween,guitar
+plus	peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,sen,typewriter,rgb,space,trungthu,valentine,halloween,guitar
 #theme	dark	bg	key	special	ink	accent	accentInk	border	fn	fnInk	deco
 oled	0	FF000000	FF1C1C1E	FF3A3A3C	FFFFFFFF	FF0A84FF	FFFFFFFF	-	-	-	-
 oled	1	FF000000	FF1C1C1E	FF3A3A3C	FFFFFFFF	FF0A84FF	FFFFFFFF	-	-	-	-
@@ -53,3 +53,5 @@ valentine	0	FFFFE3E8	FFFFFFFF	FFFFC2CF	FF9B1035	FFD81B4A	FFFFFFFF	-	FFFFD3DC	FFB
 valentine	1	FF2A0610	FF4E0D20	FF6B1430	FFFFE9EE	FFD81B4A	FFFFFFFF	-	FF3D0918	FFFF9AB5	hearts:73FF3D6E
 halloween	0	FF120A1C	FF2A1840	FF1E1030	FFFFE8CC	FFFF7A1A	FF1A0A00	-	FF24123A	FFFF9A3C	pumpkin+bat:80FF7A1A
 halloween	1	FF120A1C	FF2A1840	FF1E1030	FFFFE8CC	FFFF7A1A	FF1A0A00	-	FF24123A	FFFF9A3C	pumpkin+bat:80FF7A1A
+guitar	0	FFDDA35C	FF4A2A1C	FF6B4030	FFF6EBD5	FFE8A93A	FF2A1606	-	FF351D13	FFF2C46D	strings+inlay:D9FBF1DC
+guitar	1	FF1A1009	FF4A2A1C	FF6B4030	FFF6EBD5	FFE8A93A	FF2A1606	-	FF351D13	FFF2C46D	strings+inlay:73C9A46A

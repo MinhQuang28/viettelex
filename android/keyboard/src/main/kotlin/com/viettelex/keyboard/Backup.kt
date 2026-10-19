@@ -92,6 +92,8 @@ object BackupSettings {
         Spec(Keys.KEY_EFFECT, SettingKind.Choice(KeyEffect.DEFAULT.id, KeyEffect.IDS)),
         // "Bạn đồng hành" (Plus, [BuddyCharacter]) — cùng khoá + id iOS; lạ ⇒ bỏ qua (máy giữ Tắt).
         Spec(Keys.KEYBOARD_BUDDY, SettingKind.Choice(BuddyCharacter.DEFAULT.id, BuddyCharacter.IDS)),
+        // "Hiệu ứng nét vuốt" ([SwipeTrailStyle]) — cùng khoá + id iOS; lạ ⇒ bỏ qua (máy giữ Đơn giản).
+        Spec(Keys.SWIPE_TRAIL, SettingKind.Choice(SwipeTrailStyle.DEFAULT.id, SwipeTrailStyle.IDS)),
         // "Tuỳ chỉnh nâng cao" (Plus) RIÊNG từng theme — MỘT chuỗi JSON chuẩn ([KeyStyleStore]), cùng khoá +
         // định dạng iOS. Khoá chung cũ (keyLabelColor…) không còn sao lưu: file cũ có chúng ⇒ bỏ qua như
         // key lạ. "rounded" (chỉ iOS) vẫn giữ để khứ hồi; bàn phím Android vẽ như mặc định.

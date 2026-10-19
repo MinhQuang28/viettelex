@@ -82,6 +82,9 @@ struct KeyboardPalette: Equatable {
     /// Viền phím cầu vồng (Gaming RGB, slot "borderFx":"rainbow"): MỘT lớp gradient che bằng hình viền mọi phím
     /// (RainbowBorder) — chỉ xoay màu khi đang gõ, nghỉ thì đứng yên. Android `rainbowBorder` cùng ý nghĩa.
     var rainbowBorder = false
+    /// Lỗ thoát âm trên phím cách (Ghi-ta, slot "spaceDeco":"soundhole"): hình tròn tối + vành hoa văn vẽ MỘT lần
+    /// (CAShapeLayer trong phím cách / Canvas Android), 0 chi phí mỗi phím. Android `spaceSoundhole` cùng ý nghĩa.
+    var spaceSoundhole = false
     /// Người dùng chọn "Màu nhấn" (KeyStyle.accentColor) ⇒ phím ⇧ bật / Caps tô `accent` + `accentInk`
     /// (mặc định: nền trắng glyph đen như stock). Android cùng ý nghĩa (`accentShift`).
     var accentShift = false
@@ -257,6 +260,9 @@ enum KeyboardTheme: String, CaseIterable {
     case typewriter, rgb, space
     // Bộ đủ món 10/2026 (màu + hoạ tiết + hiệu ứng + âm): Trung Thu, Valentine, Halloween.
     case trungthu, valentine, halloween
+    // Bộ đủ món 10/2026: Ghi-ta (mặt đàn gỗ thích mật ong, phím gỗ hồng sắc, dây đàn + khảm xà cừ, lỗ thoát âm trên
+    // phím cách, âm ghi-ta mộc + hiệu ứng rung dây).
+    case guitar
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
     // Hệ thống + Màu nhấn D6336C (KeyStyleStore.migrate). Id lạ / đã bỏ luôn về Hệ thống.
 
@@ -287,6 +293,7 @@ enum KeyboardTheme: String, CaseIterable {
         case .trungthu: return L("Trung Thu")
         case .valentine: return L("Valentine")
         case .halloween: return L("Halloween")
+        case .guitar: return L("Ghi-ta")
         }
     }
 
@@ -314,7 +321,8 @@ enum KeyboardTheme: String, CaseIterable {
              .tet, .tetMai, .xmas, .xmasSnow, .piano,
              .sen,
              .typewriter, .rgb, .space,
-             .trungthu, .valentine, .halloween: return true
+             .trungthu, .valentine, .halloween,
+             .guitar: return true
         }
     }
 
@@ -379,6 +387,9 @@ struct KeyboardDecoration: Equatable {
         case starfield
         // Trung Thu / Halloween (10/2026, vector tự vẽ): đèn lồng, trăng khuyết, bí ngô, dơi.
         case lantern, moon, pumpkin, bat
+        // Ghi-ta (10/2026): "strings" = dây đàn kim loại kéo NGANG HẾT khe hàng (vẽ một lần mỗi khe, dày dần ở khe
+        // dưới như dây trầm — không theo vị trí motif); "inlay" = chấm khảm xà cừ nhỏ (thường dùng làm deco.alt).
+        case strings, inlay
     }
     var motif: Motif
     var color: RGBA
@@ -394,6 +405,27 @@ struct KeyboardDecoration: Equatable {
 
     /// Motif của vị trí thứ `k` (theo thứ tự `placements`).
     func motif(at k: Int) -> Motif { k % 2 == 1 ? (alt ?? motif) : motif }
+
+    /// Có dây đàn (motif chính hoặc alt = strings) ⇒ path thêm mỗi khe một dây ngang.
+    var hasStrings: Bool { motif == .strings || alt == .strings }
+
+    /// Độ dày dây ở khe thứ `i` (0 = khe trên cùng; pt / dp) — dây dưới dày hơn như dây trầm của đàn.
+    static func stringThickness(_ i: Int) -> Double { min(0.6 + 0.3 * Double(i), 1.5) }
+    /// Lề hai đầu dây (pt / dp).
+    static let stringInset = 6.0
+
+    /// Dây đàn: mỗi khe có motif (tâm `y` khác nhau của `placements`, theo thứ tự) một hình chữ nhật mảnh kéo từ
+    /// `stringInset` tới `width − stringInset` (nil ⇒ tới motif xa nhất + `inset`). Chiều quay như `shape` (nonzero
+    /// hợp với chấm khảm đè lên). Android ThemeDecoration.strings y hệt.
+    static func strings(_ placements: [Placement], width: Double?) -> [(x0: Double, x1: Double, y: Double, h: Double)] {
+        var ys: [Double] = []
+        for p in placements where !ys.contains(p.y) { ys.append(p.y) }
+        guard !ys.isEmpty else { return [] }
+        let right = width ?? ((placements.map { $0.x + $0.size / 2 }.max() ?? 0) + inset)
+        let x0 = stringInset, x1 = right - stringInset
+        guard x1 > x0 else { return [] }
+        return ys.sorted().enumerated().map { (x0: x0, x1: x1, y: $0.element, h: stringThickness($0.offset)) }
+    }
 
     /// Bước ngang (pt / dp), cỡ motif tối đa, lề hai bên, cỡ nhỏ nhất còn vẽ.
     static let stepX = 64.0, motifSize = 8.0, inset = 14.0, minMotifSize = 5.0
@@ -439,9 +471,19 @@ struct KeyboardDecoration: Equatable {
         return pts
     }
 
-    /// Path mọi motif (gốc trên-trái, y xuống).
-    func path(_ placements: [Placement]) -> CGPath {
+    /// Path mọi motif (gốc trên-trái, y xuống). `width` = bề ngang vùng vẽ (dây đàn kéo hết khe); nil ⇒ suy từ motif.
+    func path(_ placements: [Placement], width: Double? = nil) -> CGPath {
         let path = CGMutablePath()
+        if hasStrings {
+            for s in Self.strings(placements, width: width) {
+                let t = s.y - s.h / 2, b = s.y + s.h / 2
+                path.move(to: CGPoint(x: s.x1, y: t))
+                path.addLine(to: CGPoint(x: s.x1, y: b))
+                path.addLine(to: CGPoint(x: s.x0, y: b))
+                path.addLine(to: CGPoint(x: s.x0, y: t))
+                path.closeSubpath()
+            }
+        }
         // Dữ liệu hình tính MỘT lần mỗi lần dựng path (không mỗi motif).
         let shapes = [motif, alt ?? motif].map(Self.shape)
         for (k, c) in placements.enumerated() {
@@ -512,7 +554,10 @@ struct KeyboardDecoration: Equatable {
         }
         func poly(_ q: [[Double]]) -> Sub { Sub(start: (q[0][0], q[0][1]), segs: Array(q.dropFirst())) }
         switch m {
-        case .hearts, .flowers: return []
+        case .hearts, .flowers, .strings: return []
+        case .inlay:
+            // Chấm khảm xà cừ (tròn nhỏ) — trên cần đàn thật nằm giữa hai phím đàn.
+            return [ell(0, 0, 0.22, 0.22)]
         case .starfield:
             // Vũ trụ: một sao lấp lánh 4 cánh (to) + vài chấm sao nhỏ trải NGANG trong khe (dọc vẫn ±0.45 —
             // không chạm phím). Chấm = hình thoi nhỏ, cùng chiều quay với sao.
@@ -609,6 +654,22 @@ struct KeyboardDecoration: Equatable {
                                                     [-0.4, -0.04, -0.44, -0.04, -0.48, -0.12],
                                                     [-0.36, -0.24, -0.18, -0.22, -0.06, -0.08]])]
         }
+    }
+}
+
+/// Lỗ thoát âm trên phím cách (theme Ghi-ta, slot "spaceDeco":"soundhole") — hình học thuần, Android Soundhole y hệt.
+/// Tâm = tâm phím; bán kính lỗ R = min(0.34 × cao, 0.18 × rộng); hai vành hoa văn (rosette) đồng tâm vẽ nét:
+/// (bán kính, độ dày) theo bội của R. Vành ngoài cùng ≤ 0.46 × cao ⇒ không chạm mép phím.
+enum Soundhole {
+    static let holeRatio = 0.34
+    static let maxWidthRatio = 0.18
+    static let holeAlpha = 0.55
+    static let rings: [(radius: Double, width: Double)] = [(1.28, 0.12), (1.13, 0.06)]
+    static func radius(width: Double, height: Double) -> Double { max(0, min(holeRatio * height, maxWidthRatio * width)) }
+    /// Bán kính ngoài cùng (mép vành ngoài) — test: nằm trong phím.
+    static func outerExtent(width: Double, height: Double) -> Double {
+        let r = radius(width: width, height: height)
+        return rings.map { ($0.radius + $0.width / 2) * r }.max() ?? r
     }
 }
 
@@ -839,6 +900,7 @@ struct ThemeSettings: Equatable {
             if s.weight == .regular { s.weight = t.weight }
             if s.sound == nil { s.sound = t.sound }
             if s.effect == nil { s.effect = t.effect }
+            if s.swipe == nil { s.swipe = t.swipe }
             s.assets = s.assets.merged(over: t.assets)
             if userSystemFont { s.assets.font = nil }
             if s.assets.font != nil { s.font = .standard }
@@ -988,6 +1050,8 @@ struct KeyStyle: Equatable {
     /// Âm phím / hiệu ứng đi kèm theme ("sound" / "effect", ThemeExtraIds) — CHỈ áp lúc chọn theme (ThemeExtras).
     var sound: String? = nil
     var effect: String? = nil
+    /// Nét vuốt theme ("swipe", ThemeExtraIds.swipes) — chỉ dùng khi chọn "Theo giao diện" (SwipeTrailPolicy).
+    var swipe: String? = nil
 
     static let `default` = KeyStyle()
     var isDefault: Bool { self == .default }
@@ -1101,6 +1165,7 @@ struct KeyStyle: Equatable {
             q.decoration = dc.motif.map { KeyboardDecoration(motif: $0, color: c(dc.color), density: dc.density, alt: dc.alt) }
         }
         if let fx = s.borderFx { q.rainbowBorder = fx == ThemeSlots.rainbow }
+        if let sd = s.spaceDeco { q.spaceSoundhole = sd == ThemeSlots.soundhole }
         return q
     }
 
@@ -1120,6 +1185,7 @@ struct KeyStyle: Equatable {
         st.assets = edited.assets
         st.sound = edited.sound
         st.effect = edited.effect
+        st.swipe = edited.swipe
         return (st, l.lostBg || d.lostBg)
     }
 }
@@ -1181,6 +1247,7 @@ enum KeyStyleStore {
         ThemeSpec.appendImages(st.assets, to: &f)
         if let v = st.sound { f.append(("sound", .string(v))) }
         if let v = st.effect { f.append(("effect", .string(v))) }
+        if let v = st.swipe { f.append(("swipe", .string(v))) }
         if !st.light.isEmpty { f.append(("light", ThemeSpec.json(st.light))) }
         if !st.dark.isEmpty { f.append(("dark", ThemeSpec.json(st.dark))) }
         return .object(f)

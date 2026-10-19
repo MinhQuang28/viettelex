@@ -9,13 +9,15 @@ import Foundation
 //    "light":{"bg":"#FBE3E1","key":"#FFF8F7","special":"#F1C4BF","ink":"#4A2226","accent":"#C2505A",
 //             "accentInk":"#FFFFFF","border":"#4CAF6E","fn":"#A9BFA3","fnInk":"#C2255C",
 //             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100},
-//             "borderFx":"rainbow"},
+//             "borderFx":"rainbow", "spaceDeco":"soundhole"},
 //             (deco "alt": motif thứ hai xen kẽ, vd {"motif":"pumpkin","alt":"bat",…})
 //    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold",
-//    "sound":"phao", "effect":"blossom"}
+//    "sound":"phao", "effect":"blossom", "swipe":"stardust"}
 //
 // "sound" / "effect" (tuỳ chọn, id trong danh sách trắng ThemeExtraIds): âm phím / hiệu ứng bấm phím ĐI KÈM theme —
 // CHỈ áp MỘT lần lúc người dùng chọn theme (ThemeExtras.applyOnSelect); không bao giờ tự bật âm thanh phím.
+// "swipe" (tuỳ chọn, id SwipeTrailStyle trừ "theme"): nét vuốt của theme — KHÔNG áp lúc chọn theme; chỉ được
+// dùng khi người dùng chọn "Theo giao diện" (SwipeTrailPolicy giải lúc hiện bàn phím).
 //
 // Tệp tải về (Plus — ThemeAssets.swift: kế hoạch / kho / dọn; App/ThemeAssetDownloader.swift: tải + xử lý):
 //   "font": "serif" | {"name":"Nunito","url":"https://….ttf|otf","sha256":"…"?}
@@ -423,11 +425,17 @@ struct ThemeSlots: Equatable {
     var deco: ThemeDeco?
     /// Hiệu ứng viền phím: "rainbow" (Gaming RGB — viền cầu vồng, chỉ xoay màu khi đang gõ) | "none" (bản vá: bỏ).
     var borderFx: String?
+    /// Hình vẽ trên phím cách: "soundhole" (Ghi-ta — lỗ thoát âm tròn + vành hoa văn, vẽ MỘT lần vào lớp của phím cách)
+    /// | "none" (bản vá: bỏ). Không có hook skin ảnh cho builtin (skin = ảnh tải về) ⇒ slot riêng tối giản.
+    var spaceDeco: String?
 
     var isEmpty: Bool { self == ThemeSlots() }
     static let rainbow = "rainbow"
     /// Giá trị hợp lệ của "borderFx" (Android ThemeSlots.BORDER_FX y hệt).
     static let borderFxValues: Set<String> = [rainbow, "none"]
+    static let soundhole = "soundhole"
+    /// Giá trị hợp lệ của "spaceDeco" (Android ThemeSlots.SPACE_DECO y hệt).
+    static let spaceDecoValues: Set<String> = [soundhole, "none"]
     static let colorKeys = ["accent", "accentInk", "balloon", "bg", "border", "fn", "fnInk", "ink", "key", "special", "trail"]
     static let requiredKeys = ["key", "special", "ink", "accent"]
 
@@ -472,6 +480,7 @@ struct ThemeSlots: Equatable {
         for k in Self.colorKeys where patch[color: k] != nil { o[color: k] = patch[color: k] }
         if let d = patch.deco { o.deco = d }
         if let fx = patch.borderFx { o.borderFx = fx }
+        if let sd = patch.spaceDeco { o.spaceDeco = sd }
         return o
     }
 
@@ -495,6 +504,7 @@ struct ThemeSlots: Equatable {
         }
         if deco != base.deco { p.deco = deco ?? ThemeDeco(motif: nil) }
         if borderFx != base.borderFx { p.borderFx = borderFx ?? "none" }
+        if spaceDeco != base.spaceDeco { p.spaceDeco = spaceDeco ?? "none" }
         return (p, lostBg)
     }
 }
@@ -613,6 +623,8 @@ struct ThemeSpec: Equatable {
     /// Âm phím / hiệu ứng bấm phím đi kèm (id ThemeExtraIds) — chỉ áp lúc chọn theme.
     var sound: String?
     var effect: String?
+    /// Nét vuốt của theme (id ThemeExtraIds.swipes) — chỉ dùng khi cài đặt nét vuốt = "Theo giao diện".
+    var swipe: String?
 
     func slots(dark d: Bool) -> ThemeSlots { d ? (dark ?? light) : light }
     var name: String { L10n.isEnglish ? (nameEn ?? nameVi) : nameVi }
@@ -623,6 +635,7 @@ struct ThemeSpec: Equatable {
         k.assets = assets
         k.sound = sound
         k.effect = effect
+        k.swipe = swipe
         return k
     }
 }
@@ -632,6 +645,8 @@ struct ThemeSpec: Equatable {
 enum ThemeExtraIds {
     static let sounds: Set<String> = Set(KeySoundStyle.presetIDs)
     static let effects: Set<String> = Set(KeyEffect.allCases.map(\.rawValue))
+    /// "swipe": kiểu nét vuốt cụ thể (không có "theme" — theme không trỏ về chính nó).
+    static let swipes: Set<String> = Set(SwipeTrailStyle.themeIds)
 }
 
 // MARK: - Đọc / kiểm
@@ -651,9 +666,9 @@ enum ThemeSpecParser {
 
     static let assetKeys: Set<String> = ["background", "foreground", "keys"]
     static let rootKeys: Set<String> = Set(["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
-                                            "sound", "effect"])
+                                            "sound", "effect", "swipe"])
         .union(assetKeys)
-    static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco", "borderFx"])
+    static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco", "borderFx", "spaceDeco"])
 
     /// Đọc theme ĐẦY ĐỦ từ văn bản (dán / trình sửa). Cảnh báo tương phản kèm theo.
     static func parse(_ text: String) -> Outcome {
@@ -719,6 +734,7 @@ enum ThemeSpecParser {
         if spec.assets.font != nil { spec.font = nil }
         spec.sound = typo.sound
         spec.effect = typo.effect
+        spec.swipe = typo.swipe
         if contrast { c.issues += contrastIssues(spec) }
         return Outcome(spec: c.failed ? nil : spec, issues: c.issues)
     }
@@ -749,6 +765,12 @@ enum ThemeSpecParser {
                 guard case .string(let fx) = val else { c.err(.wrongType, path); continue }
                 guard ThemeSlots.borderFxValues.contains(fx) else { c.err(.badValue, path); continue }
                 s.borderFx = fx
+                continue
+            }
+            if k == "spaceDeco" {
+                guard case .string(let sd) = val else { c.err(.wrongType, path); continue }
+                guard ThemeSlots.spaceDecoValues.contains(sd) else { c.err(.badValue, path); continue }
+                s.spaceDeco = sd
                 continue
             }
             guard slotKeys.contains(k) else { c.err(.unknownKey, path); continue }
@@ -848,6 +870,7 @@ enum ThemeSpecParser {
         }
         s.sound = pick("sound", ThemeExtraIds.sounds)
         s.effect = pick("effect", ThemeExtraIds.effects)
+        s.swipe = pick("swipe", ThemeExtraIds.swipes)
     }
 
     // MARK: tệp tải về
@@ -933,7 +956,7 @@ enum ThemeSpecParser {
         guard case .object(let m) = j else { return nil }
         var c = Ctx()
         let allowed: Set<String> = Set(["label", "fill", "accent", "corner", "fontScale", "font", "weight", "light", "dark",
-                                        "sound", "effect"])
+                                        "sound", "effect", "swipe"])
             .union(assetKeys)
         for (k, _) in m where !allowed.contains(k) { c.err(.unknownKey, k) }
         let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
@@ -998,6 +1021,7 @@ extension ThemeSpec {
         Self.appendImages(assets, to: &m)
         if let sound { m.append(("sound", .string(sound))) }
         if let effect { m.append(("effect", .string(effect))) }
+        if let swipe { m.append(("swipe", .string(swipe))) }
         return .object(m)
     }
 
@@ -1035,6 +1059,7 @@ extension ThemeSpec {
             m.append(("deco", .object(dm)))
         }
         if let fx = s.borderFx { m.append(("borderFx", .string(fx))) }
+        if let sd = s.spaceDeco { m.append(("spaceDeco", .string(sd))) }
         return .object(m)
     }
 }
@@ -1075,6 +1100,7 @@ extension ThemeSpec {
             p.decoration = KeyboardDecoration(motif: m, color: c(dc.color), density: dc.density, alt: dc.alt)
         }
         p.rainbowBorder = s.borderFx == ThemeSlots.rainbow
+        p.spaceSoundhole = s.spaceDeco == ThemeSlots.soundhole
         return p
     }
 
@@ -1092,6 +1118,7 @@ extension ThemeSpec {
         if a(p.trail) != a(p.accent.alpha(0.6)) { s.trail = a(p.trail) }
         if let d = p.decoration { s.deco = ThemeDeco(motif: d.motif, color: a(d.color), density: d.density, alt: d.alt) }
         if p.rainbowBorder { s.borderFx = ThemeSlots.rainbow }
+        if p.spaceSoundhole { s.spaceDeco = ThemeSlots.soundhole }
         return s
     }
 
@@ -1108,6 +1135,7 @@ extension ThemeSpec {
         if s.assets.font != nil { s.font = nil }
         s.sound = style.sound
         s.effect = style.effect
+        s.swipe = style.swipe
         return s
     }
 }
@@ -1247,6 +1275,7 @@ enum ThemeJSONActions {
             if let w = b.spec?.weight, st.weight == w { st.weight = .regular }
             if st.sound == b.spec?.sound { st.sound = nil }
             if st.effect == b.spec?.effect { st.effect = nil }
+            if st.swipe == b.spec?.swipe { st.swipe = nil }
             s.setStyle(st, for: b)
             if r.lostBg { warnings.append(ThemeIssue(code: .bgKept, path: "bg")) }
         case .custom(let id):

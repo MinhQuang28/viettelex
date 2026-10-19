@@ -43,7 +43,7 @@ struct KeyboardSettings {
     var keySound = false
     /// Âm lượng âm phím 0…100 (%), mặc định 50.
     var keySoundVolume = 50
-    /// Kiểu âm phím (KeySoundStyle.rawValue): system ("iOS", click hệ thống)|subtle|wood|mechanical|typewriter|bubble|rock|pop|water|vintage|phao|jingle|piano|trong|boo|custom.
+    /// Kiểu âm phím (KeySoundStyle.rawValue): system ("iOS", click hệ thống)|subtle|wood|mechanical|typewriter|bubble|rock|pop|water|vintage|phao|jingle|piano|dantranh|trong|boo|guitar|custom.
     var keySoundStyle = KeySoundStyle.defaultStyle.rawValue
     /// Gợi ý sửa lỗi chạm trượt phím kề (AdjacentKeyFixer) — mặc định BẬT (25/09/2026).
     var autoFixAdjacent = true
