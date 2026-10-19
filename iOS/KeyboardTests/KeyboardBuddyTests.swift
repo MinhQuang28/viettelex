@@ -202,7 +202,7 @@ final class KeyboardBuddyTests: XCTestCase {
         print("BUDDY checksum \(sums)")
         XCTAssertEqual(sums, Self.checksums)
     }
-    static let checksums = ["0.0000", "12053.6237", "12013.9930", "15286.2573", "12005.5890"]
+    static let checksums = ["0.0000", "13803.1358", "12756.7491", "15286.2573", "12025.5890"]
 
     func testEveryRigHasAllPartsAndSleepPose() {
         for c in BuddyCharacter.allCases where c != .off {
@@ -224,7 +224,7 @@ final class KeyboardBuddyTests: XCTestCase {
     private final class Clock { var t = 100.0 }
 
     @MainActor private func makeView(_ c: BuddyCharacter, low: Bool = false, clock: Clock) -> BuddyView {
-        let v = BuddyView(character: c, dark: false, lowPower: low)
+        let v = BuddyView(character: c, bar: BuddyHalo.systemLight, lowPower: low)
         v.clock = { clock.t }
         v.frame = CGRect(x: 0, y: 0, width: KeyboardView.buddyZoneWidth, height: 40)
         v.layoutIfNeeded()
@@ -279,7 +279,7 @@ final class KeyboardBuddyTests: XCTestCase {
         for _ in 0..<40 {
             clock.t += 0.1; v.keyPressed(); v.tick()
             if case .dancing(let k) = v.shown, tiers.last != k { tiers.append(k) }
-            XCTAssertLessThanOrEqual(v.runningAnimationCount, 2 * 12)
+            XCTAssertLessThanOrEqual(v.runningAnimationCount, 2 * 20)   // vòng + nối mỗi kênh; bộ phận có bản quầng xoay cùng
         }
         XCTAssertEqual(tiers, [0, 1, 2, 3])
         v.halt()
@@ -302,7 +302,7 @@ final class KeyboardBuddyTests: XCTestCase {
             }
             v.tick()
             XCTAssertEqual(v.layerCount, layers, "không tạo thêm layer khi gõ")
-            XCTAssertLessThanOrEqual(v.runningAnimationCount, 24)
+            XCTAssertLessThanOrEqual(v.runningAnimationCount, 40)
             RunLoop.main.run(until: Date().addingTimeInterval(0.05))   // lượt apply hoãn
         }
         RunLoop.main.run(until: Date().addingTimeInterval(0.05))
@@ -311,7 +311,7 @@ final class KeyboardBuddyTests: XCTestCase {
 
     /// Chi phí main mỗi phím (đường đồng bộ `keyPressed`) — ngưỡng < 0,1 ms.
     @MainActor func testPerKeyCost() {
-        let v = BuddyView(character: .girl, dark: false, lowPower: false)
+        let v = BuddyView(character: .girl, bar: BuddyHalo.systemLight, lowPower: false)
         v.frame = CGRect(x: 0, y: 0, width: 34, height: 40)
         v.layoutIfNeeded()
         var samples: [Double] = []
@@ -699,7 +699,7 @@ final class KeyboardBuddyTests: XCTestCase {
     @MainActor func testOutfitViewIsStaticNoExtraAnimations() {
         let clock = Clock()
         let plain = makeView(.girl, clock: clock)
-        let v = BuddyView(character: .girl, dark: false, lowPower: false, season: .christmas)
+        let v = BuddyView(character: .girl, bar: BuddyHalo.systemLight, lowPower: false, season: .christmas)
         v.clock = { clock.t }
         v.frame = plain.frame
         v.layoutIfNeeded()
@@ -715,26 +715,81 @@ final class KeyboardBuddyTests: XCTestCase {
             throw XCTSkip("đặt TEST_RUNNER_VT_BUDDY_SHOTS để lưu ảnh")
         }
         try FileManager.default.createDirectory(atPath: dir, withIntermediateDirectories: true)
-        for dark in [false, true] {
+        // Nền thanh thật: tối (OLED, Kính tối, Neon) + sáng (Hệ thống sáng, Đào/pastel).
+        let bars: [(String, KeyboardTheme, Bool)] = [("oled", .oled, true), ("glass-dark", .glass, true), ("neon", .neon, true),
+                                                      ("system-light", .system, false), ("peach", .peach, false)]
+        for (tag, theme, sysDark) in bars {
+            let pal = theme.palette(systemDark: sysDark)
+            let bar = pal.buddyBar
             for c in BuddyCharacter.allCases where c != .off {
-                for (name, pose) in [("asleep", nil), ("dance", BuddyDance.pose(BuddyRig.rig(c)!.style, tier: 3, p: 0.125)),
-                                     ("love", BuddyDance.react(.love, BuddyRig.rig(c)!.style, f: 0.5)),
-                                     ("angry", BuddyDance.react(.angry, BuddyRig.rig(c)!.style, f: 0.3)),
-                                     ("bar", BuddyDance.pose(BuddyRig.rig(c)!.style, tier: 2, p: 0.3))] as [(String, BuddyPose?)] {
+                let style = BuddyRig.rig(c)!.style
+                for (name, pose) in [("asleep", nil), ("dance", BuddyDance.pose(style, tier: 3, p: 0.125)),
+                                     ("love", BuddyDance.react(.love, style, f: 0.5)),
+                                     ("angry", BuddyDance.react(.angry, style, f: 0.3)),
+                                     ("bar", BuddyDance.pose(style, tier: 2, p: 0.3))] as [(String, BuddyPose?)] {
                     let big = name != "bar"
                     let size = big ? CGSize(width: 200, height: 220) : CGSize(width: 34, height: 40)
                     let host = UIView(frame: CGRect(origin: .zero, size: size))
-                    host.backgroundColor = dark ? UIColor(white: 0.17, alpha: 1) : UIColor(red: 0.82, green: 0.84, blue: 0.87, alpha: 1)
-                    let v = BuddyView(character: c, dark: dark, lowPower: false, framing: .full)
+                    host.backgroundColor = UIColor(red: CGFloat((bar >> 16) & 0xFF) / 255, green: CGFloat((bar >> 8) & 0xFF) / 255,
+                                                   blue: CGFloat(bar & 0xFF) / 255, alpha: 1)
+                    let v = BuddyView(character: c, bar: bar, lowPower: false, framing: .full)
                     v.maxFigureHeight = big ? 200 : 44
                     v.frame = host.bounds
                     host.addSubview(v)
                     v.debugPose(pose, dance: name != "angry", heart: name == "love", angry: name == "angry")
                     let img = UIGraphicsImageRenderer(size: size, format: { let f = UIGraphicsImageRendererFormat(); f.scale = 3; return f }())
                         .image { ctx in host.layer.render(in: ctx.cgContext) }
-                    let file = "\(dir)/\(c.rawValue)-\(name)\(dark ? "-dark" : "").png"
-                    try img.pngData()!.write(to: URL(fileURLWithPath: file))
+                    try img.pngData()!.write(to: URL(fileURLWithPath: "\(dir)/\(tag)-\(c.rawValue)-\(name).png"))
                 }
+            }
+        }
+    }
+
+    // MARK: Tương phản (Phil: chân mảnh lẫn vào nền tối)
+
+    /// Mọi theme dựng sẵn (sáng + tối): quầng nhân vật tương phản ≥ 3:1 với nền thanh.
+    func testHaloContrastOnEveryTheme() {
+        for t in KeyboardTheme.allCases {
+            for sysDark in [false, true] {
+                let bar = t.palette(systemDark: sysDark).buddyBar
+                let tones = BuddyHalo.colors(bar: bar)
+                let c = BuddyHalo.contrast(tones.halo, bar)
+                XCTAssertGreaterThanOrEqual(c, 3, "\(t.rawValue) \(sysDark ? "tối" : "sáng"): quầng \(String(tones.halo, radix: 16)) / nền \(String(bar, radix: 16)) = \(c)")
+            }
+        }
+        XCTAssertTrue(BuddyHalo.colors(bar: 0x000000).darkBar)
+        XCTAssertEqual(BuddyHalo.colors(bar: 0x000000).halo, BuddyHalo.light)
+        XCTAssertEqual(BuddyHalo.colors(bar: 0xFFFFFF).halo, BuddyHalo.dark)
+        XCTAssertEqual(BuddyHalo.colors(bar: 0xFFFFFF).outline, 0x3A2A2A)
+    }
+
+    /// Chân / tay là hình TÔ (không phải nét đậm trơn) và đủ dày ở cỡ thanh (~38 pt cao): ≥ 2,5 pt.
+    func testLimbsAreFilledAndThickEnough() {
+        for c in BuddyCharacter.allCases where c != .off {
+            let r = BuddyRig.rig(c)!
+            let pt = 38 / r.full.h
+            for part in [BuddyPart.legL, .legR, .armL, .armR] {
+                let ps = r.pieces.filter { $0.part == part }
+                // Nét viền trơn phải đi cặp với nét màu cùng đường (chi = viền + ruột màu).
+                for p in ps where p.fill == nil && p.stroke == .outline {
+                    guard case .path(let d) = p.shape else { continue }
+                    XCTAssertTrue(ps.contains { q in
+                        if case .path(let e) = q.shape, e == d, case .color = q.stroke { return true }
+                        return false
+                    }, "\(c) \(part): nét đậm trơn \(d)")
+                }
+                var thick = 0.0
+                for p in ps {
+                    if p.fill == nil { thick = max(thick, p.width) }
+                    else if case .path(let d) = p.shape {
+                        let n = BuddySVG.numbers(d)
+                        let xs = stride(from: 0, to: n.count - 1, by: 2).map { n[$0] }, ys = stride(from: 1, to: n.count, by: 2).map { n[$0] }
+                        if let a = xs.min(), let b = xs.max(), let y0 = ys.min(), let y1 = ys.max(), y1 - y0 > 30 {
+                            thick = max(thick, min(b - a, y1 - y0) * 0.6)   // ống quần: bề ngang trung bình ≈ 0,6 hộp
+                        }
+                    }
+                }
+                XCTAssertGreaterThanOrEqual(thick * pt, 2.5, "\(c) \(part): \(thick * pt) pt")
             }
         }
     }

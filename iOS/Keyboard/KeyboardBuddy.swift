@@ -673,7 +673,7 @@ struct BuddyRig {
     static let zColor: UInt32 = 0x8AA6E8
     /// Màu viền nền sáng / nền tối.
     static let outlineLight: UInt32 = 0x3A2A2A
-    static let outlineDark: UInt32 = 0xF3E6DC
+    static let outlineDark: UInt32 = 0x4A3A38
     static let ink: UInt32 = 0x3A2A2A
 
     /// Nét chữ "z" cỡ `k` tại (x, y).
@@ -722,6 +722,42 @@ struct BuddyRig {
         s += r.hat.x + r.hat.y + r.hat.size + r.sleepHat.x + r.sleepHat.y + r.sleepHat.size
         s += r.neck.x + r.neck.y + r.hand.x * 2 + r.hand.y * 2
         return s
+    }
+}
+
+/// Viền sáng / tối bao quanh CẢ dáng nhân vật (vẽ dưới mọi bộ phận) + màu viền nét — chọn theo nền thanh gợi ý,
+/// MỘT lần lúc đổi theme. Nền tối ⇒ quầng sáng; nền sáng ⇒ quầng đậm. Chọn theo tỉ lệ tương phản WCAG (bên nào
+/// cao hơn) nên mọi nền đều ≥ 4,5:1 về lý thuyết; test giữ ≥ 3:1 cho mọi theme dựng sẵn. Android BuddyHalo y hệt.
+enum BuddyHalo {
+    static let light: UInt32 = 0xF4F4F4
+    static let dark: UInt32 = 0x3A2A2A
+    /// Bề rộng quầng (pt / dp) ngoài nét viền.
+    static let width = 1.75
+    /// Nền thanh khi theme để trong suốt (Hệ thống / Kính): xám bàn phím iOS sáng / tối.
+    static let systemLight: UInt32 = 0xD1D3D9
+    static let systemDark: UInt32 = 0x2C2C2E
+
+    static func luminance(_ c: UInt32) -> Double {
+        func ch(_ v: UInt32) -> Double {
+            let x = Double(v & 0xFF) / 255
+            return x <= 0.03928 ? x / 12.92 : pow((x + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * ch(c >> 16) + 0.7152 * ch(c >> 8) + 0.0722 * ch(c)
+    }
+    static func contrast(_ a: UInt32, _ b: UInt32) -> Double {
+        let x = luminance(a), y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    struct Colors: Equatable {
+        var halo: UInt32, outline: UInt32, darkBar: Bool
+    }
+
+    /// Màu quầng + viền nét cho nền thanh `bar` (RGB đục).
+    static func colors(bar: UInt32) -> Colors {
+        let darkBar = contrast(light, bar) >= contrast(dark, bar)
+        return Colors(halo: darkBar ? light : dark, outline: darkBar ? BuddyRig.outlineDark : BuddyRig.outlineLight,
+                      darkBar: darkBar)
     }
 }
 
@@ -786,16 +822,24 @@ extension BuddyRig {
         var p: [BuddyPiece] = limb(.tail, "M14 66 Q50 70 52 40 Q54 20 40 18", hair, 5)
         p += [
             L(.tail, "M44 22 Q40 17 38 19", .color(0xFFFFFF), 4),
-            L(.legL, "M-8 72 L-10 140", .outline, outlineWidth),
+        ]
+        p += limb(.legL, "M-8 72 L-10 140", skin, 11)
+        p += [
             E(.legL, -11, 142, 8, 4.5, fill: shoe),
-            L(.legR, "M8 72 L10 140", .outline, outlineWidth),
+        ]
+        p += limb(.legR, "M8 72 L10 140", skin, 11)
+        p += [
             E(.legR, 11, 142, 8, 4.5, fill: shoe),
             P(.body, "M-14 24 Q0 18 14 24 L24 76 Q0 84 -24 76 Z", fill: dress),
             L(.body, "M-20 70 Q0 78 20 70", .color(0xFFFFFF), 4),
-            L(.armL, "M-12 30 L-22 62", .outline, outlineWidth),
-            C(.armL, -23, 64, 5, fill: skin),
-            L(.armR, "M12 30 L22 62", .outline, outlineWidth),
-            C(.armR, 23, 64, 5, fill: skin),
+        ]
+        p += limb(.armL, "M-12 30 L-22 62", skin, 11)
+        p += [
+            C(.armL, -23, 64, 6, fill: skin),
+        ]
+        p += limb(.armR, "M12 30 L22 62", skin, 11)
+        p += [
+            C(.armR, 23, 64, 6, fill: skin),
             C(.head, 0, -16, 32, fill: skin),
             P(.head, "M-30 -36 L-26 -72 L-8 -48 Z", fill: 0xFFFFFF),
             P(.head, "M-25 -42 L-23 -62 L-13 -48 Z", fill: earIn, stroke: .none),
@@ -856,10 +900,14 @@ extension BuddyRig {
             L(.body, "M-11 21 Q0 40 11 21", .color(gold2), 6),
             L(.body, "M-11 21 Q0 40 11 21", .color(gold), 3.5),
             BuddyPiece(.body, .circle(0, 34, 4.5), fill: gold, stroke: .color(gold2), width: 2.5),
-            L(.armL, "M-18 26 L-26 58", .outline, outlineWidth),
-            C(.armL, -27, 60, 5, fill: skin),
-            L(.armR, "M18 26 L26 58", .outline, outlineWidth),
-            C(.armR, 27, 60, 5, fill: skin),
+        ]
+        p += limb(.armL, "M-18 26 L-26 58", skin, 11)
+        p += [
+            C(.armL, -27, 60, 6, fill: skin),
+        ]
+        p += limb(.armR, "M18 26 L26 58", skin, 11)
+        p += [
+            C(.armR, 27, 60, 6, fill: skin),
             C(.head, 0, -16, 32, fill: skin),
             P(.head, "M-32 -24 Q-30 -54 2 -54 Q32 -52 32 -24 Z", fill: cap),
             P(.head, "M-30 -30 Q-46 -30 -48 -22 Q-40 -18 -28 -22 Z", fill: cap),
@@ -954,10 +1002,10 @@ extension BuddyRig {
     // Gà con (chibi): tròn vàng, cánh vỗ.
     static let chick: BuddyRig = {
         let yellow: UInt32 = 0xFFD43B, wing: UInt32 = 0xF5BE2A, orange: UInt32 = 0xF08A24, blush: UInt32 = 0xFF9EAA
-        var p: [BuddyPiece] = limb(.legL, "M-12 86 L-12 104", orange, 6)
-        p += limb(.legL, "M-22 108 L-12 103 L-2 108", orange, 5)
-        p += limb(.legR, "M12 86 L12 104", orange, 6)
-        p += limb(.legR, "M2 108 L12 103 L22 108", orange, 5)
+        var p: [BuddyPiece] = limb(.legL, "M-12 86 L-12 104", orange, 9)
+        p += limb(.legL, "M-22 108 L-12 103 L-2 108", orange, 7)
+        p += limb(.legR, "M12 86 L12 104", orange, 9)
+        p += limb(.legR, "M2 108 L12 103 L22 108", orange, 7)
         p += [E(.body, 0, 64, 38, 30, fill: yellow),
               E(.body, 0, 70, 22, 18, fill: 0xFFE68A, stroke: .none),
               P(.armL, "M-32 50 Q-58 62 -44 84 Q-34 74 -28 62 Z", fill: wing),

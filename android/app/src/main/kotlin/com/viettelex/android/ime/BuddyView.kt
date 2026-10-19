@@ -13,6 +13,7 @@ import com.viettelex.keyboard.BuddyDance
 import com.viettelex.keyboard.BuddyDriver
 import com.viettelex.keyboard.BuddyFX
 import com.viettelex.keyboard.BuddyFraming
+import com.viettelex.keyboard.BuddyHalo
 import com.viettelex.keyboard.BuddyOutfit
 import com.viettelex.keyboard.BuddyPart
 import com.viettelex.keyboard.BuddyPhase
@@ -41,7 +42,7 @@ class BuddyView(
     context: Context,
     val character: BuddyCharacter,
     private val density: Float,
-    dark: Boolean,
+    bar: Int,
     lowPower: Boolean,
     val season: BuddySeason? = null,
     private val framing: BuddyFraming = BuddyFraming.BAR,
@@ -78,6 +79,26 @@ class BuddyView(
     private val rect = RectF()
     private var cloudFor = ""
     private var outline = 0
+    private var tones = BuddyHalo.colors(bar)
+    /** Quầng: path gộp theo (bộ phận, bề rộng nét, có tô) — vẽ một lượt DƯỚI mọi bộ phận, cùng biến đổi. */
+    private class Halo(val part: BuddyPart, val width: Double, val filled: Boolean, val path: Path = Path())
+    private val halos: List<Halo> = run {
+        val out = ArrayList<Halo>()
+        for (p in pieces) {
+            val (w, f) = BuddyHalo.key(p)
+            val h = out.firstOrNull { it.part == p.part && it.width == w && it.filled == f } ?: Halo(p.part, w, f).also { out += it }
+            val tmp = Path(); build(p, tmp)
+            if (p.turn != null) {
+                val m = android.graphics.Matrix(); m.setRotate(p.turn!!.first.toFloat(), p.turn!!.second.toFloat(), p.turn!!.third.toFloat())
+                tmp.transform(m)
+            }
+            h.path.addPath(tmp)
+        }
+        out
+    }
+    private val haloByPart: Array<List<Halo>> = BuddyPart.entries.map { p -> halos.filter { it.part == p } }.toTypedArray()
+    private val haloPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL_AND_STROKE; strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND }
+    private val haloStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND; strokeCap = Paint.Cap.ROUND }
     private val pose = BuddyPose()
     private var drawScale = 1f
     private var grawlixSerial = -1
@@ -98,11 +119,21 @@ class BuddyView(
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
         isClickable = false
         for ((i, p) in pieces.withIndex()) build(p, paths[i])
-        setDark(dark)
+        applyTones()
     }
 
-    fun setDark(dark: Boolean) {
-        outline = 0xFF000000.toInt() or (if (dark) BuddyRig.OUTLINE_DARK else BuddyRig.OUTLINE_LIGHT)
+    /** Nền thanh gợi ý (RGB đục) — đổi theme / sáng-tối ⇒ màu quầng + viền. */
+    fun setBar(bar: Int) {
+        val t = BuddyHalo.colors(bar)
+        if (t == tones) return
+        tones = t
+        applyTones()
+    }
+
+    private fun applyTones() {
+        outline = 0xFF000000.toInt() or tones.outline
+        haloPaint.color = 0xFF000000.toInt() or tones.halo
+        haloStroke.color = haloPaint.color
         fun re(c: Int) = outfit.recolor[c] ?: c
         for ((i, p) in pieces.withIndex()) {
             fills[i].color = p.fill?.let { argb(re(it), p.alpha) } ?: 0
@@ -191,14 +222,20 @@ class BuddyView(
         val fx = rig.feet.x.toFloat(); val fy = rig.feet.y.toFloat()
         c.rotate(deg(p.rot), fx, fy)
         c.scale(p.sx.toFloat(), 1f, fx, fy)
+        // Lượt quầng: cùng biến đổi bộ phận, vẽ trước (dưới) mọi bộ phận.
         for (part in BuddyPart.entries) {
             if (part == BuddyPart.SLEEP) continue
             val pv = rig.pivots[part]
-            val a = when (part) {
-                BuddyPart.HEAD -> p.head; BuddyPart.ARM_L -> p.armL; BuddyPart.ARM_R -> p.armR
-                BuddyPart.LEG_L -> p.legL; BuddyPart.LEG_R -> p.legR; BuddyPart.TAIL -> p.tail
-                else -> 0.0
-            }
+            val a = angle(part, p)
+            val save = c.save()
+            if (pv != null && a != 0.0) c.rotate(deg(a), pv.x.toFloat(), pv.y.toFloat())
+            drawHalo(c, part)
+            c.restoreToCount(save)
+        }
+        for (part in BuddyPart.entries) {
+            if (part == BuddyPart.SLEEP) continue
+            val pv = rig.pivots[part]
+            val a = angle(part, p)
             val save = c.save()
             if (pv != null && a != 0.0) c.rotate(deg(a), pv.x.toFloat(), pv.y.toFloat())
             for (i in byPart[part.ordinal]) {
@@ -226,8 +263,25 @@ class BuddyView(
         }
     }
 
+    private fun angle(part: BuddyPart, p: BuddyPose): Double = when (part) {
+        BuddyPart.HEAD -> p.head; BuddyPart.ARM_L -> p.armL; BuddyPart.ARM_R -> p.armR
+        BuddyPart.LEG_L -> p.legL; BuddyPart.LEG_R -> p.legR; BuddyPart.TAIL -> p.tail
+        else -> 0.0
+    }
+
+    /** Quầng bộ phận: nét rộng hơn viền đúng [BuddyHalo.WIDTH] dp mỗi bên (đổi sang đơn vị thiết kế theo tỉ lệ vẽ). */
+    private fun drawHalo(c: Canvas, part: BuddyPart) {
+        val extra = (2 * BuddyHalo.WIDTH * density / drawScale).toFloat()
+        for (h in haloByPart[part.ordinal]) {
+            val paint = if (h.filled) haloPaint else haloStroke
+            paint.strokeWidth = h.width.toFloat() + extra
+            c.drawPath(h.path, paint)
+        }
+    }
+
     private fun drawSleep(c: Canvas, t: Double) {
         c.translate(0f, rig.sleepOffset(framing).toFloat())
+        drawHalo(c, BuddyPart.SLEEP)
         for (i in byPart[BuddyPart.SLEEP.ordinal]) drawPiece(c, i)
         val zzz = (driver.shown as? BuddyPhase.Asleep)?.zzz == true && !driver.lowPower
         val n = zPaths.size
@@ -304,7 +358,7 @@ class BuddyView(
             c.save(); c.translate(x, y); c.scale(sc, sc)
             when (r) {
                 BuddyReaction.PANIC -> {
-                    fxText.color = argb(outline and 0xFFFFFF, al.toDouble()); fxText.textSize = 8f
+                    fxText.color = argb(tones.halo, al.toDouble()); fxText.textSize = 8f
                     c.drawText(BuddyFX.PANIC_GLYPHS[i % BuddyFX.PANIC_GLYPHS.size], 0f, 3f, fxText)
                 }
                 else -> {

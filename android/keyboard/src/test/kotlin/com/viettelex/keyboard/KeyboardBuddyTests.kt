@@ -12,6 +12,8 @@ import org.junit.Before
 import org.junit.Test
 import java.lang.management.ManagementFactory
 import java.util.Locale
+import kotlin.math.max
+import kotlin.math.min
 
 /**
  * "Bạn đồng hành" ([KeyboardBuddy]): máy trạng thái theo dấu giờ, bậc tốc độ, dáng, phản ứng theo từ, hoảng khi xoá
@@ -146,7 +148,7 @@ class KeyboardBuddyTests {
     /** Bảng hình giống hệt iOS (KeyboardBuddyTests.checksums). */
     @Test fun rigChecksumParity() {
         val sums = BuddyCharacter.entries.map { String.format(Locale.US, "%.4f", BuddyRig.checksum(it)) }
-        assertEquals(listOf("0.0000", "12053.6237", "12013.9930", "15286.2573", "12005.5890"), sums)
+        assertEquals(listOf("0.0000", "13803.1358", "12756.7491", "15286.2573", "12025.5890"), sums)
     }
 
     @Test fun everyRigComplete() {
@@ -441,5 +443,47 @@ class KeyboardBuddyTests {
         assertTrue("cấp phát trên đường phím: $bytes byte", bytes < 1024)
         assertTrue("cấp phát mỗi khung: $frameBytes byte", frameBytes < 4096)
         assertTrue("chi phí mỗi phím ${ns / 1e6} ms", ns / 1e6 < 0.1)
+    }
+
+    // MARK: tương phản (Phil: chân mảnh lẫn vào nền tối)
+
+    /** Mọi theme dựng sẵn (sáng + tối): quầng tương phản ≥ 3:1 với nền thanh. */
+    @Test fun haloContrastOnEveryTheme() {
+        for (t in KeyboardTheme.entries) for (dark in listOf(false, true)) {
+            val raw = t.palette(dark)?.bg ?: (if (dark) BuddyHalo.SYSTEM_DARK else BuddyHalo.SYSTEM_LIGHT) or (0xFF shl 24)
+            val bar = BuddyHalo.opaque(raw, dark)
+            val tones = BuddyHalo.colors(bar)
+            val c = BuddyHalo.contrast(tones.halo, bar)
+            assertTrue("${t.id} ${if (dark) "tối" else "sáng"}: ${Integer.toHexString(tones.halo)} / ${Integer.toHexString(bar)} = $c", c >= 3)
+        }
+        assertEquals(BuddyHalo.LIGHT, BuddyHalo.colors(0x000000).halo)
+        assertEquals(BuddyHalo.DARK, BuddyHalo.colors(0xFFFFFF).halo)
+        assertEquals(0x3A2A2A, BuddyHalo.colors(0xFFFFFF).outline)
+        assertEquals(0x808080, BuddyHalo.opaque(0x00808080, false).let { BuddyHalo.opaque(0xFF808080.toInt(), false) })
+    }
+
+    /** = iOS testLimbsAreFilledAndThickEnough: chi là hình tô (viền + ruột màu), ≥ 2,5 dp ở cỡ thanh ~38 dp. */
+    @Test fun limbsAreFilledAndThickEnough() {
+        for (c in BuddyCharacter.entries.filter { it != BuddyCharacter.OFF }) {
+            val r = BuddyRig.rig(c)!!
+            val pt = 38 / r.full.h
+            for (part in listOf(BuddyPart.LEG_L, BuddyPart.LEG_R, BuddyPart.ARM_L, BuddyPart.ARM_R)) {
+                val ps = r.pieces.filter { it.part == part }
+                for (p in ps) if (p.fill == null && p.stroke === Stroke.Outline) {
+                    val d = (p.shape as? Shape.Path)?.d ?: continue
+                    assertTrue("$c $part: nét đậm trơn $d", ps.any { q -> (q.shape as? Shape.Path)?.d == d && q.stroke is Stroke.Color })
+                }
+                var thick = 0.0
+                for (p in ps) {
+                    if (p.fill == null) thick = max(thick, p.width)
+                    else (p.shape as? Shape.Path)?.let { sh ->
+                        val n = BuddySVG.numbers(sh.d)
+                        val xs = n.filterIndexed { i, _ -> i % 2 == 0 }; val ys = n.filterIndexed { i, _ -> i % 2 == 1 }
+                        if (ys.max() - ys.min() > 30) thick = max(thick, min(xs.max() - xs.min(), ys.max() - ys.min()) * 0.6)
+                    }
+                }
+                assertTrue("$c $part: ${thick * pt} dp", thick * pt >= 2.5)
+            }
+        }
     }
 }

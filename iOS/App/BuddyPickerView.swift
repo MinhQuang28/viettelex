@@ -122,13 +122,13 @@ final class BuddyPreviewView: UIView {
         if character == .off { buddy?.removeFromSuperview(); buddy = nil; return }
         if buddy?.character != character {
             buddy?.removeFromSuperview()
-            let b = BuddyView(character: character, dark: palette.isDark, lowPower: false, framing: .full)
+            let b = BuddyView(character: character, bar: palette.buddyBar, lowPower: false, framing: .full)
             b.maxFigureHeight = 88
             addSubview(b)
             buddy = b
             setNeedsLayout()
         }
-        buddy?.setDark(palette.isDark)
+        buddy?.setBar(palette.buddyBar)
         if play != lastPlay { lastPlay = play; startDemo() }
     }
 

@@ -24,12 +24,17 @@ final class BuddyView: UIView {
 
     private(set) var brain = BuddyBrain()
     private(set) var shown: BuddyPhase = .asleep(zzz: false)
-    private var dark: Bool
+    /// Màu quầng + viền theo nền thanh (BuddyHalo) — đổi theme mới tính lại.
+    private var tones: BuddyHalo.Colors
     private let outfit: BuddyOutfit
 
     private let stage = CALayer()      // khung nhân vật (cắt theo bounds view)
     private let step = CALayer(), hop = CALayer(), tilt = CALayer(), spin = CALayer()
     private var parts: [BuddyPart: CALayer] = [:]
+    /// Quầng: bản sao cây bộ phận (cùng điểm xoay, cùng hoạt ảnh) nằm DƯỚI mọi bộ phận — viền sáng/tối quanh cả dáng.
+    private var haloParts: [BuddyPart: CALayer] = [:]
+    private var haloShapes: [(CAShapeLayer, BuddyPart, Double, Bool)] = []
+    private let sleepHalo = CALayer()
     private let sleepGroup = CALayer()
     private var zLayers: [CAShapeLayer] = []
     private var restOnly: [CALayer] = [], danceOnly: [CALayer] = []
@@ -56,13 +61,13 @@ final class BuddyView: UIView {
     private var badge: CAShapeLayer?
     private var badgeText: CATextLayer?
 
-    init(character: BuddyCharacter, dark: Bool, lowPower: Bool, framing: BuddyFraming = .bar, season: BuddySeason? = nil) {
+    init(character: BuddyCharacter, bar: UInt32, lowPower: Bool, framing: BuddyFraming = .bar, season: BuddySeason? = nil) {
         self.character = character
         self.rig = BuddyRig.rig(character) ?? BuddyRig.cat
         self.framing = framing
         self.season = season
         self.outfit = BuddyOutfit.make(season, character)
-        self.dark = dark
+        self.tones = BuddyHalo.colors(bar: bar)
         self.lowPower = lowPower
         super.init(frame: .zero)
         isUserInteractionEnabled = false
@@ -72,9 +77,27 @@ final class BuddyView: UIView {
         stage.addSublayer(step); step.addSublayer(hop); hop.addSublayer(tilt); tilt.addSublayer(spin)
         stage.addSublayer(sleepGroup)
         for p in BuddyPart.allCases where p != .sleep {
+            let h = CALayer()
+            haloParts[p] = h
+            spin.addSublayer(h)
+        }
+        for p in BuddyPart.allCases where p != .sleep {
             let l = CALayer()
             parts[p] = l
             spin.addSublayer(l)
+        }
+        sleepGroup.addSublayer(sleepHalo)
+        // Nhóm quầng theo (bộ phận, bề rộng nét): hình tô ⇒ nét viền + tô kín; nét đơn ⇒ nét của nó.
+        var keys: [(BuddyPart, Double, Bool)] = []
+        for piece in rig.pieces + outfit.pieces {
+            let k = Self.haloKey(piece)
+            if !keys.contains(where: { $0.0 == piece.part && $0.1 == k.0 && $0.2 == k.1 }) { keys.append((piece.part, k.0, k.1)) }
+        }
+        for (part, w, filled) in keys {
+            let l = CAShapeLayer()
+            l.lineJoin = .round; l.lineCap = .round
+            haloShapes.append((l, part, w, filled))
+            (part == .sleep ? sleepHalo : haloParts[part])?.addSublayer(l)
         }
         for piece in rig.pieces + outfit.pieces {
             let s = CAShapeLayer()
@@ -185,10 +208,17 @@ final class BuddyView: UIView {
         removeAllAnimations()
     }
 
-    func setDark(_ d: Bool) {
-        guard d != dark else { return }
-        dark = d
+    /// Nền thanh gợi ý (RGB đục) — đổi theme / sáng-tối.
+    func setBar(_ bar: UInt32) {
+        let t = BuddyHalo.colors(bar: bar)
+        guard t != tones else { return }
+        tones = t
         applyColors()
+    }
+
+    /// Khoá nhóm quầng của một mảnh: (bề rộng nét thiết kế, có tô).
+    static func haloKey(_ p: BuddyPiece) -> (Double, Bool) {
+        p.fill != nil ? (BuddyRig.outlineWidth, true) : (p.width, false)
     }
 
     private func forceApply() {
@@ -297,6 +327,7 @@ final class BuddyView: UIView {
                            (\.legR, .legR), (\.tail, .tail)] {
             guard let l = parts[part], rig.pivots[part] != nil else { continue }
             out.append((kp, l, "transform.rotation.z", 1))
+            if let h = haloParts[part] { out.append((kp, h, "transform.rotation.z", 1)) }   // quầng xoay cùng
         }
         return out
     }
@@ -376,6 +407,7 @@ final class BuddyView: UIView {
     private func removeRigAnimations() {
         for l in [step, hop, tilt, spin] { l.removeAllAnimations() }
         for (_, l) in parts { l.removeAllAnimations() }
+        for (_, l) in haloParts { l.removeAllAnimations() }
     }
 
     private func removeAllAnimations() {
@@ -443,7 +475,7 @@ final class BuddyView: UIView {
             if r == .panic {
                 let t = fxText(i)
                 t.string = BuddyFX.panicGlyphs[i % BuddyFX.panicGlyphs.count]
-                t.foregroundColor = Self.cg(dark ? BuddyRig.outlineDark : BuddyRig.outlineLight)
+                t.foregroundColor = Self.cg(tones.halo)
                 l = t
             } else {
                 let s = fxShape(i)
@@ -591,7 +623,9 @@ final class BuddyView: UIView {
         for (p, l) in parts {
             let v = rig.pivots[p] ?? (rig.feet.x, rig.feet.y)
             pin(l, box, at: pt(v.x, v.y))
+            if let h = haloParts[p] { pin(h, box, at: pt(v.x, v.y)) }
         }
+        sleepHalo.frame = box
         let sleepDy = rig.sleepOffset(framing)
         for (layer, piece) in shapes {
             layer.frame = box
@@ -603,6 +637,19 @@ final class BuddyView: UIView {
             z.frame = box
             z.path = Self.svg(BuddyRig.zPath(x: spec.x, y: spec.y, size: spec.size), origin: (vp.x, vp.y - sleepDy), scale: s)
             z.lineWidth = 4.5 * s
+        }
+        // Quầng: gộp path các mảnh cùng nhóm, nét rộng hơn viền đúng `BuddyHalo.width` pt mỗi bên.
+        for (l, part, w, filled) in haloShapes {
+            let m = CGMutablePath()
+            let dy = part == .sleep ? sleepDy : 0
+            for (_, piece) in shapes where piece.part == part {
+                let k = Self.haloKey(piece)
+                guard k.0 == w, k.1 == filled else { continue }
+                m.addPath(Self.path(piece, origin: (vp.x, vp.y - dy), scale: s))
+            }
+            l.frame = box
+            l.path = m
+            l.lineWidth = CGFloat(w) * s + CGFloat(2 * BuddyHalo.width)
         }
         let hp = rig.heart
         prop.frame = box
@@ -635,7 +682,9 @@ final class BuddyView: UIView {
     private func applyColors() {
         CATransaction.begin(); CATransaction.setDisableActions(true)
         defer { CATransaction.commit() }
-        let outline = Self.cg(dark ? BuddyRig.outlineDark : BuddyRig.outlineLight)
+        let outline = Self.cg(tones.outline)
+        let halo = Self.cg(tones.halo)
+        for (l, _, _, filled) in haloShapes { l.strokeColor = halo; l.fillColor = filled ? halo : nil }
         prop.fillColor = Self.cg(BuddyFX.heartColor)
         prop.strokeColor = outline
         flush.fillColor = Self.cg(BuddyFX.angryRed, alpha: 0.45)
@@ -742,6 +791,19 @@ final class BuddyView: UIView {
         spin.transform = CATransform3DMakeScale(CGFloat(pose.sx), 1, 1)
         let rot: [BuddyPart: Double] = [.head: pose.head, .armL: pose.armL, .armR: pose.armR, .legL: pose.legL,
                                         .legR: pose.legR, .tail: pose.tail]
-        for (p, a) in rot { parts[p]?.transform = CATransform3DMakeRotation(CGFloat(a), 0, 0, 1) }
+        for (p, a) in rot {
+            parts[p]?.transform = CATransform3DMakeRotation(CGFloat(a), 0, 0, 1)
+            haloParts[p]?.transform = CATransform3DMakeRotation(CGFloat(a), 0, 0, 1)
+        }
+    }
+}
+
+extension KeyboardPalette {
+    /// Nền thanh gợi ý (RGB đục) cho quầng nhân vật: nền theme (trộn lên xám bàn phím hệ thống nếu trong suốt).
+    var buddyBar: UInt32 {
+        let sys = RGBA(hex: isDark ? BuddyHalo.systemDark : BuddyHalo.systemLight)
+        let c = background.map { $0.over(sys) } ?? sys
+        func b(_ v: Double) -> UInt32 { UInt32(max(0, min(255, (v * 255).rounded()))) }
+        return b(c.r) << 16 | b(c.g) << 8 | b(c.b)
     }
 }

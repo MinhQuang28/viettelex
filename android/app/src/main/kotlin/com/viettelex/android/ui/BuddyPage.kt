@@ -118,12 +118,12 @@ internal class BuddyPreviewView(context: Context) : FrameLayout(context) {
         if (off) { buddy?.let { it.halt(); removeView(it) }; buddy = null; invalidate(); return }
         if (buddy?.character != ch) {
             buddy?.let { it.halt(); removeView(it) }
-            val b = BuddyView(context, ch, d, p.isDark, false, null, BuddyFraming.FULL).apply { maxFigureDp = 88f }
+            val b = BuddyView(context, ch, d, com.viettelex.keyboard.BuddyHalo.opaque(p.bg, p.isDark), false, null, BuddyFraming.FULL).apply { maxFigureDp = 88f }
             val m = (4 * d).toInt()
             addView(b, LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.MATCH_PARENT).apply { setMargins(m, m, m, m) })
             buddy = b
         }
-        buddy?.setDark(p.isDark)
+        buddy?.setBar(com.viettelex.keyboard.BuddyHalo.opaque(p.bg, p.isDark))
         if (play != lastPlay) { lastPlay = play; removeCallbacks(demo); presses = 0; post(demo) }
         invalidate()
     }

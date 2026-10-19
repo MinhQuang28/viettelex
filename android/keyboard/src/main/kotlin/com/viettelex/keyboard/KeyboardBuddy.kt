@@ -593,7 +593,7 @@ class BuddyRig(
         const val OUTLINE_WIDTH = 6.0
         const val Z_COLOR = 0x8AA6E8
         const val OUTLINE_LIGHT = 0x3A2A2A
-        const val OUTLINE_DARK = 0xF3E6DC
+        const val OUTLINE_DARK = 0x4A3A38
         const val INK = 0x3A2A2A
         private const val ink = INK
 
@@ -665,16 +665,24 @@ class BuddyRig(
             val p = mutableListOf<BuddyPiece>(); p += limb(BuddyPart.TAIL, "M14 66 Q50 70 52 40 Q54 20 40 18", hair, 5)
             p += listOf(
                 L(BuddyPart.TAIL, "M44 22 Q40 17 38 19", Stroke.Color(0xFFFFFF), 4),
-                L(BuddyPart.LEG_L, "M-8 72 L-10 140", Stroke.Outline, OUTLINE_WIDTH),
+            )
+            p += limb(BuddyPart.LEG_L, "M-8 72 L-10 140", skin, 11)
+            p += listOf(
                 E(BuddyPart.LEG_L, -11, 142, 8, 4.5, fill = shoe),
-                L(BuddyPart.LEG_R, "M8 72 L10 140", Stroke.Outline, OUTLINE_WIDTH),
+            )
+            p += limb(BuddyPart.LEG_R, "M8 72 L10 140", skin, 11)
+            p += listOf(
                 E(BuddyPart.LEG_R, 11, 142, 8, 4.5, fill = shoe),
                 P(BuddyPart.BODY, "M-14 24 Q0 18 14 24 L24 76 Q0 84 -24 76 Z", fill = dress),
                 L(BuddyPart.BODY, "M-20 70 Q0 78 20 70", Stroke.Color(0xFFFFFF), 4),
-                L(BuddyPart.ARM_L, "M-12 30 L-22 62", Stroke.Outline, OUTLINE_WIDTH),
-                C(BuddyPart.ARM_L, -23, 64, 5, fill = skin),
-                L(BuddyPart.ARM_R, "M12 30 L22 62", Stroke.Outline, OUTLINE_WIDTH),
-                C(BuddyPart.ARM_R, 23, 64, 5, fill = skin),
+            )
+            p += limb(BuddyPart.ARM_L, "M-12 30 L-22 62", skin, 11)
+            p += listOf(
+                C(BuddyPart.ARM_L, -23, 64, 6, fill = skin),
+            )
+            p += limb(BuddyPart.ARM_R, "M12 30 L22 62", skin, 11)
+            p += listOf(
+                C(BuddyPart.ARM_R, 23, 64, 6, fill = skin),
                 C(BuddyPart.HEAD, 0, -16, 32, fill = skin),
                 P(BuddyPart.HEAD, "M-30 -36 L-26 -72 L-8 -48 Z", fill = 0xFFFFFF),
                 P(BuddyPart.HEAD, "M-25 -42 L-23 -62 L-13 -48 Z", fill = earIn, stroke = Stroke.None),
@@ -734,10 +742,14 @@ class BuddyRig(
                 L(BuddyPart.BODY, "M-11 21 Q0 40 11 21", Stroke.Color(gold2), 6),
                 L(BuddyPart.BODY, "M-11 21 Q0 40 11 21", Stroke.Color(gold), 3.5),
                 BuddyPiece(BuddyPart.BODY, Shape.Circle(0, 34, 4.5), fill = gold, stroke = Stroke.Color(gold2), width = 2.5),
-                L(BuddyPart.ARM_L, "M-18 26 L-26 58", Stroke.Outline, OUTLINE_WIDTH),
-                C(BuddyPart.ARM_L, -27, 60, 5, fill = skin),
-                L(BuddyPart.ARM_R, "M18 26 L26 58", Stroke.Outline, OUTLINE_WIDTH),
-                C(BuddyPart.ARM_R, 27, 60, 5, fill = skin),
+            )
+            p += limb(BuddyPart.ARM_L, "M-18 26 L-26 58", skin, 11)
+            p += listOf(
+                C(BuddyPart.ARM_L, -27, 60, 6, fill = skin),
+            )
+            p += limb(BuddyPart.ARM_R, "M18 26 L26 58", skin, 11)
+            p += listOf(
+                C(BuddyPart.ARM_R, 27, 60, 6, fill = skin),
                 C(BuddyPart.HEAD, 0, -16, 32, fill = skin),
                 P(BuddyPart.HEAD, "M-32 -24 Q-30 -54 2 -54 Q32 -52 32 -24 Z", fill = cap),
                 P(BuddyPart.HEAD, "M-30 -30 Q-46 -30 -48 -22 Q-40 -18 -28 -22 Z", fill = cap),
@@ -830,10 +842,10 @@ class BuddyRig(
         // Gà con (chibi): tròn vàng, cánh vỗ.
         val CHICK: BuddyRig = run {
             val yellow = 0xFFD43B; val wing = 0xF5BE2A; val orange = 0xF08A24; val blush = 0xFF9EAA
-            val p = mutableListOf<BuddyPiece>(); p += limb(BuddyPart.LEG_L, "M-12 86 L-12 104", orange, 6)
-            p += limb(BuddyPart.LEG_L, "M-22 108 L-12 103 L-2 108", orange, 5)
-            p += limb(BuddyPart.LEG_R, "M12 86 L12 104", orange, 6)
-            p += limb(BuddyPart.LEG_R, "M2 108 L12 103 L22 108", orange, 5)
+            val p = mutableListOf<BuddyPiece>(); p += limb(BuddyPart.LEG_L, "M-12 86 L-12 104", orange, 9)
+            p += limb(BuddyPart.LEG_L, "M-22 108 L-12 103 L-2 108", orange, 7)
+            p += limb(BuddyPart.LEG_R, "M12 86 L12 104", orange, 9)
+            p += limb(BuddyPart.LEG_R, "M2 108 L12 103 L22 108", orange, 7)
             p += listOf(E(BuddyPart.BODY, 0, 64, 38, 30, fill = yellow),
                   E(BuddyPart.BODY, 0, 70, 22, 18, fill = 0xFFE68A, stroke = Stroke.None),
                   P(BuddyPart.ARM_L, "M-32 50 Q-58 62 -44 84 Q-34 74 -28 62 Z", fill = wing),
@@ -866,6 +878,47 @@ class BuddyRig(
                 hat = P3(0, -36, 34), sleepHat = P3(-30, 0, 26), neck = P2(0, 36), hand = P2(44, 84))
         }
     }
+}
+
+/**
+ * Quầng sáng / tối quanh CẢ dáng (vẽ dưới mọi bộ phận) + màu viền nét — theo nền thanh gợi ý, chọn MỘT lần lúc đổi
+ * theme: bên nào tương phản WCAG cao hơn. = iOS BuddyHalo (cùng số).
+ */
+object BuddyHalo {
+    const val LIGHT = 0xF4F4F4
+    const val DARK = 0x3A2A2A
+    /** Bề rộng quầng (dp) ngoài nét viền. */
+    const val WIDTH = 1.75
+    const val SYSTEM_LIGHT = 0xD1D3D9
+    const val SYSTEM_DARK = 0x2C2C2E
+
+    fun luminance(c: Int): Double {
+        fun ch(v: Int): Double { val x = (v and 0xFF) / 255.0; return if (x <= 0.03928) x / 12.92 else Math.pow((x + 0.055) / 1.055, 2.4) }
+        return 0.2126 * ch(c shr 16) + 0.7152 * ch(c shr 8) + 0.0722 * ch(c)
+    }
+    fun contrast(a: Int, b: Int): Double {
+        val x = luminance(a); val y = luminance(b)
+        return (max(x, y) + 0.05) / (min(x, y) + 0.05)
+    }
+
+    data class Colors(val halo: Int, val outline: Int, val darkBar: Boolean)
+
+    /** Màu quầng + viền cho nền thanh [bar] (RGB đục). */
+    fun colors(bar: Int): Colors {
+        val darkBar = contrast(LIGHT, bar) >= contrast(DARK, bar)
+        return Colors(if (darkBar) LIGHT else DARK, if (darkBar) BuddyRig.OUTLINE_DARK else BuddyRig.OUTLINE_LIGHT, darkBar)
+    }
+
+    /** Nền thanh (ARGB, có thể trong suốt) trộn lên xám bàn phím hệ thống ⇒ RGB đục. */
+    fun opaque(argb: Int, dark: Boolean): Int {
+        val a = ((argb ushr 24) and 0xFF) / 255.0
+        val sys = if (dark) SYSTEM_DARK else SYSTEM_LIGHT
+        fun ch(sh: Int): Int = Math.round(((argb shr sh) and 0xFF) * a + ((sys shr sh) and 0xFF) * (1 - a)).toInt()
+        return (ch(16) shl 16) or (ch(8) shl 8) or ch(0)
+    }
+
+    /** Khoá nhóm quầng của một mảnh: (bề rộng nét thiết kế, có tô). */
+    fun key(p: BuddyPiece): Pair<Double, Boolean> = if (p.fill != null) BuddyRig.OUTLINE_WIDTH to true else p.width to false
 }
 
 /** Nghệ thuật: khung vector (mặc định) hoặc bộ khung hình vẽ sẵn (hoạ sĩ — chưa có). = iOS BuddyArt. */

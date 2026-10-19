@@ -395,9 +395,9 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
             cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH))
         val old = r.buddy
         if (old != null && old.character == c && old.season == season) {
-            old.lowPower = low; old.setDark(th.dark)
+            old.lowPower = low; old.setBar(com.viettelex.keyboard.BuddyHalo.opaque(th.bg, th.dark))
         } else {
-            r.buddy = BuddyView(this, c, th.density, th.dark, low, season)
+            r.buddy = BuddyView(this, c, th.density, com.viettelex.keyboard.BuddyHalo.opaque(th.bg, th.dark), low, season)
         }
         st.buddyDp = StripGeometry.BUDDY_W
         session.trackBoundaryWord = true

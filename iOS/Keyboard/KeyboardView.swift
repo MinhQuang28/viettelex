@@ -1816,7 +1816,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // Hiệu ứng theo màu nhấn MỚI (đổi sáng/tối giữa chừng).
         keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui,
                                       keyFill: palette.keyFill.ui, dark: palette.isDark) }
-        buddy?.setDark(palette.isDark)
+        buddy?.setBar(palette.buddyBar)
         configureTrailColors()
         applyBackdrop()
     }
@@ -6052,11 +6052,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                                          year: today.year ?? 0, month: today.month ?? 0, day: today.day ?? 0)
         if let b = buddy, b.character == c, b.season == season {
             b.lowPower = low
-            b.setDark(palette.isDark)
+            b.setBar(palette.buddyBar)
             return
         }
         buddy?.halt(); buddy?.removeFromSuperview()
-        let b = BuddyView(character: c, dark: palette.isDark, lowPower: low, season: season)
+        let b = BuddyView(character: c, bar: palette.buddyBar, lowPower: low, season: season)
         addSubview(b)
         buddy = b
         setNeedsLayout()
