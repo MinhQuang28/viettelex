@@ -1,3 +1,6 @@
+#include <cmath>
+#include <utility>
+
 #include "app_policy.h"
 #include "game_ipc.h"
 #include "ipc.h"
@@ -389,6 +392,41 @@ TEST(glyph_icon_ids) {
     CHECK_EQ(glyphIconId("vi", true, true), 0);
 }
 
+namespace {
+double relLuminance(unsigned rgb) {
+    auto ch = [](unsigned v) {
+        const double c = v / 255.0;
+        return c <= 0.03928 ? c / 12.92 : std::pow((c + 0.055) / 1.055, 2.4);
+    };
+    return 0.2126 * ch((rgb >> 16) & 0xFF) + 0.7152 * ch((rgb >> 8) & 0xFF) + 0.0722 * ch(rgb & 0xFF);
+}
+double contrast(unsigned a, unsigned b) {
+    double la = relLuminance(a), lb = relLuminance(b);
+    if (la < lb) std::swap(la, lb);
+    return (la + 0.05) / (lb + 0.05);
+}
+}  // namespace
+
+// 2026-10 field report: "biểu tượng không hiện rõ đang là E hay V". The tray badge must
+// say V or E in letters, differ in colour, and stay readable (WCAG AA) on any taskbar.
+TEST(tray_badge_is_clear_v_or_e) {
+    const TrayBadge v = trayBadge(true), e = trayBadge(false);
+    CHECK(v.letter == L'V');
+    CHECK(e.letter == L'E');
+    CHECK(v.bg != e.bg);
+    CHECK(contrast(v.fg, v.bg) >= 4.5);
+    CHECK(contrast(e.fg, e.bg) >= 4.5);
+    // An opaque badge reads on the light (white-ish) and the dark (near-black) taskbar.
+    CHECK(contrast(v.bg, 0xF3F3F3) >= 3.0 && contrast(e.bg, 0xF3F3F3) >= 3.0);
+    // Style: "letter" is the default; anything unknown falls back to it.
+    CHECK(parseTrayStyle("") == TrayStyle::Letter);
+    CHECK(parseTrayStyle("garbage") == TrayStyle::Letter);
+    CHECK(parseTrayStyle("keyboard") == TrayStyle::Keyboard);
+    CHECK(parseTrayStyle(trayStyleName(TrayStyle::Letter)) == TrayStyle::Letter);
+    CHECK(parseTrayStyle(trayStyleName(TrayStyle::Keyboard)) == TrayStyle::Keyboard);
+    CHECK_EQ(Settings().trayIconStyle, std::string("letter"));
+}
+
 TEST(display_attribute_provider_is_registered) {
     // No-underline composition depends on TSF finding our ITfDisplayAttributeProvider,
     // which it does ONLY through this category (Chrome underlines otherwise).
@@ -494,10 +532,12 @@ TEST(settings_snapshot_game_bits) {
     // Registry-only strings are not in the snapshot.
     s.gameModeHotkey = "ctrl-alt-g";
     s.switchIndicator = "off";
+    s.trayIconStyle = "keyboard";
     b = serialize(s);
     CHECK(deserialize(b.data(), b.size(), r));
     CHECK_EQ(r.gameModeHotkey, std::string("off"));
     CHECK_EQ(r.switchIndicator, std::string("auto"));
+    CHECK_EQ(r.trayIconStyle, std::string("letter"));
 }
 
 TEST(tip_suspension_reasons) {

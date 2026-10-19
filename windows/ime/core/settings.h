@@ -43,8 +43,9 @@ struct Settings {
     std::string uiLanguage = "vi";    // "vi" | "en"
     bool autoUpdateCheck = false;
     bool debugLogging = false;
-    bool showTrayIcon = false;        // tray icon off: the taskbar input indicator shows V/E
-                                      // already; Start menu -> VietTelex opens Settings
+    bool showTrayIcon = false;        // the ONLY lasting Việt/Anh indicator (the taskbar shows
+                                      // the static keyboard icon since 1.0.8); the welcome
+                                      // window pre-ticks it. Start menu -> VietTelex = Settings
     // Công cụ văn bản (macOS textToolsInMenu / addTonesHotkey): the tray menu's "Công cụ
     // văn bản" submenu, and the global Thêm dấu hotkey (app/core/text_action_logic.h
     // choices, default "off"). VietTelex.exe only: addTonesHotkey is registry-only (not in
@@ -85,6 +86,8 @@ struct Settings {
     // default "off") and the floating V/E indicator ("auto" | "on" | "off").
     std::string gameModeHotkey = "off";
     std::string switchIndicator = "auto";
+    // Tray icon style (res/icon_ids.h TrayStyle): "letter" = V/E badge, "keyboard".
+    std::string trayIconStyle = "letter";
     // Data
     std::map<std::u16string, std::u16string> shortcuts;   // gõ tắt
     std::map<std::string, AppMode> appModes;              // user override, key = lowercase exe

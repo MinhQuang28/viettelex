@@ -121,6 +121,12 @@ enum class S {
     // Gợi ý chữ khi gõ (Chính tả page, Gợi ý section): word prediction follows Windows'
     // "Show text suggestions when typing on the physical keyboard" — state + a button to it
     TextPrediction, TextPredictionOn, TextPredictionOff, TextPredictionCaption, TextPredictionButton,
+    // Tray icon style (Kiểu gõ page, Appearance) + the tray tooltip's state line
+    TrayStyle, TrayStyleDesc, TrayStyleLetter, TrayStyleKeyboard, TrayStateVi, TrayStateEn,
+    // Welcome: how to start typing; "make VietTelex the default keyboard" checkbox
+    WelcomeHowTo, WelcomeDefaultInput,
+    // Windows' own Ctrl+Shift hotkey (conflict card / dialog)
+    WinHotkeyName, WinHotkeyDesc, WinHotkeyFix, WinHotkeyFixNote, WinHotkeyFixed, WinHotkeyFixFailed,
     Count
 };
 

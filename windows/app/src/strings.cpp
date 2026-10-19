@@ -91,8 +91,8 @@ const Pair kStrings[] = {
     {L"Logo", L"Logo"},
     {L"Chữ VI", L"VI text"},
     {L"Hiện biểu tượng ở khay hệ thống", L"Show icon in the notification area"},
-    {L"Hiện trạng thái Việt/Anh của ứng dụng đang dùng (biểu tượng mờ = tiếng Anh). Tắt thì mở lại Cài đặt bằng VietTelex trong menu Start.",
-     L"Shows Vietnamese/English for the app in use (dimmed icon = English). When off, reopen Settings from VietTelex in the Start menu."},
+    {L"Hiện trạng thái Việt/Anh của ứng dụng đang dùng (V = tiếng Việt, E = tiếng Anh). Tắt thì mở lại Cài đặt bằng VietTelex trong menu Start.",
+     L"Shows Vietnamese/English for the app in use (V = Vietnamese, E = English). When off, reopen Settings from VietTelex in the Start menu."},
     // Bilingual on purpose: findable whichever language the window is in.
     {L"Ngôn ngữ / Language", L"Ngôn ngữ / Language"},
     {L"Ngôn ngữ của cửa sổ này và menu khay. Mặc định tiếng Việt.",
@@ -252,9 +252,10 @@ const Pair kStrings[] = {
 
     // Other Vietnamese input methods
     {L"Có bộ gõ tiếng Việt khác", L"Another Vietnamese input method is active"},
-    {L"Hai bộ gõ cùng lúc sẽ bỏ dấu hai lần (vieejt → viêệt). Hãy thoát bộ gõ kia hoặc gỡ nó khỏi danh sách.",
-     L"Two input methods at once add every tone twice (vieejt → viêệt). Quit the other one or remove it from the "
-     L"list."},
+    {L"Hai bộ gõ cùng lúc sẽ bỏ dấu hai lần (vieejt → viêệt) và cùng đổi Việt/Anh khi bấm Ctrl+Shift. Hãy thoát "
+     L"bộ gõ kia hoặc gỡ nó khỏi danh sách.",
+     L"Two input methods at once add every tone twice (vieejt → viêệt) and both switch on Ctrl+Shift. Quit the "
+     L"other one or remove it from the list."},
     {L"Xử lý…", L"Resolve…"},
     {L"VietTelex sẽ không tự tắt hay gỡ phần mềm khác. Chọn việc cần làm:",
      L"VietTelex never quits or uninstalls other software by itself. Choose what to do:"},
@@ -285,8 +286,10 @@ const Pair kStrings[] = {
     {L"Kiểu gõ", L"Typing method"},
     {L"Phím chuyển Việt/Anh", L"Vietnamese/English switch key"},
     {L"Hiện biểu tượng V/E ở khay hệ thống (như UniKey)", L"Show a V/E icon in the notification area (like UniKey)"},
-    {L"Không bật thì biểu tượng bàn phím trên thanh tác vụ và chữ V/E nhỏ khi chuyển cho biết đang gõ gì.",
-     L"Without it, the keyboard icon on the taskbar and a small V/E when you switch show the current language."},
+    {L"V đỏ = tiếng Việt, E xanh = tiếng Anh. Windows 11 có thể giấu nó dưới mũi tên ^ cạnh đồng hồ: kéo nó ra "
+     L"thanh tác vụ. Không bật thì chỉ có chữ V/E nhỏ hiện thoáng qua khi chuyển.",
+     L"Red V = Vietnamese, blue E = English. Windows 11 may hide it under the ^ arrow next to the clock: drag it "
+     L"onto the taskbar. Without it, only a brief V/E shows when you switch."},
     {L"Chuyển gõ tắt từ UniKey / OpenKey…", L"Bring shortcuts from UniKey / OpenKey…"},
     {L"Bắt đầu gõ", L"Start typing"},
     {L"Mở Cài đặt…", L"Open Settings…"},
@@ -339,6 +342,40 @@ const Pair kStrings[] = {
      L"VietTelex follows the Windows setting “Show text suggestions when typing on the physical keyboard”; it has no "
      L"switch of its own."},
     {L"Mở cài đặt Gõ phím của Windows…", L"Open Windows Typing settings…"},
+    // Tray icon style
+    {L"Kiểu biểu tượng khay", L"Tray icon style"},
+    {L"“Chữ V/E”: nền đỏ chữ V = tiếng Việt, nền xanh chữ E = tiếng Anh. Windows 11 có thể giấu biểu tượng dưới "
+     L"mũi tên ^ ở góc thanh tác vụ: kéo nó ra thanh tác vụ để luôn thấy.",
+     L"“V/E letter”: red V = Vietnamese, blue E = English. Windows 11 may hide the icon under the ^ arrow at the "
+     L"end of the taskbar: drag it onto the taskbar to always see it."},
+    {L"Chữ V/E (như UniKey)", L"V/E letter (like UniKey)"},
+    {L"Biểu tượng bàn phím", L"Keyboard icon"},
+    {L"Tiếng Việt (V)", L"Vietnamese (V)"},
+    {L"Tiếng Anh (E)", L"English (E)"},
+    // Welcome: how to start, default input method
+    {L"Để gõ: trên thanh tác vụ (góc phải, chữ ENG/VIE) hoặc bằng Win+Space, chọn bàn phím VietTelex. Sau đó "
+     L"phím chuyển bên dưới đổi Việt/Anh. Hãy thoát UniKey/EVKey/OpenKey nếu đang chạy.",
+     L"To type: pick the VietTelex keyboard on the taskbar (ENG/VIE, bottom right) or with Win+Space. Then the "
+     L"switch key below toggles Vietnamese/English. Quit UniKey/EVKey/OpenKey if they are running."},
+    {L"Đặt VietTelex làm bàn phím mặc định (ứng dụng mở ra là gõ được ngay)",
+     L"Make VietTelex the default keyboard (apps are ready to type when they open)"},
+    // Windows' own Ctrl+Shift hotkey (input_switch.h winHotkeyClash)
+    {L"Phím Ctrl+Shift của Windows", L"Windows' Ctrl+Shift hotkey"},
+    {L"Windows cũng dùng Ctrl+Shift để đổi bàn phím, nên mỗi lần bấm, Windows và VietTelex cùng đổi — có lúc "
+     L"thanh tác vụ hiện VIE mà vẫn gõ tiếng Anh.",
+     L"Windows also uses Ctrl+Shift to switch keyboards, so every press switches both Windows and VietTelex — the "
+     L"taskbar can show VIE while you still type English."},
+    {L"Bỏ Ctrl+Shift khỏi phím tắt của Windows", L"Take Ctrl+Shift off Windows' hotkeys"},
+    {L"Đổi phím chuyển ngôn ngữ của Windows sang Alt+Shift trái (mặc định của Windows) và bỏ phím đổi bố cục. "
+     L"Đổi lại được trong Cài đặt → Gõ phím → Cài đặt bàn phím nâng cao → Phím nóng ngôn ngữ nhập.",
+     L"Sets Windows' input-language hotkey to Left Alt+Shift (the Windows default) and removes the layout hotkey. "
+     L"You can change it back in Settings → Typing → Advanced keyboard settings → Input language hot keys."},
+    {L"Đã đổi. Từ giờ Ctrl+Shift chỉ đổi Việt/Anh của VietTelex.",
+     L"Done. Ctrl+Shift now only switches VietTelex between Vietnamese and English."},
+    {L"Không đổi được tự động. Cài đặt Gõ phím của Windows sẽ mở ra: Cài đặt bàn phím nâng cao → Phím nóng "
+     L"ngôn ngữ nhập.",
+     L"Could not change it automatically. Windows Typing settings will open: Advanced keyboard settings → Input "
+     L"language hot keys."},
 };
 static_assert(sizeof(kStrings) / sizeof(kStrings[0]) == static_cast<size_t>(S::Count), "string table size");
 }  // namespace

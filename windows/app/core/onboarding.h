@@ -84,12 +84,16 @@ enum class ConflictKind {
     GoTiengViet,
     MicrosoftVietnamese,  // Windows' Vietnamese Telex / Number-key keyboard or the
                           // legacy "Vietnamese" layout, enabled in this user's list
+    WindowsHotkey,        // Windows' own input hotkey is Ctrl+Shift too (input_switch.h
+                          // winHotkeyClash): the same press also switches the keyboard
 };
 // Running process image (lower-case file name) -> a known Vietnamese IME, or false.
 bool classifyImeProcess(const std::string& exeLower, ConflictKind& out);
 const char* conflictName(ConflictKind k);  // "UniKey", "EVKey", … (product names, not translated)
 // The others are hook-based: quitting from their tray icon is enough (they stay installed).
-inline bool isThirdPartyIme(ConflictKind k) { return k != ConflictKind::MicrosoftVietnamese; }
+inline bool isThirdPartyIme(ConflictKind k) {
+    return k != ConflictKind::MicrosoftVietnamese && k != ConflictKind::WindowsHotkey;
+}
 
 // One input profile of the user's vi-VN list (ITfInputProcessorProfileMgr::EnumProfiles).
 struct ViProfile {

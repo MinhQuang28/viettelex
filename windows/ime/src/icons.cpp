@@ -1,5 +1,7 @@
 #include "icons.h"
 
+#include <cmath>
+
 #include "../res/icon_ids.h"
 
 namespace vtx::tip {
@@ -80,6 +82,49 @@ HICON CreateTextIcon(const wchar_t* text, int size, COLORREF color) {
         const DWORD p = d.px[i];
         const DWORD cov = ((p & 0xFF) + ((p >> 8) & 0xFF) + ((p >> 16) & 0xFF)) / 3;
         d.px[i] = (cov << 24) | rgb;
+    }
+    return d.toIcon();
+}
+
+HICON CreateBadgeIcon(bool vietnamese, int size) {
+    if (size <= 0) size = GetSystemMetrics(SM_CXSMICON);
+    const TrayBadge b = trayBadge(vietnamese);
+    Dib d(size);
+    if (!d.ok()) return nullptr;
+    // 1. The letter's coverage: white on black, grayscale antialiasing.
+    RECT rc = {0, 0, size, size};
+    FillRect(d.dc, &rc, static_cast<HBRUSH>(GetStockObject(BLACK_BRUSH)));
+    SetBkMode(d.dc, TRANSPARENT);
+    SetTextColor(d.dc, RGB(255, 255, 255));
+    HFONT font = CreateFontW(-(size * 13 / 16), 0, 0, 0, FW_BOLD, FALSE, FALSE, FALSE, DEFAULT_CHARSET,
+                             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS,
+                             L"Segoe UI");
+    HGDIOBJ oldFont = SelectObject(d.dc, font);
+    const wchar_t text[2] = {b.letter, 0};
+    DrawTextW(d.dc, text, 1, &rc, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    SelectObject(d.dc, oldFont);
+    DeleteObject(font);
+    GdiFlush();
+    // 2. Compose: an opaque rounded square (antialiased corners) in the state colour, the
+    //    letter blended over it. Straight alpha, like CreateTextIcon.
+    const double r = size * 0.22, sz = size;
+    for (int y = 0; y < size; ++y) {
+        for (int x = 0; x < size; ++x) {
+            const double px = x + 0.5, py = y + 0.5;
+            const double cx = px < r ? r : px > sz - r ? sz - r : px;
+            const double cy = py < r ? r : py > sz - r ? sz - r : py;
+            const double dist = std::sqrt((px - cx) * (px - cx) + (py - cy) * (py - cy));
+            double cover = r - dist + 0.5;
+            cover = cover < 0 ? 0 : cover > 1 ? 1 : cover;
+            const DWORD p = d.px[y * size + x];
+            const unsigned t = ((p & 0xFF) + ((p >> 8) & 0xFF) + ((p >> 16) & 0xFF)) / 3;  // letter 0..255
+            auto mix = [t](unsigned bg, unsigned fg) { return (bg * (255 - t) + fg * t + 127) / 255; };
+            const unsigned rr = mix((b.bg >> 16) & 0xFF, (b.fg >> 16) & 0xFF);
+            const unsigned gg = mix((b.bg >> 8) & 0xFF, (b.fg >> 8) & 0xFF);
+            const unsigned bb = mix(b.bg & 0xFF, b.fg & 0xFF);
+            const DWORD a = static_cast<DWORD>(cover * 255 + 0.5);
+            d.px[y * size + x] = (a << 24) | (rr << 16) | (gg << 8) | bb;
+        }
     }
     return d.toIcon();
 }

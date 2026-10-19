@@ -120,4 +120,53 @@ DefaultInputAdvice defaultInputAdvice(SwitchHotkey h, unsigned defaultLangId);
 // SetDefaultLayoutOrTip profile-list string "0x042A:{CLSID}{PROFILE}" (documented format).
 std::string defaultLayoutOrTipSpec(unsigned langId, const std::string& clsid, const std::string& profile);
 
+// Welcome window: pre-tick "make VietTelex the default input method"? Same rule as the
+// Kiểu gõ card — a fresh install leaves Windows on the old keyboard (ENG), and a UniKey
+// user has never needed Win+Space, so nothing types Vietnamese until it is switched.
+inline bool welcomeOffersDefaultInput(SwitchHotkey h, unsigned defaultLangId) {
+    return defaultInputAdvice(h, defaultLangId) == DefaultInputAdvice::MakeVietTelexDefault;
+}
+
+// ---- Windows' own Ctrl+Shift (2026-10 field report, UniKey user) -----------------------
+// "Không gõ được tiếng Việt, không chuyển được Việt/Anh dù đã đặt Ctrl+Shift." Windows has
+// two input hotkeys of its own, in HKCU\Keyboard Layout\Toggle (REG_SZ "1".."4"):
+//   "Language Hotkey" (older builds: "Hotkey")  between input languages   (VIE <-> ENG)
+//   "Layout Hotkey"                              between keyboards of one language
+// 1 = Left Alt+Shift, 2 = Ctrl+Shift, 3 = not assigned, 4 = grave accent (`).
+// Defaults when a value is absent: language = Left Alt+Shift, layout = Ctrl+Shift.
+// With VietTelex's Ctrl+Shift:
+//   * language = Ctrl+Shift: one press flips VietTelex Việt->Anh AND Windows VIE->ENG; the
+//     next press brings VIE back with VietTelex still in Anh (remembered per app). The
+//     taskbar says VIE and nothing types Vietnamese.
+//   * layout = Ctrl+Shift (the default) and another Vietnamese keyboard in the list
+//     (Microsoft Vietnamese Telex, the legacy layout): the press also jumps from VietTelex
+//     to that keyboard.
+// Fix (only on the user's click): move Windows' hotkeys off Ctrl+Shift, then
+// SystemParametersInfo(SPI_SETLANGTOGGLE) so Windows re-reads them (documented).
+enum class WinToggle : uint8_t { AltShift = 1, CtrlShift = 2, None = 3, Grave = 4 };
+// One registry value; `present` false (missing) or anything but "1".."4" -> `dflt`.
+WinToggle parseWinToggle(bool present, const std::string& value, WinToggle dflt);
+const char* winToggleValue(WinToggle t);  // "1".."4"
+
+struct WinToggles {
+    WinToggle language = WinToggle::AltShift;
+    WinToggle layout = WinToggle::CtrlShift;
+};
+// From the raw values: "Language Hotkey" wins over the legacy "Hotkey".
+WinToggles readWinToggles(bool hasLanguage, const std::string& language, bool hasLegacy, const std::string& legacy,
+                          bool hasLayout, const std::string& layout);
+
+enum class WinHotkeyClash { None, LanguageSwitch, LayoutSwitch };
+WinHotkeyClash winHotkeyClash(SwitchHotkey ours, const WinToggles& w, bool otherVietnameseKeyboard);
+
+// The values to write: Ctrl+Shift between languages -> Left Alt+Shift (Windows' default);
+// a Ctrl+Shift layout hotkey, or one now equal to the language hotkey -> not assigned.
+struct WinToggleFix {
+    bool changeLanguage = false;
+    WinToggle language = WinToggle::AltShift;
+    bool changeLayout = false;
+    WinToggle layout = WinToggle::None;
+};
+WinToggleFix winToggleFix(const WinToggles& w);
+
 }  // namespace vtx

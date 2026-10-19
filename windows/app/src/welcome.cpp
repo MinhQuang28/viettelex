@@ -9,9 +9,12 @@
 
 #include "app.h"
 #include "conflicts.h"
+#include "foreground.h"
+#include "input_switch.h"
 #include "res/icon_ids.h"
 #include "settings_store.h"
 #include "strings.h"
+#include "tip_control.h"
 
 namespace vtx::app {
 
@@ -23,6 +26,7 @@ enum : int {
     IdVni,
     IdSwitch,
     IdTray,
+    IdDefaultInput,
     IdResolve,
     IdImport,
     IdSettings,
@@ -53,6 +57,12 @@ void finish() {
         settingsChanged();
         refreshSettingsWindow();
     }
+    // "Make VietTelex the default keyboard" (shown only when Windows' default is another
+    // one): SetDefaultLayoutOrTip, applied to this session too. The ticked box is consent.
+    if (GetDlgItem(g_wnd, IdDefaultInput) && IsDlgButtonChecked(g_wnd, IdDefaultInput) == BST_CHECKED) {
+        const bool ok = setDefaultKeyboardForUser();
+        appLog("app", std::string("welcome: make VietTelex the default keyboard: ") + (ok ? "done" : "failed"));
+    }
     DestroyWindow(g_wnd);
 }
 
@@ -71,7 +81,11 @@ void build() {
     add(L"STATIC", tr(S::WelcomeTitle), SS_LEFT, 24, y, W - 48, 30, 0, g_title);
     y += 38;
     add(L"STATIC", tr(S::WelcomeIntro), SS_LEFT, 24, y, W - 48, 40);
-    y += 52;
+    y += 48;
+    // How to start: a UniKey user has never picked a keyboard in Windows (field report
+    // 2026-10: "không gõ được tiếng Việt" right after installing).
+    add(L"STATIC", tr(S::WelcomeHowTo), SS_LEFT, 24, y, W - 48, 60);
+    y += 70;
 
     add(L"STATIC", tr(S::WelcomeMethod), SS_LEFT, 24, y + 3, 170, 20);
     add(L"BUTTON", tr(S::Telex), BS_AUTORADIOBUTTON | WS_GROUP | WS_TABSTOP, 200, y, 90, 24, IdTelex);
@@ -90,23 +104,30 @@ void build() {
     SendMessageW(combo, CB_SETCURSEL, static_cast<WPARAM>(sel), 0);
     y += 40;
 
-    // Tray icon: the setting stays OFF by default; the box is pre-ticked only for people
-    // coming from UniKey & co. (whose state indicator was a tray icon).
-    bool migrating = false;
-    for (const FoundConflict& c : g_found) migrating = migrating || isThirdPartyIme(c.kind);
+    // Windows still opens apps with the old keyboard (ENG): offer to make VietTelex the
+    // default, pre-ticked (input_switch.h welcomeOffersDefaultInput).
+    if (welcomeOffersDefaultInput(parseSwitchHotkey(g_settings.switchHotkey), defaultInputLangId())) {
+        add(L"BUTTON", tr(S::WelcomeDefaultInput), BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 24, y, W - 48, 24,
+            IdDefaultInput);
+        CheckDlgButton(g_wnd, IdDefaultInput, BST_CHECKED);
+        y += 32;
+    }
+
+    // Tray icon: the setting stays OFF by default, but the box is pre-ticked: it is the only
+    // lasting Việt/Anh indicator (the taskbar shows the static keyboard icon since 1.0.8).
     add(L"BUTTON", tr(S::WelcomeTray), BS_AUTOCHECKBOX | WS_TABSTOP | WS_GROUP, 24, y, W - 48, 24, IdTray);
-    CheckDlgButton(g_wnd, IdTray, (g_settings.showTrayIcon || migrating) ? BST_CHECKED : BST_UNCHECKED);
+    CheckDlgButton(g_wnd, IdTray, BST_CHECKED);
     y += 26;
-    add(L"STATIC", tr(S::WelcomeTrayNote), SS_LEFT, 44, y, W - 68, 36);
-    y += 46;
+    add(L"STATIC", tr(S::WelcomeTrayNote), SS_LEFT, 44, y, W - 68, 52);
+    y += 62;
 
     if (!g_found.empty()) {
         const std::wstring msg = std::wstring(tr(S::ConflictTitle)) + L": " + conflictNames(g_found) + L". " +
-                                 tr(S::ConflictDesc);
-        add(L"STATIC", msg.c_str(), SS_LEFT, 24, y, W - 48 - 120, 60);
+                                 conflictDescription(g_found);
+        add(L"STATIC", msg.c_str(), SS_LEFT, 24, y, W - 48 - 120, 96);
         add(L"BUTTON", tr(S::ConflictButton), BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP, W - 24 - 110, y, 110, 30,
             IdResolve);
-        y += 70;
+        y += 106;
     }
 
     add(L"BUTTON", tr(S::WelcomeImport), BS_PUSHBUTTON | WS_TABSTOP | WS_GROUP, 24, y, 300, 30, IdImport);

@@ -92,6 +92,27 @@ inline int iconIndexOf(int resourceId) {
 }
 inline int profileIconIndex(IconChoice c) { return iconIndexOf(profileIconId(c)); }
 
+// TRAY icon style (settings `trayIconStyle`, VietTelex.exe only, registry-only).
+//   "letter" (default): a filled badge with a bold V (Việt, red) or E (Anh, blue), white
+//            letter — the UniKey habit. 2026-10 field report: the keyboard glyph's English
+//            state (the same glyph at 40% opacity) could not be told from Việt at 16 px.
+//   "keyboard": the keyboard icon chosen above (indicatorIcon), as before.
+enum class TrayStyle : int { Letter = 0, Keyboard = 1 };
+inline TrayStyle parseTrayStyle(const std::string& s) {
+    return s == "keyboard" ? TrayStyle::Keyboard : TrayStyle::Letter;
+}
+inline const char* trayStyleName(TrayStyle t) { return t == TrayStyle::Keyboard ? "keyboard" : "letter"; }
+
+struct TrayBadge {
+    wchar_t letter;
+    unsigned bg;  // 0xRRGGBB, opaque; the same on light and dark taskbars
+    unsigned fg;
+};
+// White on both: contrast >= 4.5:1 (unit-tested), and V/E differ in letter AND hue.
+inline TrayBadge trayBadge(bool vietnamese) {
+    return vietnamese ? TrayBadge{L'V', 0xC62828u, 0xFFFFFFu} : TrayBadge{L'E', 0x1565C0u, 0xFFFFFFu};
+}
+
 }  // namespace vtx
 #endif
 #endif  // VTX_ICON_IDS_H
