@@ -9,6 +9,11 @@
 #   [exclude]  từ | từ1 từ2      — KHÔNG lấy từ corpus (thiên lệch nguồn: tên Tom của câu Tatoeba…)
 #   [sensitive-bigram] từ1 từ2 trọng-số — như [bigram] + vào bảng SensitivePairs: "Lọc từ nhạy cảm" BẬT
 #              thì không gợi ý từ2 sau từ1 (cặp chửi/tục ghép từ hai từ thường) — xem đầu khối
+#   [trigram]  từ1 từ2 từ3 trọng-số — CHUỖI seed ba từ (KHÔNG vào SeedData): sau đúng "từ1 từ2" thì từ3 đứng
+#              đầu từ kế tiếp (SensitiveWords.chains, mọi nền tảng); trọng-số chỉ để xếp khi chung ngữ cảnh
+#   [sensitive-trigram] từ1 từ2 từ3 trọng-số — như [trigram] (trọng-số 0 = đã đoán sẵn, chỉ chặn) + bảng
+#              SensitiveWords.triples: "Lọc từ nhạy cảm" BẬT thì không gợi ý từ3 sau đúng "từ1 từ2" (cặp
+#              "từ2 từ3" vẫn hiện — "như chó", "mất dạy") — xem đầu khối
 # Tách 18/10/2026 từ SeedData.swift cũ (OpenSubtitles2018 + lớp chat/teencode + ~105 từ tiếng Anh
 # cap ≤ 18 + các khối bổ sung 24/07/2026): mọi từ KHÔNG phải âm tiết vnlexicon của khối đầu, toàn bộ
 # khối bổ sung (địa danh, thương hiệu, họ/tên, hệ điều hành, từ nhạy cảm cho SwipeVocab), cặp có từ
@@ -1398,7 +1403,6 @@ thằng chó 3
 đồ chó 3
 chó chết 3
 chó má 3
-như chó 3
 thằng ngu 4
 đồ ngu 4
 thằng khốn 3
@@ -1427,7 +1431,8 @@ kích dục 3
 massage kích 3
 chơi cave 3
 # bổ sung 18/10/2026 (Phil, lô 3): chửi ghép từ thường. Phil bỏ lọc (cùng ngày) "con chó", "con gà", "óc chó",
-# "như heo", "như bò", "như lợn" — nghĩa đen quá thường: "con chó" còn từ corpus, "óc chó" ở [bigram], còn lại bỏ khỏi seed
+# "như heo", "như bò", "như lợn" — nghĩa đen quá thường: "con chó" còn từ corpus, "óc chó" ở [bigram], còn lại bỏ khỏi seed.
+# 19/10/2026: "như chó" cũng bỏ (bỏ khỏi seed) — chặn ở mức bộ ba "ngu như chó" ([sensitive-trigram])
 óc lợn 3
 não phẳng 3
 láo chó 3
@@ -1445,3 +1450,56 @@ cò hương 3
 chúa phòng 3
 # Gen Z: fuck boy (từ trước tục, từ sau thường)
 fuck boy 3
+
+[sensitive-trigram]
+# BỘ BA chửi/tục (19/10/2026, Phil): chỉ hiện khi TẮT lọc. Chuỗi seed (trọng-số > 0) chỉ khi thanh gợi ý
+# chưa đoán từ3 sau "từ1 từ2" ở hạng ≤ 3 (iOS người dùng mới + máy tính, tắt lọc); trọng-số 0 = đã đoán
+# sẵn (vnlm.bin / seed), chỉ chặn khi BẬT lọc. Generator chỉ đưa vào bảng chặn (SensitiveWords.triples) bộ
+# ba mà lọc theo từ / cặp chưa chặn (từ3 thường, "từ2 từ3" không phải cặp nhạy cảm). Đã đủ — không cần dòng:
+# địt/lồn/đĩ/đụ/mả/cút mẹ mày, con mẹ mày, đụ/đù má mày (cặp mẹ/má mày), thằng/đồ mặt lồn (từ tục),
+# thằng chó chết (cặp chó chết). Không thêm: "con chó này" (câu thường — Phil bỏ lọc
+# "con chó"), "mặt dày như" (từ3 hư từ). Chuỗi bốn từ = hai bộ ba (địt con mẹ + con mẹ mày).
+## — chửi có từ tục (từ tục đã lọc theo từ; bộ ba chặn phần đuôi thường) —
+địt con mẹ 3
+con đĩ mẹ 3
+địt cụ mày 3
+cái máu lồn 3
+vãi cả lồn 3
+mặt lồn ra 3
+đéo hiểu sao 3
+đéo ai thèm 3
+đéo quan tâm 0
+đcm thằng này 3
+đm cuộc đời 0
+vcl thật sự 0
+## — chửi ghép toàn từ thường —
+ngu như chó 3
+ngu như lợn 2
+ngu như bò 0
+óc bã đậu 3
+bố tiên sư 3
+tiên sư bố 3
+mẹ kiếp mày 3
+tổ cha mày 3
+mả cha mày 3
+cha mày chứ 3
+cút con mẹ 3
+đồ chó má 3
+đồ ăn hại 3
+đồ con lợn 0
+# "khốn nạn" / "mất dạy" đứng riêng là từ thường (hiện khi bật lọc) — chỉ chặn sau thằng / con / đồ
+đồ khốn nạn 0
+thằng khốn nạn 0
+thằng mất dạy 0
+con mất dạy 0
+đồ mất dạy 0
+mặt dày vãi 3
+thằng ất ơ 3
+câm mồm lại 0
+im mồm đi 0
+bố mày đây 3
+ông mày đây 3
+
+[trigram]
+# Chuỗi seed ba từ HIỆN cho mọi người (lóng nhẹ, vui). "não cá vàng" đã đoán sẵn — không cần dòng.
+vãi cả chưởng 3

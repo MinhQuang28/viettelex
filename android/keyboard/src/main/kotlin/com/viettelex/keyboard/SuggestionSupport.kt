@@ -106,14 +106,15 @@ object SuggestRank {
      */
     fun nextFill(prev: String, prev2: String?, personal: List<String>, triCount: (String) -> Int,
                  filter: (List<String>) -> List<String> = { it }, lm: SyllableLM? = SyllableLM.shared,
-                 p: Params = DEFAULT, need: Int = 3): List<String> {
+                 p: Params = DEFAULT, need: Int = 3, chain: List<String> = emptyList()): List<String> {
+        // chain = chuỗi seed ba từ sau (prev2, prev) ĐÃ lọc — sau bộ ba người dùng, trước trigram tĩnh / cá nhân (= iOS)
         val limit = maxOf(6, need + 3)
         val tri = if (prev2 != null && p.useTrigram && lm != null) topNext(prev, prev2, limit, lm, p) else null
         if (tri != null && tri.trigram) {
             val learned = personal.filter { triCount(it) >= p.learnedTriMin }.take(minOf(2, need))
-            return SuggestionFill.pad(learned, filter(tri.words()) + personal, need)
+            return SuggestionFill.pad(learned, chain + filter(tri.words()) + personal, need)
         }
-        val base = personal.take(need)
+        val base = if (chain.isEmpty()) personal.take(need) else SuggestionFill.pad(chain, personal, need)
         if (base.size >= need) return base
         val st = tri?.words() ?: bigramNext(prev, limit, lm, p)
         return SuggestionFill.pad(base, filter(st), need)

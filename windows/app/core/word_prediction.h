@@ -106,6 +106,13 @@ bool isEnglishVulgar(const std::u32string& w);  // SensitiveWords.english (lower
 // Scripts/seed-curated.txt [sensitive-bigram]) — with the filter on, `word` is never suggested after
 // `prev` and the seed pair gives no context bonus.
 bool isSensitivePair(const std::u32string& prev, const std::u32string& word);
+// SensitiveWords.isTriple: (prev2, prev, word) ∈ SensitiveTriples (sensitive_pairs.inc, from
+// [sensitive-trigram]) — with the filter on, `word` is never suggested after exactly (prev2, prev)
+// ("ngu như" → chó) while the pair ("như chó") stays.
+bool isSensitiveTriple(const std::u32string& prev2, const std::u32string& prev, const std::u32string& word);
+// SensitiveWords.chain(after:prev2:): the seed three-word chain words after (prev2, prev) (kSeedChains,
+// heaviest first; unfiltered).
+std::vector<std::u32string> seedChain(const std::u32string& prev2, const std::u32string& prev);
 // PredictionLogic.withVulgarEnglish: filter OFF — merge the English vulgar words (absent from
 // enlexicon) starting with `typed` into (word, lexicon freq) hits at SensitiveWords.englishFreq.
 std::vector<std::u32string> withVulgarEnglish(const std::vector<std::pair<std::u32string, int>>& en,

@@ -105,16 +105,18 @@ enum SuggestRank {
     /// Từ kế tiếp sau dấu cách (≤ `need`, CHƯA đệm topWords). `personal` = nextWords cá nhân/seed
     /// đã lọc nhạy cảm (≤ 6), `triCount` = số lượt người dùng gõ (prev2, prev → w), `filter` lọc
     /// nhạy cảm cho phần tĩnh. `need` = số ô ("Số từ gợi ý", mặc định 3 — hành vi cũ).
+    /// `chain` = chuỗi seed ba từ sau (`prev2`, `prev`) ĐÃ lọc (SensitiveWords.chain + filter) — đứng
+    /// ngay sau bộ ba người dùng đã gõ, trước trigram tĩnh / cá nhân.
     static func nextFill(_ prev: String, prev2: String?, personal: [String], triCount: (String) -> Int,
-                         filter: ([String]) -> [String] = { $0 }, need: Int = 3,
+                         filter: ([String]) -> [String] = { $0 }, need: Int = 3, chain: [String] = [],
                          lm: SyllableLM? = SyllableLM.shared, _ p: Params = Params()) -> [String] {
         let limit = max(6, need + 3)
         let tri = prev2 != nil && p.useTrigram ? topNext(prev, prev2: prev2, limit: limit, lm: lm, p) : nil
         if let tri, tri.trigram {
             let learned = Array(personal.filter { triCount($0) >= p.learnedTriMin }.prefix(min(2, need)))
-            return SuggestionFill.pad(learned, with: filter(tri.words) + personal, need: need)
+            return SuggestionFill.pad(learned, with: chain + filter(tri.words) + personal, need: need)
         }
-        let base = Array(personal.prefix(need))
+        let base = chain.isEmpty ? Array(personal.prefix(need)) : SuggestionFill.pad(chain, with: personal, need: need)
         if base.count >= need { return base }
         return SuggestionFill.pad(base, with: filter(tri?.words ?? bigramNext(prev, limit: limit, lm: lm, p)), need: need)
     }

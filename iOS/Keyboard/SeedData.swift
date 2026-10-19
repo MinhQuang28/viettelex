@@ -2,7 +2,7 @@
 // Scripts/seed-curated.txt rồi chạy lại). Seed ban đầu cho UserLangModel (lần đầu chạy / sau khi
 // user bấm "Xoá từ đã học"). 797 âm tiết + 600 cặp từ corpus hội thoại
 // (OpenSubtitles v2024 + lát diễn đàn FineWeb-2 + Tatoeba — docs/DATA-SOURCES.md mục "SeedData") +
-// lớp chọn tay 422 từ / 677 cặp (chat/teencode, từ tiếng Anh cap ≤ 18, tên riêng, từ nhạy cảm).
+// lớp chọn tay 422 từ / 676 cặp (chat/teencode, từ tiếng Anh cap ≤ 18, tên riêng, từ nhạy cảm).
 // Weight log-scale 50·(c/c_max)^0.3, max 50 — user gõ thật (+1/lần, accepted +2) sẽ vượt seed sau
 // vài ngày; decay tuần làm seed mờ dần.
 import Foundation
@@ -437,14 +437,13 @@ enum SeedData {
         ("tiền", "sản", 3), ("hậu", "quả", 4), ("phil", "trinh", 5),
         // — cặp chửi / tục ghép từ thường (chỉ hiện khi TẮT lọc) —
         ("bố", "mày", 7), ("thằng", "mặt", 4), ("má", "mày", 4), ("vãi", "đái", 3), ("thằng", "chó", 3),
-        ("đồ", "chó", 3), ("chó", "chết", 3), ("chó", "má", 3), ("như", "chó", 3), ("thằng", "ngu", 4),
-        ("đồ", "ngu", 4), ("thằng", "khốn", 3), ("đồ", "khốn", 3), ("thằng", "điên", 3), ("đồ", "điên", 3),
-        ("mẹ", "mày", 3), ("nâng", "bi", 2), ("sờ", "chim", 2), ("sờ", "cu", 2), ("rờ", "cu", 2),
-        ("móc", "lốp", 2), ("bú", "cu", 2), ("nện", "nhau", 2), ("phang", "nhau", 2), ("xoạc", "nhau", 2),
-        ("chơi", "gái", 3), ("đậu", "má", 3), ("đù", "má", 3), ("damn", "it", 4), ("piss", "off", 3),
-        ("kích", "dục", 3), ("massage", "kích", 3), ("chơi", "cave", 3), ("óc", "lợn", 3), ("não", "phẳng", 3),
-        ("láo", "chó", 3), ("quay", "tay", 3), ("phim", "heo", 3), ("clip", "nóng", 3), ("lộ", "clip", 3),
-        ("như", "cột", 3), ("cái", "mâm", 3), ("lùn", "tịt", 3), ("cò", "hương", 3), ("chúa", "phòng", 3),
-        ("fuck", "boy", 3),
+        ("đồ", "chó", 3), ("chó", "chết", 3), ("chó", "má", 3), ("thằng", "ngu", 4), ("đồ", "ngu", 4),
+        ("thằng", "khốn", 3), ("đồ", "khốn", 3), ("thằng", "điên", 3), ("đồ", "điên", 3), ("mẹ", "mày", 3),
+        ("nâng", "bi", 2), ("sờ", "chim", 2), ("sờ", "cu", 2), ("rờ", "cu", 2), ("móc", "lốp", 2),
+        ("bú", "cu", 2), ("nện", "nhau", 2), ("phang", "nhau", 2), ("xoạc", "nhau", 2), ("chơi", "gái", 3),
+        ("đậu", "má", 3), ("đù", "má", 3), ("damn", "it", 4), ("piss", "off", 3), ("kích", "dục", 3),
+        ("massage", "kích", 3), ("chơi", "cave", 3), ("óc", "lợn", 3), ("não", "phẳng", 3), ("láo", "chó", 3),
+        ("quay", "tay", 3), ("phim", "heo", 3), ("clip", "nóng", 3), ("lộ", "clip", 3), ("như", "cột", 3),
+        ("cái", "mâm", 3), ("lùn", "tịt", 3), ("cò", "hương", 3), ("chúa", "phòng", 3), ("fuck", "boy", 3),
     ] }
 }

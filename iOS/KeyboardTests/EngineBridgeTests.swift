@@ -383,6 +383,70 @@ final class SensitiveWordsTests: XCTestCase {
         XCTAssertEqual(pair(true)("sờ", "chim"), 0)
     }
 
+    /// Chuỗi chửi BA từ (seed-curated [sensitive-trigram], 19/10/2026). Tắt lọc ⇒ từ thứ ba nằm trong 3 ô từ kế
+    /// tiếp sau đúng hai từ đầu (người dùng mới: nextWords seed + SensitiveWords.chain + SuggestRank.nextFill);
+    /// bật lọc ⇒ không ở đâu (từ kế tiếp, hoàn thành từ, ngữ cảnh vuốt); cặp thường cuối ("như chó", "mất dạy",
+    /// "bã đậu"…) vẫn hiện khi bật lọc.
+    static let insultChains = [
+        "địt mẹ mày", "địt con mẹ", "con mẹ mày", "lồn mẹ mày", "thằng mặt lồn", "ngu như chó", "óc bã đậu",
+        "bố tiên sư", "thằng mất dạy", "con mất dạy", "cái máu lồn", "đồ mất dạy", "con đĩ mẹ", "đĩ mẹ mày",
+        "đụ má mày", "đụ mẹ mày", "đù má mày", "địt cụ mày", "đéo hiểu sao", "đéo quan tâm", "đéo ai thèm",
+        "vãi cả lồn", "đồ mặt lồn", "đm cuộc đời", "đcm thằng này", "vcl thật sự", "mặt lồn ra", "mẹ kiếp mày",
+        "tiên sư bố", "tổ cha mày", "mả cha mày", "mả mẹ mày", "cha mày chứ", "cút mẹ mày", "cút con mẹ",
+        "thằng chó chết", "đồ chó má", "đồ con lợn", "đồ ăn hại", "đồ khốn nạn", "thằng khốn nạn", "ngu như bò",
+        "ngu như lợn", "mặt dày vãi", "thằng ất ơ", "câm mồm lại", "im mồm đi", "bố mày đây", "ông mày đây",
+    ]
+
+    func testSensitiveTrigramChains() {
+        let m = UserLangModel(appGroup: nil)
+        m.isKnownWord = { VNSuggest.contains($0) }
+        m.seedIfEmpty(unigrams: SeedData.unigrams, bigrams: SeedData.bigrams)
+        func next(_ p2: String, _ p: String, _ fs: Bool, need: Int = 3) -> [String] {
+            let personal = SensitiveWords.filter(m.nextWords(after: p, prev2: p2, limit: 6), after: p, prev2: p2, enabled: fs)
+            let chain = SensitiveWords.filter(SensitiveWords.chain(after: p, prev2: p2), after: p, prev2: p2, enabled: fs)
+            return SuggestRank.nextFill(p, prev2: p2, personal: personal, triCount: { m.trigramCount(p2, p, $0) },
+                                        filter: { SensitiveWords.filter($0, after: p, prev2: p2, enabled: fs) },
+                                        need: need, chain: chain)
+        }
+        for phrase in Self.insultChains {
+            let w = phrase.split(separator: " ").map(String.init)
+            XCTAssertTrue(next(w[0], w[1], false).contains(w[2]), "tắt lọc: \(phrase) — \(next(w[0], w[1], false))")
+            XCTAssertFalse(next(w[0], w[1], true, need: 5).contains(w[2]), "bật lọc: \(phrase) — \(next(w[0], w[1], true, need: 5))")
+            XCTAssertTrue(SensitiveWords.filter([w[2]], after: w[1], prev2: w[0], enabled: true).isEmpty, phrase)
+            let ctx = m.nextWords(after: w[1], prev2: w[0], limit: 24)   // contextSet thêm chuỗi seed
+            if SensitiveWords.isTriple(w[0], w[1], w[2]) {   // từ tục: vuốt đã bỏ theo từ (SwipeDecoder.expand)
+                XCTAssertFalse(SwipeTyping.contextSet(ctx, prev: w[1], prev2: w[0], filter: true).contains(w[2]), "vuốt: \(phrase)")
+            }
+            if SensitiveWords.chain(after: w[1], prev2: w[0]).contains(w[2]) {
+                XCTAssertTrue(SwipeTyping.contextSet(ctx, prev: w[1], prev2: w[0], filter: false).contains(w[2]), "vuốt tắt lọc: \(phrase)")
+            }
+        }
+        // mọi bộ ba của bảng chặn: từ ba thường, cặp cuối không phải cặp nhạy cảm (chặn đúng mức BA từ)
+        for (k, ws) in SensitiveWords.triples {
+            let p = k.split(separator: " ").map(String.init)
+            XCTAssertEqual(p.count, 2)
+            for w in ws {
+                XCTAssertFalse(SensitiveWords.set.contains(w), "\(k) \(w)")
+                XCTAssertFalse(SensitiveWords.isPair(p[1], w), "\(k) \(w)")
+                XCTAssertTrue(SensitiveWords.isTriple(p[0].uppercased(), p[1], w.uppercased()))
+                XCTAssertEqual(SensitiveWords.dropPairs([w, "và"], after: p[1], prev2: p[0], enabled: true), ["và"])
+                XCTAssertEqual(SensitiveWords.dropPairs([w], after: p[1], prev2: p[0], enabled: false), [w])
+            }
+        }
+        // cặp thường vẫn hiện khi BẬT lọc (chỉ bộ ba bị chặn)
+        for (p, w) in [("như", "chó"), ("mất", "dạy"), ("bã", "đậu"), ("tiên", "sư"), ("khốn", "nạn"), ("con", "lợn"),
+                       ("ăn", "hại"), ("như", "bò"), ("mồm", "đi")] {
+            XCTAssertFalse(SensitiveWords.isPair(p, w), "\(p) \(w)")
+            XCTAssertEqual(SensitiveWords.filter([w], after: p, enabled: true), [w], "\(p) \(w)")
+            XCTAssertEqual(SensitiveWords.filter([w], after: p, prev2: "anh", enabled: true), [w], "anh \(p) \(w)")
+        }
+        XCTAssertTrue(SensitiveWords.filter(m.nextWords(after: "mất", limit: 24), after: "mất", enabled: true).contains("dạy"))
+        XCTAssertFalse(SeedData.bigrams.contains { $0.0 == "như" && $0.1 == "chó" }, "như chó bỏ khỏi seed (chặn ở bộ ba)")
+        // lóng vui hiện cho mọi người
+        XCTAssertEqual(next("vãi", "cả", true).first, "chưởng")
+        XCTAssertEqual(next("não", "cá", true).first, "vàng")
+    }
+
     /// Lô 2–3 (Phil 18/10/2026): tiếng lóng / từ báo chí (ma tuý, cờ bạc, mại dâm, tội phạm) và cảm thán nói
     /// tránh hiện cho mọi người; cặp nói thẳng tình dục / chửi ghép từ thường (kích dục, chơi cave, óc lợn,
     /// láo chó…) chỉ khi tắt lọc; cc / đb / lìn lọc theo từ.

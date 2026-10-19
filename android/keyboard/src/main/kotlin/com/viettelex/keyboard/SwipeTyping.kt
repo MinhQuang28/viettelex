@@ -234,9 +234,11 @@ object SwipeSuggest {
                 english: SwipeEnglishPrior? = null,
                 lm: SyllableLM? = SyllableLM.shared, properNouns: Boolean = true,
                 filterSensitive: Boolean = SwipeVocab.filterSensitive): Context {
-        // Lọc bật ⇒ cặp nhạy cảm (SensitiveWords.pairs: seed "sờ chim") không thưởng ngữ cảnh. = iOS contextSet.
+        // Lọc bật ⇒ cặp / bộ ba nhạy cảm (SensitiveWords.pairs / triples: seed "sờ chim", "ngu như chó") không
+        // thưởng ngữ cảnh; + chuỗi seed ba từ (SensitiveWords.chain). = iOS contextSet.
         val next = if (model != null && prev1 != null)
-            SensitiveWords.dropPairs(model.nextWords(prev1, prev2, 24), prev1, filterSensitive).map { it.lowercase() }.toSet()
+            SensitiveWords.dropPairs(SensitiveWords.chain(prev1, prev2) + model.nextWords(prev1, prev2, 24), prev1,
+                filterSensitive, prev2).map { it.lowercase() }.toSet()
         else emptySet()
         val count: (String) -> Int = if (model == null) { _ -> 0 } else { w -> model.count(w) }
         val learned: ((String) -> String?)? = model?.let { m -> { k: String -> m.learnedCase(k) } }

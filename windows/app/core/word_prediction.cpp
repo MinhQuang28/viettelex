@@ -71,24 +71,26 @@ std::vector<std::u32string> filterSensitive(const std::vector<std::u32string>& w
     return out;
 }
 
-// SensitiveWords.filter(_:after:enabled:): also drops a word forming a SensitivePairs pair with `prev`.
+// SensitiveWords.filter(_:after:prev2:enabled:): also drops a word forming a SensitivePairs pair with
+// `prev` or a SensitiveTriples triple with (`prev2`, `prev`) ("" = no word).
 std::vector<std::u32string> filterSensitive(const std::vector<std::u32string>& words, const std::u32string& prev,
-                                            bool on = true) {
+                                            const std::u32string& prev2, bool on = true) {
     if (!on) return words;
     std::vector<std::u32string> out;
     out.reserve(words.size());
     for (const auto& w : words)
-        if (!isSensitive(w) && !isSensitivePair(prev, w)) out.push_back(w);
+        if (!isSensitive(w) && !isSensitivePair(prev, w) && !isSensitiveTriple(prev2, prev, w)) out.push_back(w);
     return out;
 }
 
-// SensitiveWords.dropPairs: context words (seed next words as a bonus) without the sensitive pairs.
+// SensitiveWords.dropPairs(_:after:prev2:enabled:): context words (seed next words as a bonus) without the
+// sensitive pairs / triples.
 std::vector<std::u32string> dropSensitivePairs(const std::vector<std::u32string>& words, const std::u32string& prev,
-                                               bool on) {
+                                               const std::u32string& prev2, bool on) {
     if (!on) return words;
     std::vector<std::u32string> out;
     for (const auto& w : words)
-        if (!isSensitivePair(prev, w)) out.push_back(w);
+        if (!isSensitivePair(prev, w) && !isSensitiveTriple(prev2, prev, w)) out.push_back(w);
     return out;
 }
 
@@ -364,6 +366,24 @@ bool isSensitivePair(const std::u32string& prev, const std::u32string& word) {
     return it != e && key == *it;
 }
 
+bool isSensitiveTriple(const std::u32string& prev2, const std::u32string& prev, const std::u32string& word) {
+    if (prev2.empty() || prev.empty() || word.empty()) return false;
+    const std::string key = u8(lowerS(prev2)) + " " + u8(lowerS(prev)) + " " + u8(lowerS(word));
+    const auto* b = std::begin(kSensitiveTriples);
+    const auto* e = std::end(kSensitiveTriples);
+    const auto* it = std::lower_bound(b, e, key, [](const char* a, const std::string& k) { return std::strcmp(a, k.c_str()) < 0; });
+    return it != e && key == *it;
+}
+
+std::vector<std::u32string> seedChain(const std::u32string& prev2, const std::u32string& prev) {
+    std::vector<std::u32string> out;
+    if (prev2.empty() || prev.empty()) return out;
+    const std::string head = u8(lowerS(prev2)) + " " + u8(lowerS(prev)) + " ";
+    for (const char* row : kSeedChains)  // tiny table (≈ 30 rows): linear scan
+        if (std::strncmp(row, head.c_str(), head.size()) == 0) out.push_back(u32(std::string(row + head.size())));
+    return out;
+}
+
 bool isEnglishVulgar(const std::u32string& w) {
     const std::string l = u8(lowerS(w));
     for (const char* x : kEnglishVulgar)
@@ -510,7 +530,7 @@ bool Model::topNext(const std::u32string& prev, const std::optional<std::u32stri
 std::vector<std::u32string> Model::nextWords(const std::u32string& prev, const std::optional<std::u32string>& prev2) const {
     Top tri;
     if (!prev2 || !topNext(prev, prev2, 6, tri) || !tri.trigram) return {};
-    return pad(filterSensitive(words(tri), prev), kRankDepth);
+    return pad(filterSensitive(words(tri), prev, *prev2), kRankDepth);
 }
 
 // EnglishLite.completions: words starting with `typed` (a–z, any case), frequency desc then
@@ -566,19 +586,26 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
         } else if (all.size() > 6) {
             all.resize(6);
         }
-        for (const auto& w : filterSensitive(all, *r.prev, filterOn))
+        const std::u32string p2 = r.prev2 ? *r.prev2 : std::u32string();
+        for (const auto& w : filterSensitive(all, *r.prev, p2, filterOn))
             if (!r.english || data_.english.contains(u8(w)) || isEnglishVulgar(w)) personal.push_back(w);
-        std::vector<std::u32string> cands;
+        std::vector<std::u32string> cands, chain;
+        // iOS nextFill(chain:): the seed three-word chain (SensitiveWords.chain — "óc bã" → đậu) after the
+        // learned triples, before the static trigram / seed; the filter drops the sensitive triples.
+        if (wantsNextWord(r)) chain = filterSensitive(seedChain(p2, *r.prev), *r.prev, p2, filterOn);
         Top tri;
         if (wantsNextWord(r) && index_.lexiconId(*r.prev) >= 0 && topNext(*r.prev, r.prev2, 6, tri) && tri.trigram) {
             // iOS nextFill: a learned triple typed ≥ learnedTriMin times leads (≤ 2), then the
-            // static trigram row, then personal.
+            // chain, then the static trigram row, then personal.
             if (learned)
                 for (const auto& w : personal)
                     if (cands.size() < 2 && learned->trigramCount(u8(*r.prev2), u8(*r.prev), u8(w)) >= learn::kLearnedPairMin)
                         cands.push_back(w);
-            const auto t = filterSensitive(words(tri), *r.prev, filterOn);
+            cands.insert(cands.end(), chain.begin(), chain.end());
+            const auto t = filterSensitive(words(tri), *r.prev, p2, filterOn);
             cands.insert(cands.end(), t.begin(), t.end());
+        } else {
+            cands.insert(cands.end(), chain.begin(), chain.end());
         }
         cands.insert(cands.end(), personal.begin(), personal.end());
         for (const auto& w : pad(cands, kRankDepth)) out.push_back(resolveCase(w, r.prev, learned));
@@ -622,6 +649,7 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
         // Học từ bạn gõ: context = personal next words (no pair gate, limit 24 as iOS), count =
         // seed + learned (the iOS store is seeded, then counts up).
         std::vector<std::u32string> ctx;
+        const std::u32string p2 = r.prev2 ? *r.prev2 : std::u32string();
         if (r.prev) ctx = seedNext(lowerS(*r.prev));
         if (r.prev && learned) {
             std::vector<std::string> seeds;
@@ -630,7 +658,11 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
             for (const auto& w : learned->nextWords(u8(*r.prev), r.prev2 ? u8(*r.prev2) : std::string(), seeds, 24, 0))
                 ctx.push_back(u32(w));
         }
-        if (r.prev) ctx = dropSensitivePairs(ctx, *r.prev, filterOn);  // no bonus from a sensitive pair
+        if (r.prev) {  // + the seed chain (SensitiveWords.chain); no bonus from a sensitive pair / triple
+            auto ch = seedChain(p2, *r.prev);
+            ch.insert(ch.end(), ctx.begin(), ctx.end());
+            ctx = dropSensitivePairs(ch, *r.prev, p2, filterOn);
+        }
         auto inCtx = [&](const std::u32string& w) { return std::find(ctx.begin(), ctx.end(), w) != ctx.end(); };
         const size_t typedLen = glen(typed);
         std::vector<std::pair<size_t, double>> scored;
@@ -654,7 +686,7 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
             for (size_t j = i; j > 0 && scored[j - 1].second < scored[j].second; --j) std::swap(scored[j - 1], scored[j]);
         std::vector<std::u32string> ranked;
         for (const auto& s : scored) ranked.push_back(poolWords[s.first]);
-        for (const auto& w : completions(filterSensitive(ranked, r.prev ? *r.prev : std::u32string(), filterOn), typed))
+        for (const auto& w : completions(filterSensitive(ranked, r.prev ? *r.prev : std::u32string(), p2, filterOn), typed))
             out.push_back(suggestionCase(resolveCase(w, r.prev, learned), typed));
         return out;
     }
@@ -663,7 +695,7 @@ std::vector<std::u32string> Model::candidates(const Request& r, const std::u32st
     const std::u32string src = glen(key) >= static_cast<size_t>(kMinTyped) ? key : typed;
     std::vector<std::u32string> en = englishCompletions(src, kPoolLimit);
     if (filterOn) {
-        en = filterSensitive(en, r.prev ? *r.prev : std::u32string(), true);
+        en = filterSensitive(en, r.prev ? *r.prev : std::u32string(), r.prev2 ? *r.prev2 : std::u32string(), true);
     } else {  // PredictionLogic.withVulgarEnglish (lexicon frequency of each hit)
         const addtones::EnglishLexicon& lx = data_.english;
         std::vector<std::pair<std::u32string, int>> hits;

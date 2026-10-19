@@ -187,3 +187,55 @@ cảm 			0	1	ăn cơm*3	ơn|thấy|giác
 mình 			0	1	mình đi*2|mình ăn*3|mình ngủ*2	đang|ăn|đi
 tôi hi	hi	hi	0	1	tôi hiền*5	hiểu|hiền|hiện
 Phil 			0	1		Trinh
+ngu như 			0	0		chó|lợn|bò
+ngu như 			0	1		vậy|thế|một
+óc bã 			0	0		đậu
+óc bã 			0	1		
+bố tiên 			0	0		sư
+bố tiên 			0	1		
+tiên sư 			0	0		bố
+tiên sư 			0	1		
+thằng mất 			0	0		dạy|rồi|đi
+thằng mất 			0	1		rồi|đi|mát
+đồ mất 			0	0		dạy|não
+đồ mất 			0	1		não
+địt con 			0	0		mẹ|người|gái
+địt con 			0	1		người|gái|trai
+địt cụ 			0	0		mày
+địt cụ 			0	1		
+con đĩ 			0	0		mẹ
+con đĩ 			0	1		
+đéo hiểu 			0	0		sao|rồi
+đéo hiểu 			0	1		rồi
+mẹ kiếp 			0	0		mày
+mẹ kiếp 			0	1		
+tổ cha 			0	0		mày
+tổ cha 			0	1		
+cha mày 			0	0		chứ
+cha mày 			0	1		
+đồ ăn 			0	0		hại|vặt|ngon
+đồ ăn 			0	1		vặt|ngon|nhanh
+đồ khốn 			0	0		kiếp|nạn|khổ
+đồ khốn 			0	1		kiếp|khổ|đó
+thằng ất 			0	0		ơ
+thằng ất 			0	1		
+im mồm 			0	0		đi|một|mép
+im mồm 			0	1		một|mép|lại
+ông mày 			0	0		đây
+ông mày 			0	1		
+vãi cả 			0	0		lồn|chưởng|đái
+vãi cả 			0	1		chưởng|đái|ra
+não cá 			0	0		vàng|nhân|cược
+não cá 			0	1		vàng|nhân|cược
+con chó 			0	0		của|săn|sủa
+con chó 			0	1		của|săn|sủa
+ngu như lợ	lợ	lowj	0	0		lợi|lợn|lợm
+ngu như lợ	lợ	lowj	0	1		lợi|lợm|lợp
+như lợ	lợ	lowj	0	0		lợi|lợn|lợm
+như lợ	lợ	lowj	0	1		lợi|lợn|lợm
+thằng mất dạ	dạ	daj	0	0		dạy|đại|đặt
+thằng mất dạ	dạ	daj	0	1		đại|đặt|đặc
+mất dạ	dạ	daj	0	0		dạy|đại|đặt
+mất dạ	dạ	daj	0	1		dạy|đại|đặt
+óc bã đậ	đậ	ddaaj	0	0		đậu|đập|đậm
+óc bã đậ	đậ	ddaaj	0	1		đập|đậm|đậy

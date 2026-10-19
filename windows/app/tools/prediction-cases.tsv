@@ -195,3 +195,57 @@ cảm 			0	1	ăn cơm*3
 mình 			0	1	mình đi*2|mình ăn*3|mình ngủ*2
 tôi hi	hi	hi	0	1	tôi hiền*5
 Phil 			0	1
+# [sensitive-trigram] / [trigram] (19/10/2026): chuỗi seed ba từ hiện khi TẮT lọc; BẬT lọc ⇒ bộ ba bị chặn,
+# cặp thường ("như chó", "mất dạy") vẫn hiện
+ngu như 			0	0
+ngu như 			0	1
+óc bã 			0	0
+óc bã 			0	1
+bố tiên 			0	0
+bố tiên 			0	1
+tiên sư 			0	0
+tiên sư 			0	1
+thằng mất 			0	0
+thằng mất 			0	1
+đồ mất 			0	0
+đồ mất 			0	1
+địt con 			0	0
+địt con 			0	1
+địt cụ 			0	0
+địt cụ 			0	1
+con đĩ 			0	0
+con đĩ 			0	1
+đéo hiểu 			0	0
+đéo hiểu 			0	1
+mẹ kiếp 			0	0
+mẹ kiếp 			0	1
+tổ cha 			0	0
+tổ cha 			0	1
+cha mày 			0	0
+cha mày 			0	1
+đồ ăn 			0	0
+đồ ăn 			0	1
+đồ khốn 			0	0
+đồ khốn 			0	1
+thằng ất 			0	0
+thằng ất 			0	1
+im mồm 			0	0
+im mồm 			0	1
+ông mày 			0	0
+ông mày 			0	1
+vãi cả 			0	0
+vãi cả 			0	1
+não cá 			0	0
+não cá 			0	1
+con chó 			0	0
+con chó 			0	1
+ngu như lợ	lợ	lowj	0	0
+ngu như lợ	lợ	lowj	0	1
+như lợ	lợ	lowj	0	0
+như lợ	lợ	lowj	0	1
+thằng mất dạ	dạ	daj	0	0
+thằng mất dạ	dạ	daj	0	1
+mất dạ	dạ	daj	0	0
+mất dạ	dạ	daj	0	1
+óc bã đậ	đậ	ddaaj	0	0
+óc bã đậ	đậ	ddaaj	0	1
