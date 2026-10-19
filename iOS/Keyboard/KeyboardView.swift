@@ -353,7 +353,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         letterKeys.removeAll(); shiftKeys = []; crossRowConstraints = []
         spaceBar = nil; spaceLogo = nil; spaceCode = nil; indentedRow = nil
         overlayPanel?.removeFromSuperview(); overlayPanel = nil
-        keyEffects = nil; fxPoint = nil
+        keyEffects?.halt(); keyEffects = nil; fxRect = nil
         wallpaperView.image = nil
         wallpaperLoadedFor = .zero
         themeImageView.image = nil; foregroundView.image = nil; themeScreenLoadedFor = nil
@@ -1752,7 +1752,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                                            systemDark: systemDark, wallpaper: wallpaperActive))
         if balloonMade { balloon.invalidateStyle() }
         // Hiệu ứng theo màu nhấn MỚI (đổi sáng/tối giữa chừng).
-        keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui) }
+        keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui,
+                                      keyFill: palette.keyFill.ui, dark: palette.isDark) }
         applyBackdrop()
     }
 
@@ -5827,26 +5828,29 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
     private func tapped(_ key: Key) {
         // Hiệu ứng khi bấm phím: lấy điểm đã đánh dấu (fxMark), chữ chèn TRƯỚC rồi mới hẹn vẽ.
-        let fx = fxPoint
-        fxPoint = nil
+        let fx = fxRect
+        fxRect = nil
         if handleSearchKey(key) { return }
         onKey(key)
-        if let fx, let o = keyEffects { o.emit(at: fx) }
+        if let fx, let o = keyEffects { o.emit(key: fx) }
     }
 
     // MARK: Hiệu ứng khi bấm phím (KeyEffects.swift) — TẮT ⇒ overlay nil, đường phím chỉ đọc optional.
     private(set) var keyEffects: KeyEffectOverlay?
-    /// Tâm phím vừa chạm (toạ độ self) — chỉ ghi khi hiệu ứng bật; `tapped` tiêu thụ.
-    private var fxPoint: CGPoint?
+    /// Khung phím vừa chạm (toạ độ self) — chỉ ghi khi hiệu ứng bật; `tapped` tiêu thụ. Chỉ là TOẠ ĐỘ:
+    /// hiệu ứng (vd mảnh vỡ của Tia sét) không bao giờ đụng tới view phím thật.
+    private var fxRect: CGRect?
     @inline(__always) private func fxMark(_ v: UIView) {
         guard keyEffects != nil else { return }
-        fxPoint = convert(CGPoint(x: v.bounds.midX, y: v.bounds.midY), from: v)
+        fxRect = convert(v.bounds, from: v)
     }
     /// Đọc cài đặt lúc hiện (applyAppearance): kiểu + cổng Plus + nguồn điện thấp + giảm chuyển động.
     private func configureKeyEffects() {
+        // Matrix / Mực loang / Sóng nước: dải DƯỚI phím (ngay dưới rowsContainer, trên nền / ảnh nền).
         keyEffects = KeyEffectOverlay.install(KeyEffectPolicy.current(UserDefaultsProvider.shared),
-                                              color: palette.accent.alpha(1).ui, in: self, existing: keyEffects)
-        if keyEffects == nil { fxPoint = nil }
+                                              color: palette.accent.alpha(1).ui, keyFill: palette.keyFill.ui,
+                                              dark: palette.isDark, in: self, keys: rowsContainer, existing: keyEffects)
+        if keyEffects == nil { fxRect = nil }
     }
 
     #if DEBUG
@@ -6289,6 +6293,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         letterKeys.first { $0.base == s }.map { ($0.button.titleLabel?.font, $0.button.layer.cornerRadius, $0.button.bounds.size) }
     }
     /// Test hook: frame phím chữ (toạ độ self).
+    /// Thứ tự lớp: nền (màu / ảnh theme / ảnh nền / lớp tối) + hàng phím.
+    var debugBackdropViews: [UIView] { [themeBackdrop, themeImageView, wallpaperView, wallpaperDim] }
+    var debugRowsContainer: UIView { rowsContainer }
     func debugLetterFrame(_ s: String) -> CGRect? {
         letterKeys.first { $0.base == s }.map { convert($0.button.bounds, from: $0.button) }
     }

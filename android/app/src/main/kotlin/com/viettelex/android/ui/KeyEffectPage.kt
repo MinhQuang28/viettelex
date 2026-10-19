@@ -31,7 +31,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import com.viettelex.android.ime.KeyEffectView
+import com.viettelex.keyboard.ComboMeter
 import com.viettelex.keyboard.KeyEffect
+import com.viettelex.keyboard.KeyEffectBand
 import com.viettelex.keyboard.KeyEffectGate
 import com.viettelex.keyboard.Keys
 import com.viettelex.keyboard.ThemePalette
@@ -58,7 +60,8 @@ internal fun KeyEffectPage(palette: ThemePalette, onOpenPlus: () -> Unit, onBack
         }
     }
     VTSection(header = tr("Chạm một ô để chọn và xem thử."),
-        footer = tr("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Trình tiết kiệm pin.")) {
+        footer = tr("Hình nhỏ bay ra từ phím vừa bấm, theo màu nhấn của giao diện. Vẽ sau khi chữ đã vào ô nên không làm chậm gõ; tự tắt khi bật Trình tiết kiệm pin.") +
+            " " + tr("Matrix, Mực loang, Sóng nước chạy dưới phím; Matrix chỉ chạy khi đang gõ. Nháy sáng được giới hạn nhịp và độ sáng cho dịu mắt. Emoji theo chữ hiện khi vừa gõ xong từ như \"haha\", \"cảm ơn\", \"chúc mừng\".")) {
         KeyEffect.entries.chunked(3).forEach { row ->
             Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 row.forEach { e ->
@@ -106,20 +109,35 @@ internal class KeyEffectPreviewView(context: Context) : KeyEffectView(context, c
 
     fun update(e: KeyEffect, p: ThemePalette, play: Int) {
         bg = p.bg; keyPaint.color = p.keyFill; textPaint.color = p.ink
-        configure(e, p.action)
+        configure(e, p.action, p.keyFill, p.isDark)
         invalidate()
         if (play != lastPlay) {
             lastPlay = play
-            if (width > 0) burst(width / 2f, height - 8 * d - 21 * d) else post { burst(width / 2f, height - 8 * d - 21 * d) }
+            if (width > 0) playOnce() else post { playOnce() }
         }
+    }
+
+    /** Một lần xem thử: emoji như vừa gõ "haha" + dấu cách; combo = một tràng phím nhanh (mức lửa cao nhất). */
+    private fun playOnce() {
+        val x = width / 2f; val y = height - 8 * d - 21 * d
+        when (effect) {
+            KeyEffect.EMOJIWORD -> queueEmoji("😂")
+            KeyEffect.COMBO -> repeat(ComboMeter.THRESHOLDS[2]) { burst(x, y, 34 * d, 42 * d); flush() }
+            else -> {}
+        }
+        burst(x, y, 34 * d, 42 * d)
     }
 
     override fun onDraw(canvas: Canvas) {
         canvas.drawColor(bg)
+        // Matrix / Mực loang / Sóng nước: dưới phím mẫu (như bàn phím thật); còn lại: trên.
+        val below = effect.band == KeyEffectBand.BELOW_KEYS
+        var running = below && drawEffects(canvas)
         val w = 34 * d; val h = 42 * d
         keyRect.set((width - w) / 2f, height - h - 8 * d, (width + w) / 2f, height - 8 * d)
         canvas.drawRoundRect(keyRect, 6 * d, 6 * d, keyPaint)
         canvas.drawText("a", keyRect.centerX(), keyRect.centerY() + textPaint.textSize / 3f, textPaint)
-        super.onDraw(canvas)
+        if (!below) running = drawEffects(canvas)
+        if (running) postInvalidateOnAnimation()
     }
 }
