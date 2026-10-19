@@ -100,6 +100,8 @@ object Keys {
     const val KEY_SOUND_STYLE = "keySoundStyle"
     /** String — "Hiệu ứng khi bấm phím" ([KeyEffect.id], Plus): none|heart|bubble|ripple|petal|firework|flash|matrix|lightning|emojiword|blossom|combo|ink|wave|snow, mặc định none. Tên như iOS App Group. */
     const val KEY_EFFECT = "keyEffect"
+    /** String — "Bạn đồng hành" ([BuddyCharacter.id], Plus): off|girl|boy|cat|chick, mặc định off. Tên như iOS App Group. */
+    const val KEYBOARD_BUDDY = "keyboardBuddy"
     /** Int −10…18 (dp mỗi hàng; [KeyboardSettings.ROW_HEIGHT_MAX], trên +10 còn kẹp theo cao màn hình). */
     const val ROW_HEIGHT_ADJUST = "rowHeightAdjust"
     /** Bool — hàng phím số trên plane chữ (tên như iOS App Group). */

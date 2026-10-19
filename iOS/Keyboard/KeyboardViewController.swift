@@ -1438,9 +1438,11 @@ final class KeyboardViewController: UIInputViewController {
         updateSuggestions()
     }
 
-    /// "Emoji theo chữ" (KeyEffects.swift): CHỈ ở ranh giới từ, bằng từ vừa chốt — tra bảng O(1).
+    /// "Emoji theo chữ" (KeyEffects.swift) + thả tim của Bạn đồng hành: CHỈ ở ranh giới từ, bằng từ vừa chốt — tra bảng O(1).
     /// Kiểu khác / tắt ⇒ một phép so sánh, không tra gì. Emoji bắn ở lượt vẽ kế của phím ranh giới.
     private func fxWordBoundary(_ word: String, prev: String?) {
+        // Bạn đồng hành: phản ứng theo từ vừa chốt (tắt ⇒ nil, một optional).
+        if let b = keyboard?.buddy, !word.isEmpty { b.wordCommitted(word, prev: prev, prev2: lastWord2) }
         guard let fx = keyboard?.keyEffects, fx.effect == .emojiword, !word.isEmpty,
               let e = EmojiWords.lookup(word: word, prev: prev) else { return }
         fx.queueEmoji(e)

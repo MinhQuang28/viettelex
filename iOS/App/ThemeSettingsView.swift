@@ -45,6 +45,8 @@ struct ThemeSettingsView: View {
     @AppStorage("splitKeyboard", store: groupDefaults) private var splitKeyboard = false
     /// "Hiệu ứng khi bấm phím" (Plus, KeyEffect) — trang con KeyEffectPickerView.
     @AppStorage(KeyEffect.key, store: groupDefaults) private var keyEffectRaw = KeyEffect.defaultValue.rawValue
+    /// "Bạn đồng hành" (Plus, BuddyCharacter) — trang con BuddyPickerView.
+    @AppStorage(BuddyCharacter.key, store: groupDefaults) private var buddyRaw = BuddyCharacter.defaultValue.rawValue
 
     /// Ảnh đưa vào trình chỉnh: mới chọn (chưa ghi gì) hoặc bản gốc đã lưu ("Chỉnh ảnh").
     struct EditorInput: Identifiable {
@@ -139,6 +141,18 @@ struct ThemeSettingsView: View {
                         if !KeyEffectGate.allows { plusBadge }
                         Spacer()
                         Text(KeyEffectGate.allows ? KeyEffect.parse(keyEffectRaw).title : KeyEffect.none.title)
+                            .foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
+                // "Bạn đồng hành" (Plus, KeyboardBuddy) — mục riêng, mặc định Tắt.
+                NavigationLink {
+                    BuddyPickerView()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(L("Bạn đồng hành"))
+                        if !BuddyGate.allows { plusBadge }
+                        Spacer()
+                        Text(BuddyGate.allows ? BuddyCharacter.parse(buddyRaw).title : BuddyCharacter.off.title)
                             .foregroundStyle(.secondary).lineLimit(1)
                     }
                 }

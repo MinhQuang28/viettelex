@@ -133,6 +133,7 @@ struct FeatureSearchEntry: Identifiable {
             .init(viTitle: LK("Độ trong suốt ký tự"), keywords: "trong suốt transparent chữ", page: .giaoDien),
             .init(viTitle: LK("Tuỳ chỉnh nâng cao"), keywords: "màu chữ màu phím màu nhấn accent color colour bo góc tròn vuông corner radius cỡ chữ size phông font độ đậm weight bold đặt lại reset mặc định giao diện theme", page: .giaoDien),
             .init(viTitle: LK("Dán giao diện"), keywords: "json theme giao diện chép copy paste dán sửa edit nhập import tự tạo custom chia sẻ share", page: .giaoDien),
+            .init(viTitle: LK("Bạn đồng hành"), keywords: "bạn đồng hành nhân vật thú cưng mèo gà con cô gái chàng trai buddy keyboard buddy pet character mascot cat chick girl boy nhảy dance ngủ sleep plus", page: .giaoDien),
             .init(viTitle: LK("Hiệu ứng khi bấm phím"), keywords: "key press effect animation hoạt ảnh trái tim heart bong bóng bubble gợn sóng ripple cánh hoa petal pháo hoa firework nháy sáng flash matrix tia sét lightning emoji theo chữ emoji words hoa đào mai tết blossom lửa combo fire mực loang ink sóng nước water wave tuyết rơi snow giáng sinh christmas sao băng shooting star meteor vũ trụ space plus đèn lồng lantern glow trung thu mid autumn sương ma khói smoke spooky mist halloween", page: .giaoDien),
             .init(viTitle: LK("Màu nhấn"), keywords: "accent color colour nhập enter return shift tuỳ chỉnh nâng cao", page: .giaoDien),
             .init(viTitle: LK("Khôi phục giao diện gốc"), keywords: "reset mặc định", page: .giaoDien),

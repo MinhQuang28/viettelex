@@ -52,13 +52,19 @@ object StripGeometry {
      * Bề ngang các nút giữa slot và zone ⌄ (dp): 😊 ([emojiButton], LUÔN — cả khi có gợi ý, để emoji
      * không mất lối vào) + 📋 (chỉ khi có nút và [toolsShown]).
      */
-    fun rightExtraW(clipW: Float, clipButton: Boolean, toolsShown: Boolean, emojiButton: Boolean = false): Float =
-        (if (emojiButton) EMOJI_W else 0f) + (if (clipButton && toolsShown) clipW else 0f)
+    fun rightExtraW(clipW: Float, clipButton: Boolean, toolsShown: Boolean, emojiButton: Boolean = false, buddy: Float = 0f): Float =
+        buddy + (if (emojiButton) EMOJI_W else 0f) + (if (clipButton && toolsShown) clipW else 0f)
+
+    /** Ô "Bạn đồng hành" (dp) ngay TRÁI ⌄ — 😊 / 📋 dời sang trái đúng bấy nhiêu. = iOS KeyboardView.buddyZoneWidth. */
+    const val BUDDY_W = 34f
+
+    /** Mép trái / phải ô nhân vật (dp) khi bar mở: sát trái zone ⌄, cao trọn strip (không lấn phím). */
+    fun buddyLeft(width: Float, zoneW: Float): Float = width - zoneW - BUDDY_W
 
     /** Mép phải vùng slot (dp): trừ zone ⌄, ô 😊 ([emojiButton]) và ô 📋 (chỉ khi có nút và [toolsShown]). */
     fun barRight(width: Float, zoneW: Float, clipW: Float, clipButton: Boolean, toolsShown: Boolean,
-                 emojiButton: Boolean = false): Float =
-        width - zoneW - rightExtraW(clipW, clipButton, toolsShown, emojiButton)
+                 emojiButton: Boolean = false, buddy: Float = 0f): Float =
+        width - zoneW - rightExtraW(clipW, clipButton, toolsShown, emojiButton, buddy)
 
     /** Mép trái/phải slot i (0..2) trong [barL, barR] → ghi vào [l]/[r]. */
     fun thirds(barL: Float, barR: Float, l: FloatArray, r: FloatArray) = cells(barL, barR, 3, l, r)

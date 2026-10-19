@@ -1,0 +1,371 @@
+package com.viettelex.android.ime
+
+import android.annotation.SuppressLint
+import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Path
+import android.graphics.RectF
+import android.os.SystemClock
+import android.view.View
+import com.viettelex.keyboard.BuddyCharacter
+import com.viettelex.keyboard.BuddyDance
+import com.viettelex.keyboard.BuddyDriver
+import com.viettelex.keyboard.BuddyFX
+import com.viettelex.keyboard.BuddyFraming
+import com.viettelex.keyboard.BuddyOutfit
+import com.viettelex.keyboard.BuddyPart
+import com.viettelex.keyboard.BuddyPhase
+import com.viettelex.keyboard.BuddyPiece
+import com.viettelex.keyboard.BuddyPose
+import com.viettelex.keyboard.BuddyReaction
+import com.viettelex.keyboard.BuddyRig
+import com.viettelex.keyboard.BuddySVG
+import com.viettelex.keyboard.BuddySeason
+import com.viettelex.keyboard.BuddyWords
+import com.viettelex.keyboard.Shape
+import com.viettelex.keyboard.Show
+import com.viettelex.keyboard.Stroke
+import kotlin.math.floor
+import kotlin.math.max
+import kotlin.math.min
+
+/**
+ * "Bạn đồng hành" — view vẽ khung vector ([BuddyRig]): Path dựng MỘT lần theo toạ độ thiết kế (canvas co giãn,
+ * không dựng lại khi đổi cỡ), mỗi bộ phận xoay quanh điểm xoay bằng biến đổi canvas. Máy trạng thái + dáng:
+ * [BuddyDriver] (thuần, test JVM). Chỉ vẽ khung kế (postInvalidateOnAnimation) khi đang chuyển động — ngủ yên /
+ * đứng yên = 0 khung hình; mốc đổi trạng thái hẹn MỘT Runnable dựng sẵn. Không nhận chạm. = iOS BuddyView.
+ */
+@SuppressLint("ViewConstructor")
+class BuddyView(
+    context: Context,
+    val character: BuddyCharacter,
+    private val density: Float,
+    dark: Boolean,
+    lowPower: Boolean,
+    val season: BuddySeason? = null,
+    private val framing: BuddyFraming = BuddyFraming.BAR,
+) : View(context) {
+    val rig: BuddyRig = BuddyRig.rig(character) ?: BuddyRig.CAT
+    val driver = BuddyDriver(rig, lowPower)
+    private val outfit = BuddyOutfit.make(season, character)
+    private val pieces: List<BuddyPiece> = rig.pieces + outfit.pieces
+    private val paths = Array(pieces.size) { Path() }
+    private val fills = Array(pieces.size) { Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.FILL } }
+    private val strokes = Array(pieces.size) {
+        Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND }
+    }
+    /** Chỉ số mảnh theo bộ phận (thứ tự vẽ). */
+    private val byPart: Array<IntArray> = BuddyPart.entries.map { p -> pieces.indices.filter { pieces[it].part == p }.toIntArray() }.toTypedArray()
+    private val zPaths = rig.zzz.map { z -> svg(BuddyRig.zPath(z.x, z.y, z.size)) }
+    private val zPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE; strokeCap = Paint.Cap.ROUND; strokeJoin = Paint.Join.ROUND; strokeWidth = 4.5f
+        color = 0xFF000000.toInt() or BuddyRig.Z_COLOR
+    }
+    private val heartProp = svg(BuddyFX.heartPath(rig.heart.x, rig.heart.y, rig.heart.size))
+    private val flushPath = Path().apply {
+        addOval(RectF((rig.face.x - rig.face.rx).toFloat(), (rig.face.y - rig.face.ry).toFloat(),
+            (rig.face.x + rig.face.rx).toFloat(), (rig.face.y + rig.face.ry).toFloat()), Path.Direction.CW)
+    }
+    private val browsPath = svg(rig.brows)
+    private val k = (BuddyFX.PARTICLE_SIZE / 2)
+    private val heartSmall = svg(BuddyFX.heartPath(0.0, 0.0, k * 0.85))
+    private val dropSmall = svg(BuddyFX.dropPath(0.0, 0.0, k * 0.8))
+    private val fxFill = Paint(Paint.ANTI_ALIAS_FLAG)
+    private val fxStroke = Paint(Paint.ANTI_ALIAS_FLAG).apply { style = Paint.Style.STROKE; strokeJoin = Paint.Join.ROUND }
+    private val fxText = Paint(Paint.ANTI_ALIAS_FLAG).apply { textAlign = Paint.Align.CENTER; isFakeBoldText = true }
+    private val cloud = Path()
+    private val rect = RectF()
+    private var cloudFor = ""
+    private var outline = 0
+    private val pose = BuddyPose()
+    private var drawScale = 1f
+    private var grawlixSerial = -1
+    private var grawlixText = ""
+
+    /** Ô nhân vật đang hiện (bar mở) — root đặt; ẩn ⇒ không vẽ gì. */
+    var shownInSlot = true
+        set(v) { if (field != v) { field = v; invalidate() } }
+    var maxFigureDp = 44f
+        set(v) { field = v; invalidate() }
+    /** Đồng hồ (giây) — test thay. */
+    var clock: () -> Double = { SystemClock.uptimeMillis() / 1000.0 }
+
+    private val tick = Runnable { invalidate() }
+    private var tickAt = Double.NaN
+
+    init {
+        importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO
+        isClickable = false
+        for ((i, p) in pieces.withIndex()) build(p, paths[i])
+        setDark(dark)
+    }
+
+    fun setDark(dark: Boolean) {
+        outline = 0xFF000000.toInt() or (if (dark) BuddyRig.OUTLINE_DARK else BuddyRig.OUTLINE_LIGHT)
+        fun re(c: Int) = outfit.recolor[c] ?: c
+        for ((i, p) in pieces.withIndex()) {
+            fills[i].color = p.fill?.let { argb(re(it), p.alpha) } ?: 0
+            strokes[i].strokeWidth = p.width.toFloat()
+            strokes[i].color = when (val s = p.stroke) {
+                Stroke.None -> 0
+                Stroke.Outline -> outline
+                Stroke.Ink -> 0xFF000000.toInt() or BuddyRig.INK
+                is Stroke.Color -> argb(re(s.rgb), if (p.fill == null) p.alpha else 1.0)
+            }
+        }
+        invalidate()
+    }
+
+    var lowPower: Boolean
+        get() = driver.lowPower
+        set(v) { if (driver.lowPower != v) { driver.lowPower = v; invalidate() } }
+
+    // MARK: đầu vào (đường phím — chỉ ghi giờ; đổi trạng thái ⇒ một invalidate, vẽ ở khung kế)
+
+    fun keyPressed() { val t = clock(); driver.keyPressed(t); afterInput(t) }
+    fun deletePressed() { val t = clock(); driver.deletePressed(t); afterInput(t) }
+    fun cheer() { val t = clock(); driver.cheer(t); afterInput(t) }
+    fun wordCommitted(word: String, prev: String?, prev2: String?) {
+        val t = clock()
+        if (driver.wordCommitted(word, prev, prev2, t)) afterInput(t)
+    }
+    fun react(r: BuddyReaction) { val t = clock(); driver.react(r, t); afterInput(t) }
+
+    private fun afterInput(t: Double) {
+        if (driver.needsUpdate(t)) invalidate()
+        else if (tickAt.isNaN()) schedule(t)
+    }
+
+    private fun schedule(t: Double) {
+        val d = driver.nextDeadline(t)
+        if (d == null) { if (!tickAt.isNaN()) { removeCallbacks(tick); tickAt = Double.NaN }; return }
+        if (tickAt == d) return
+        removeCallbacks(tick)
+        tickAt = d
+        postDelayed(tick, ((d - t) * 1000).toLong() + 10)
+    }
+
+    /** Ẩn bàn phím: dừng hẹn giờ (không còn khung hình). */
+    fun halt() { removeCallbacks(tick); tickAt = Double.NaN }
+
+    override fun onDetachedFromWindow() { halt(); super.onDetachedFromWindow() }
+
+    /** Có cần khung kế không — = driver (ngủ yên / đứng yên = false). */
+    fun animating(t: Double = clock()): Boolean = driver.animating(t) || fxActive(t)
+
+    private fun fxActive(t: Double): Boolean = driver.shown is BuddyPhase.React && !driver.lowPower
+
+    // MARK: vẽ
+
+    override fun onDraw(c: Canvas) {
+        val t = clock()
+        driver.update(t)
+        tickAt = Double.NaN
+        if (!shownInSlot || width <= 0 || height <= 0) { schedule(t); return }
+        val vp = rig.viewport(framing)
+        val hDp = min(height / density - 1f, maxFigureDp)
+        val s = max(0.001f, min(hDp * density / vp.h.toFloat(), width / vp.w.toFloat()))
+        drawScale = s
+        val ox = (width - vp.w.toFloat() * s) / 2f
+        val oy = height - vp.h.toFloat() * s
+        val p = driver.poseAt(t, pose)
+        c.save()
+        c.translate(ox, oy); c.scale(s, s); c.translate(-vp.x.toFloat(), -vp.y.toFloat())
+        if (p == null) drawSleep(c, t) else drawRig(c, p, t)
+        c.restore()
+        drawFX(c, t)
+        if (animating(t)) postInvalidateOnAnimation() else schedule(t)
+    }
+
+    private fun drawRig(c: Canvas, p: BuddyPose, t: Double) {
+        val shown = driver.shown
+        val dance = when (shown) {
+            is BuddyPhase.Dancing, BuddyPhase.Cheering -> true
+            is BuddyPhase.React -> BuddyDance.happyEyes(shown.reaction)
+            else -> false
+        }
+        val react = (shown as? BuddyPhase.React)?.reaction
+        val f = if (react != null) ((t - driver.phaseStart) / react.duration).toFloat() else 0f
+        c.translate(p.dx.toFloat(), p.dy.toFloat())
+        val fx = rig.feet.x.toFloat(); val fy = rig.feet.y.toFloat()
+        c.rotate(deg(p.rot), fx, fy)
+        c.scale(p.sx.toFloat(), 1f, fx, fy)
+        for (part in BuddyPart.entries) {
+            if (part == BuddyPart.SLEEP) continue
+            val pv = rig.pivots[part]
+            val a = when (part) {
+                BuddyPart.HEAD -> p.head; BuddyPart.ARM_L -> p.armL; BuddyPart.ARM_R -> p.armR
+                BuddyPart.LEG_L -> p.legL; BuddyPart.LEG_R -> p.legR; BuddyPart.TAIL -> p.tail
+                else -> 0.0
+            }
+            val save = c.save()
+            if (pv != null && a != 0.0) c.rotate(deg(a), pv.x.toFloat(), pv.y.toFloat())
+            for (i in byPart[part.ordinal]) {
+                val pc = pieces[i]
+                if (pc.show == Show.REST && dance || pc.show == Show.DANCE && !dance) continue
+                drawPiece(c, i)
+            }
+            if (part == BuddyPart.HEAD && react == BuddyReaction.ANGRY) {
+                fxFill.color = argb(BuddyFX.ANGRY_RED, 0.45 * keyframe(f, 0f, 1f, 1f, 0f, 0.15f, 0.8f))
+                c.drawPath(flushPath, fxFill)
+                fxStroke.color = 0xFF000000.toInt() or BuddyRig.INK; fxStroke.strokeWidth = 4.5f; fxStroke.strokeCap = Paint.Cap.ROUND
+                c.drawPath(browsPath, fxStroke)
+            }
+            c.restoreToCount(save)
+            if (part == BuddyPart.BODY && react == BuddyReaction.LOVE) {
+                val sc = pulse(f)
+                val save2 = c.save()
+                c.scale(sc, sc, rig.heart.x.toFloat(), rig.heart.y.toFloat())
+                fxFill.color = 0xFF000000.toInt() or BuddyFX.HEART_COLOR
+                c.drawPath(heartProp, fxFill)
+                fxStroke.color = outline; fxStroke.strokeWidth = BuddyRig.OUTLINE_WIDTH.toFloat()
+                c.drawPath(heartProp, fxStroke)
+                c.restoreToCount(save2)
+            }
+        }
+    }
+
+    private fun drawSleep(c: Canvas, t: Double) {
+        c.translate(0f, rig.sleepOffset(framing).toFloat())
+        for (i in byPart[BuddyPart.SLEEP.ordinal]) drawPiece(c, i)
+        val zzz = (driver.shown as? BuddyPhase.Asleep)?.zzz == true && !driver.lowPower
+        val n = zPaths.size
+        val f = ((t - driver.phaseStart) / com.viettelex.keyboard.BuddyBrain.ZZZ).toFloat()
+        for ((i, z) in zPaths.withIndex()) {
+            var alpha = 1f; var rise = 0f
+            if (zzz && f in 0f..1f) {
+                val a = i.toFloat() / n * 0.8f; val b = (i + 1f) / n * 0.8f
+                alpha = if (f <= a) 0f else if (f >= b) 1f else (f - a) / (b - a)
+                rise = 4f * density * (1 - f) / drawScale
+            }
+            zPaint.alpha = (alpha * 255).toInt()
+            if (rise != 0f) { c.save(); c.translate(0f, rise); c.drawPath(z, zPaint); c.restore() } else c.drawPath(z, zPaint)
+        }
+    }
+
+    private fun drawPiece(c: Canvas, i: Int) {
+        val p = pieces[i]
+        val turn = p.turn
+        if (turn != null) { c.save(); c.rotate(turn.first.toFloat(), turn.second.toFloat(), turn.third.toFloat()) }
+        if (p.fill != null) c.drawPath(paths[i], fills[i])
+        if (p.stroke !== Stroke.None) c.drawPath(paths[i], strokes[i])
+        if (turn != null) c.restore()
+    }
+
+    /** Hiệu ứng phản ứng (toạ độ dp trong ô — luôn trọn trong ô). */
+    private fun drawFX(c: Canvas, t: Double) {
+        val r = (driver.shown as? BuddyPhase.React)?.reaction ?: return
+        if (driver.lowPower) return
+        val w = width / density.toDouble(); val h = height / density.toDouble()
+        val el = t - driver.phaseStart
+        val f = (el / r.duration).toFloat()
+        c.save()
+        c.scale(density, density)
+        BuddyFX.badge(r, w, h)?.let { b ->
+            val sc = keyframe(f, 0.3f, 1.1f, 1f, 1f, 0.12f, 0.2f)
+            val al = keyframe(f, 0f, 1f, 1f, 0f, 0.1f, 0.75f)
+            rect.set(b.x.toFloat(), b.y.toFloat(), (b.x + b.w).toFloat(), (b.y + b.h).toFloat())
+            c.save()
+            c.scale(sc, sc, rect.centerX(), rect.centerY())
+            when (r) {
+                BuddyReaction.ANGRY -> {
+                    fxFill.color = argb(0xFFFFFF, al.toDouble())
+                    c.drawRoundRect(rect, rect.height() / 2, rect.height() / 2, fxFill)
+                    fxStroke.color = argb(BuddyFX.ANGRY_RED, al.toDouble()); fxStroke.strokeWidth = 1f
+                    c.drawRoundRect(rect, rect.height() / 2, rect.height() / 2, fxStroke)
+                    fxText.color = argb(BuddyFX.ANGRY_RED, al.toDouble()); fxText.textSize = rect.height() * 0.72f
+                    if (grawlixSerial != driver.shownSerial) { grawlixSerial = driver.shownSerial; grawlixText = BuddyWords.grawlix(grawlixSerial) }
+                    c.drawText(grawlixText, rect.centerX(), rect.bottom - rect.height() * 0.2f, fxText)
+                }
+                BuddyReaction.SURPRISED -> {
+                    fxText.color = argb(BuddyFX.ANGRY_RED, al.toDouble()); fxText.textSize = rect.height() * 0.95f
+                    c.drawText("!", rect.centerX(), rect.bottom - 1f, fxText)
+                }
+                BuddyReaction.SAD -> {
+                    val key = "${b.w}x${b.h}"
+                    if (key != cloudFor) { cloudFor = key; cloud.reset(); cloud.set(svg(BuddyFX.cloudPath(com.viettelex.keyboard.BuddyRect(0.0, 0.0, b.w, b.h)))) }
+                    fxFill.color = argb(BuddyFX.CLOUD_COLOR, al.toDouble())
+                    c.save(); c.translate(rect.left, rect.top); c.drawPath(cloud, fxFill); c.restore()
+                }
+                else -> {}
+            }
+            c.restore()
+        }
+        val n = min(BuddyFX.count(r), BuddyFX.MAX_PARTICLES)
+        for (i in 0 until n) {
+            val p = BuddyFX.particle(r, i, w, h)
+            var u = ((el - p.delay) / BuddyFX.PARTICLE_DURATION).toFloat()
+            if (r == BuddyReaction.PANIC && u > 0f) u -= floor(u)
+            if (u < 0f || u > 1f) continue
+            val x = (p.x0 + (p.x1 - p.x0) * u).toFloat(); val y = (p.y0 + (p.y1 - p.y0) * u).toFloat()
+            val al = keyframe(u, 0f, 1f, 1f, 0f, 0.15f, 0.6f)
+            val sc = 0.4f + 0.7f * u
+            c.save(); c.translate(x, y); c.scale(sc, sc)
+            when (r) {
+                BuddyReaction.PANIC -> {
+                    fxText.color = argb(outline and 0xFFFFFF, al.toDouble()); fxText.textSize = 8f
+                    c.drawText(BuddyFX.PANIC_GLYPHS[i % BuddyFX.PANIC_GLYPHS.size], 0f, 3f, fxText)
+                }
+                else -> {
+                    fxFill.color = argb(when (r) { BuddyReaction.LOVE -> BuddyFX.HEART_COLOR; BuddyReaction.SAD -> BuddyFX.RAIN_COLOR; else -> BuddyFX.TEAR_COLOR }, al.toDouble())
+                    c.drawPath(if (r == BuddyReaction.LOVE) heartSmall else dropSmall, fxFill)
+                }
+            }
+            c.restore()
+        }
+        c.restore()
+    }
+
+    // MARK: hình
+
+    private fun build(p: BuddyPiece, out: Path) {
+        when (val sh = p.shape) {
+            is Shape.Path -> out.set(svg(sh.d))
+            is Shape.Circle -> out.addCircle(sh.cx.toFloat(), sh.cy.toFloat(), sh.r.toFloat(), Path.Direction.CW)
+            is Shape.Ellipse -> out.addOval(RectF((sh.cx - sh.rx).toFloat(), (sh.cy - sh.ry).toFloat(),
+                (sh.cx + sh.rx).toFloat(), (sh.cy + sh.ry).toFloat()), Path.Direction.CW)
+            is Shape.RRect -> {
+                val rr = min(sh.r, min(sh.w, sh.h) / 2).toFloat()
+                out.addRoundRect(RectF(sh.x.toFloat(), sh.y.toFloat(), (sh.x + sh.w).toFloat(), (sh.y + sh.h).toFloat()), rr, rr, Path.Direction.CW)
+            }
+        }
+    }
+
+    companion object {
+        fun svg(d: String): Path {
+            val p = Path()
+            for (cmd in BuddySVG.parse(d)) when (cmd) {
+                is BuddySVG.Cmd.Move -> p.moveTo(cmd.x.toFloat(), cmd.y.toFloat())
+                is BuddySVG.Cmd.Line -> p.lineTo(cmd.x.toFloat(), cmd.y.toFloat())
+                is BuddySVG.Cmd.Quad -> p.quadTo(cmd.cx.toFloat(), cmd.cy.toFloat(), cmd.x.toFloat(), cmd.y.toFloat())
+                BuddySVG.Cmd.Close -> p.close()
+            }
+            return p
+        }
+
+        fun argb(rgb: Int, a: Double): Int = ((a.coerceIn(0.0, 1.0) * 255).toInt() shl 24) or (rgb and 0xFFFFFF)
+        private fun deg(rad: Double) = Math.toDegrees(rad).toFloat()
+
+        /** Giá trị khung hình 4 điểm (0, a, b, 1) → (v0, v1, v2, v3), nội suy tuyến tính. */
+        fun keyframe(f: Float, v0: Float, v1: Float, v2: Float, v3: Float, a: Float, b: Float): Float = when {
+            f <= 0f -> v0
+            f < a -> v0 + (v1 - v0) * f / a
+            f < b -> v1 + (v2 - v1) * (f - a) / (b - a)
+            f < 1f -> v2 + (v3 - v2) * (f - b) / (1 - b)
+            else -> v3
+        }
+
+        /** Nhịp trái tim ôm trước ngực (= iOS pulse). */
+        private val PULSE_T = floatArrayOf(0f, 0.15f, 0.3f, 0.45f, 0.6f, 0.8f, 1f)
+        private val PULSE_V = floatArrayOf(0.2f, 1.15f, 0.95f, 1.1f, 1f, 1.1f, 0.2f)
+        fun pulse(f: Float): Float {
+            if (f <= 0f) return PULSE_V[0]
+            for (i in 1 until PULSE_T.size) if (f < PULSE_T[i]) {
+                val u = (f - PULSE_T[i - 1]) / (PULSE_T[i] - PULSE_T[i - 1])
+                return PULSE_V[i - 1] + (PULSE_V[i] - PULSE_V[i - 1]) * u
+            }
+            return PULSE_V.last()
+        }
+    }
+}

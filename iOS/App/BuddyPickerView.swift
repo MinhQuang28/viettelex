@@ -1,0 +1,153 @@
+// "Bạn đồng hành" (Plus): lưới chọn Tắt / Cô gái / Chàng trai / Mèo / Gà con — mỗi ô là BuddyView thật
+// trên nền theme đang dùng. Mở trang: mọi nhân vật nhảy một tràng (như đang gõ) rồi ngủ; chạm ô là chọn +
+// xem lại. Ô Plus bị khoá: mờ + nhãn Plus, chạm mở VietTelex Plus. Lưu App Group `keyboardBuddy`
+// (BuddyCharacter.key) — bàn phím đọc lần hiện kế. Android: BuddyPage.kt.
+import SwiftUI
+import UIKit
+
+private let buddyDefaults = UserDefaults(suiteName: "group.com.viettelex")
+
+struct BuddyPickerView: View {
+    @AppStorage(BuddyCharacter.key, store: buddyDefaults) private var raw = BuddyCharacter.defaultValue.rawValue
+    @Environment(\.colorScheme) private var scheme
+    @State private var showPlus = false
+    /// Số lần chạm từng ô — đổi ⇒ ô diễn lại.
+    @State private var plays: [BuddyCharacter: Int] = [:]
+
+    private let columns = Array(repeating: GridItem(.flexible(), spacing: 12), count: 3)
+    private var current: BuddyCharacter { BuddyCharacter.parse(raw) }
+
+    var body: some View {
+        let palette = ThemeSettings.load(buddyDefaults).palette(systemDark: scheme == .dark, wallpaperActive: false)
+        List {
+            if !BuddyGate.allows {
+                Section { PlusEntryRow() }
+            }
+            Section {
+                LazyVGrid(columns: columns, spacing: 12) {
+                    ForEach(BuddyCharacter.allCases, id: \.self) { tile($0, palette: palette) }
+                }
+                .padding(.vertical, 6)
+            } header: {
+                Text(L("Chạm một ô để chọn và xem thử."))
+            } footer: {
+                Text(L("Nhân vật nhỏ ở góc phải thanh gợi ý: gõ thì nhảy — gõ càng nhanh nhảy càng sung — ngừng gõ thì cuộn tròn ngủ. Chỉ chuyển động khi đang gõ; Chế độ nguồn điện thấp chỉ hiện dáng đứng yên."))
+            }
+        }
+        .bottomBarScrollMargin()
+        .navigationTitle(L("Bạn đồng hành"))
+        .navigationBarTitleDisplayMode(.inline)
+        .navigationDestination(isPresented: $showPlus) { PlusView(model: PlusShared.model) }
+    }
+
+    private func tile(_ c: BuddyCharacter, palette: KeyboardPalette) -> some View {
+        let locked = !BuddyGate.allows(c)
+        let selected = current == c
+        return VStack(spacing: 6) {
+            Button { tap(c, locked: locked) } label: {
+                BuddyPreview(character: c, palette: palette, play: plays[c, default: 0])
+                    .overlay(Color.clear.contentShape(Rectangle()))
+                    .frame(height: 96)
+                    .clipShape(RoundedRectangle(cornerRadius: 10))
+                    .overlay(RoundedRectangle(cornerRadius: 10)
+                        .stroke(selected ? Color.accentColor : Color.secondary.opacity(0.3), lineWidth: selected ? 3 : 1))
+                    .overlay(alignment: .topTrailing) {
+                        if selected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundStyle(.white, Color.accentColor).font(.body).padding(4)
+                        }
+                    }
+                    .opacity(locked ? 0.5 : 1)
+            }
+            .buttonStyle(.borderless)
+            .accessibilityLabel(c.title + (selected ? L(", đang chọn") : "") + (locked ? " · Plus" : ""))
+            .accessibilityAddTraits(selected ? .isSelected : [])
+            HStack(spacing: 4) {
+                Text(c.title).font(.footnote).lineLimit(1)
+                if locked { plusBadge }
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func tap(_ c: BuddyCharacter, locked: Bool) {
+        if locked { showPlus = true; return }
+        raw = c.rawValue
+        plays[c, default: 0] += 1
+    }
+
+    private var plusBadge: some View {
+        Text("Plus").font(.caption2.weight(.bold))
+            .padding(.horizontal, 5).padding(.vertical, 1)
+            .background(Capsule().fill(Color.orange.opacity(0.85)))
+            .foregroundStyle(.white)
+    }
+}
+
+/// Ô xem thử: nền theme + BuddyView thật (cả người, to hơn trên bàn phím).
+struct BuddyPreview: UIViewRepresentable {
+    let character: BuddyCharacter
+    let palette: KeyboardPalette
+    let play: Int
+
+    func makeUIView(context: Context) -> BuddyPreviewView { BuddyPreviewView() }
+    func updateUIView(_ v: BuddyPreviewView, context: Context) {
+        v.update(character: character, palette: palette, play: play)
+    }
+}
+
+final class BuddyPreviewView: UIView {
+    private var buddy: BuddyView?
+    private let off = UILabel()
+    private var lastPlay = -1
+    private var demo: Timer?
+
+    override init(frame: CGRect) {
+        super.init(frame: frame)
+        clipsToBounds = true
+        isUserInteractionEnabled = false
+        off.text = "—"
+        off.textAlignment = .center
+        off.font = .systemFont(ofSize: 28, weight: .light)
+        addSubview(off)
+    }
+    required init?(coder: NSCoder) { fatalError() }
+    deinit { demo?.invalidate() }
+
+    func update(character: BuddyCharacter, palette: KeyboardPalette, play: Int) {
+        backgroundColor = palette.background?.ui ?? (palette.isDark ? UIColor(white: 0.16, alpha: 1)
+                                                                    : UIColor(red: 0.82, green: 0.84, blue: 0.87, alpha: 1))
+        off.textColor = palette.barInk.ui.withAlphaComponent(0.5)
+        off.isHidden = character != .off
+        if character == .off { buddy?.removeFromSuperview(); buddy = nil; return }
+        if buddy?.character != character {
+            buddy?.removeFromSuperview()
+            let b = BuddyView(character: character, dark: palette.isDark, lowPower: false, framing: .full)
+            b.maxFigureHeight = 88
+            addSubview(b)
+            buddy = b
+            setNeedsLayout()
+        }
+        buddy?.setDark(palette.isDark)
+        if play != lastPlay { lastPlay = play; startDemo() }
+    }
+
+    /// Một tràng "gõ" ~2,6 s nhanh dần (lên tới bậc cao nhất) rồi thôi ⇒ đứng, sau 3 s ngủ.
+    private func startDemo() {
+        demo?.invalidate()
+        var n = 0
+        let t = Timer(timeInterval: 0.11, repeats: true) { [weak self] t in
+            n += 1
+            self?.buddy?.keyPressed()
+            if n >= 24 { t.invalidate() }
+        }
+        RunLoop.main.add(t, forMode: .common)
+        demo = t
+    }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        off.frame = bounds
+        buddy?.frame = bounds.insetBy(dx: 4, dy: 4)
+    }
+}

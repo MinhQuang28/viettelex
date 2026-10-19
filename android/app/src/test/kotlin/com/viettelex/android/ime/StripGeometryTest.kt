@@ -127,4 +127,26 @@ class StripGeometryTest {
         assertEquals((w - 2 * zone - StripGeometry.EMOJI_W) / 3f, r[0] - l[0], 0.001f)
         assertEquals(0f, StripGeometry.rightExtraW(StripGeometry.CLIP_W, false, true), 0.001f)
     }
+
+    /**
+     * "Bạn đồng hành": ô nhân vật sát trái ⌄, không bao giờ chồng ô gợi ý / 😊 / 📋 / ⌄, cao đúng strip (không lấn
+     * hàng phím) — điện thoại dọc, ngang, máy tính bảng; có / không 😊 📋.
+     */
+    @Test fun buddySlotNeverOverlapsChipsOrKeys() {
+        val zone = KeyLayout.STRIP_ZONE_W
+        for (w in listOf(320f, 360f, 393f, 412f, 480f, 640f, 800f, 915f, 1280f)) for (emoji in listOf(false, true)) for (clip in listOf(false, true)) {
+            val bl = StripGeometry.buddyLeft(w, zone)
+            val br = bl + StripGeometry.BUDDY_W
+            assertEquals(w - zone, br, 0.001f)                       // sát ⌄, không đè ⌄
+            val barR = StripGeometry.barRight(w, zone, StripGeometry.CLIP_W, clip, true, emoji, StripGeometry.BUDDY_W)
+            val extras = StripGeometry.rightExtraW(StripGeometry.CLIP_W, clip, true, emoji, StripGeometry.BUDDY_W)
+            assertTrue("$w: ô gợi ý kết thúc trước 😊/📋/nhân vật", barR <= bl - (extras - StripGeometry.BUDDY_W) + 0.001f)
+            val l = FloatArray(5); val r = FloatArray(5)
+            StripGeometry.cells(StripGeometry.barLeft(zone, StripGeometry.TOOL_W, true), barR, 3, l, r)
+            for (i in 0 until 3) assertTrue("$w: ô $i chồng nhân vật", r[i] <= bl + 0.001f)
+            // Không có nhân vật ⇒ y như cũ.
+            assertEquals(StripGeometry.barRight(w, zone, StripGeometry.CLIP_W, clip, true, emoji),
+                barR + StripGeometry.BUDDY_W, 0.001f)
+        }
+    }
 }

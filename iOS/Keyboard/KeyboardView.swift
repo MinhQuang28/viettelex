@@ -358,6 +358,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         spaceBar = nil; spaceLogo = nil; spaceCode = nil; indentedRow = nil
         overlayPanel?.removeFromSuperview(); overlayPanel = nil
         keyEffects?.halt(); keyEffects = nil; fxRect = nil
+        buddy?.halt(); buddy = nil
         rainbow?.halt(); rainbow = nil
         wallpaperView.image = nil
         wallpaperLoadedFor = .zero
@@ -620,6 +621,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         burgerZone.isHidden = !open || zone == .none
         chevronZone.isHidden = !open
         layoutClipboardExtras(stripOpen: open)
+        layoutBuddy(stripOpen: open)
         layoutEmojiBarButton()
         guard open, bounds.width > 0 else { stripZonesKey = nil; return }
         let strip = max(rowsTopConstraint?.constant ?? openStripNow, openStripNow)
@@ -1254,7 +1256,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                 guard let b else { return }
                 let s = b.downPayload ?? b.payload
                 b.downPayload = nil
-                if let s { self?.onSuggestion?(s) }
+                if let s { self?.onSuggestion?(s); self?.buddy?.cheer() }
             }, for: .touchUpInside)
             b.addAction(UIAction { [weak b] _ in b?.downPayload = nil }, for: [.touchCancel, .touchUpOutside])
         }
@@ -1572,7 +1574,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     static let emojiZoneWidth: CGFloat = 40
     /// Bề ngang chừa bên phải bar (trước ⌄): 📋 (lịch sử clipboard) + 😊 (Thanh trên).
     private var barRightExtras: CGFloat {
-        (clipboardButtonVisible ? Self.clipZoneWidth : 0) + (emojiInBar ? Self.emojiZoneWidth : 0)
+        (clipboardButtonVisible ? Self.clipZoneWidth : 0) + (emojiInBar ? Self.emojiZoneWidth : 0) + buddyZone
     }
     private var emojiZoneMade = false
     private lazy var emojiZone: UIButton = {
@@ -1591,9 +1593,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }()
     /// Khung nút 😊 trên thanh (nil = không hiện) — THUẦN để test: bar mở ⇒ ô cao trọn strip bên
     /// trái 📋 (hoặc ⌄); thu gọn ⇒ nút nổi 18pt bên trái ⌄ nổi (48pt).
-    static func emojiBarFrame(width: CGFloat, strip: CGFloat, collapsed: Bool, clip: Bool) -> CGRect {
+    static func emojiBarFrame(width: CGFloat, strip: CGFloat, collapsed: Bool, clip: Bool, buddy: CGFloat = 0) -> CGRect {
         if collapsed { return CGRect(x: width - 48 - 44, y: 0, width: 44, height: 18) }
-        let x = width - stripZoneWidth - (clip ? clipZoneWidth : 0) - emojiZoneWidth
+        let x = width - stripZoneWidth - buddy - (clip ? clipZoneWidth : 0) - emojiZoneWidth
         return CGRect(x: x, y: 0, width: emojiZoneWidth, height: strip)
     }
     private func layoutEmojiBarButton() {
@@ -1602,7 +1604,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         guard bounds.width > 0 else { return }
         let strip = max(rowsTopConstraint?.constant ?? openStripNow, openStripNow)
         let f = Self.emojiBarFrame(width: bounds.width, strip: strip, collapsed: barCollapsed,
-                                   clip: clipboardButtonVisible)
+                                   clip: clipboardButtonVisible, buddy: buddyZone)
         emojiZone.isHidden = false
         defer { bringSubviewToFront(emojiZone) }
         // layoutSubviews chạy cả khi gõ (shift/balloon): trạng thái không đổi ⇒ khỏi dựng lại ảnh.
@@ -1635,7 +1637,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if showClip, bounds.width > 0 {
             let strip = max(rowsTopConstraint?.constant ?? openStripNow, openStripNow)
             let w = Self.stripZoneWidth, cw = Self.clipZoneWidth
-            clipZone.frame = CGRect(x: bounds.width - w - cw, y: 0, width: cw, height: strip)
+            clipZone.frame = CGRect(x: bounds.width - w - buddyZone - cw, y: 0, width: cw, height: strip)
             clipZone.setImage(UIImage(systemName: "doc.on.clipboard",
                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .regular)), for: .normal)
             clipZone.tintColor = palette.barInk.ui.withAlphaComponent(overlayPanel == nil ? 0.45 : 0.9)
@@ -1814,6 +1816,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // Hiệu ứng theo màu nhấn MỚI (đổi sáng/tối giữa chừng).
         keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui,
                                       keyFill: palette.keyFill.ui, dark: palette.isDark) }
+        buddy?.setDark(palette.isDark)
         applyBackdrop()
     }
 
@@ -2049,6 +2052,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         resolvePalette()
         configureKeyEffects()
         configureRainbow()
+        configureBuddy()
         // Chiều cao hàng phím ±10pt (Settings → Giao diện) — đọc mỗi lần hiện. Bản cũ (có công
         // tắc "Kích thước như bàn phím iPhone") chưa được app chuyển đổi ⇒ tính trong bộ nhớ,
         // không ghi (KeyGeometry.RowAdjust.effectiveAdjust).
@@ -4629,7 +4633,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                 let held = CACurrentMediaTime() - self.backspaceHoldStart
                 if held > 3.0, self.plane != .emojiSearch, let deleteWord = self.onDeleteWord {
                     self.wordDeleteTick += 1
-                    if self.wordDeleteTick % 4 == 1 { deleteWord() }
+                    if self.wordDeleteTick % 4 == 1 { deleteWord(); self.buddy?.deletePressed() }
                     return
                 }
                 self.tapped(.backspace)
@@ -5967,6 +5971,57 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         onKey(key)
         if let fx, let o = keyEffects { o.emit(key: fx) }
         rainbow?.poke()                          // Gaming RGB: theme khác ⇒ nil, chỉ đọc một optional
+        if let b = buddy {                       // Bạn đồng hành: tắt ⇒ nil, chỉ đọc một optional
+            if case .backspace = key { b.deletePressed() } else { b.keyPressed() }
+        }
+    }
+
+    // MARK: Bạn đồng hành (KeyboardBuddy*.swift) — Tắt / chưa Plus ⇒ nil: không view, không layer, 0 chi phí.
+    private(set) var buddy: BuddyView?
+    /// Ô nhân vật ngay TRÁI ⌄ (thanh gợi ý co lại đúng bấy nhiêu, 📋 / 😊 dời trái) — không đè chip gợi ý.
+    static let buddyZoneWidth: CGFloat = 34
+    private var buddyZone: CGFloat { buddy == nil ? 0 : Self.buddyZoneWidth }
+
+    /// Khung ô nhân vật khi bar mở — THUẦN để test: cao trọn strip (không lấn hàng phím), sát trái ⌄.
+    static func buddyFrame(width: CGFloat, strip: CGFloat) -> CGRect {
+        CGRect(x: width - stripZoneWidth - buddyZoneWidth, y: 0, width: buddyZoneWidth, height: strip)
+    }
+
+    /// Lúc hiện / đổi cài đặt: gắn hoặc gỡ nhân vật (cài đặt + Plus), nguồn điện thấp ⇒ chỉ dáng tĩnh.
+    private func configureBuddy() {
+        let c = BuddyPolicy.current(UserDefaultsProvider.shared)
+        let low = ProcessInfo.processInfo.isLowPowerModeEnabled
+        if c == .off {
+            buddy?.halt(); buddy?.removeFromSuperview(); buddy = nil
+            return
+        }
+        // Trang phục mùa lễ: theme lễ đang dùng, không thì theo ngày (một lần lúc hiện, không mỗi phím).
+        let today = Calendar(identifier: .gregorian).dateComponents([.year, .month, .day], from: Date())
+        let season = BuddySeason.resolve(themeID: themeSettings.effectiveTheme.rawValue,
+                                         year: today.year ?? 0, month: today.month ?? 0, day: today.day ?? 0)
+        if let b = buddy, b.character == c, b.season == season {
+            b.lowPower = low
+            b.setDark(palette.isDark)
+            return
+        }
+        buddy?.halt(); buddy?.removeFromSuperview()
+        let b = BuddyView(character: c, dark: palette.isDark, lowPower: low, season: season)
+        addSubview(b)
+        buddy = b
+        setNeedsLayout()
+    }
+
+    private func layoutBuddy(stripOpen: Bool) {
+        guard let b = buddy else { return }
+        let show = stripOpen && bounds.width > 0
+        b.isHidden = !show
+        guard show else { return }
+        // Cao = strip thật (rowsContainer bắt đầu ngay dưới) ⇒ nhân vật (cắt theo ô) không bao giờ đè phím.
+        let strip = min(max(rowsTopConstraint?.constant ?? openStripNow, openStripNow),
+                        rowsContainer.frame.height > 0 ? rowsContainer.frame.minY : .greatestFiniteMagnitude)
+        let f = Self.buddyFrame(width: bounds.width, strip: strip)
+        if b.frame != f { b.frame = f }
+        bringSubviewToFront(b)
     }
 
     // MARK: Viền phím cầu vồng (RainbowBorder.swift) — chỉ theme có "borderFx":"rainbow"; khác ⇒ nil (0 chi phí).

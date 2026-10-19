@@ -242,6 +242,9 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     /** Trang con "Hiệu ứng khi bấm phím" (Plus) đang mở. */
     var pickingEffect by remember { mutableStateOf(false) }
     val keyEffectRaw by rememberStringPref(Keys.KEY_EFFECT, com.viettelex.keyboard.KeyEffect.DEFAULT.id)
+    /** Trang con "Bạn đồng hành" (Plus) đang mở. */
+    var pickingBuddy by remember { mutableStateOf(false) }
+    val buddyRaw by rememberStringPref(Keys.KEYBOARD_BUDDY, com.viettelex.keyboard.BuddyCharacter.DEFAULT.id)
     // Ảnh đưa vào trình chỉnh (mới chọn: chưa ghi gì — Huỷ thì ảnh nền cũ còn nguyên).
     var editor by remember { mutableStateOf<EditorInput?>(null) }
     fun update(n: ThemeSettings) { s = n; saveThemeSettings(ctx, n) }
@@ -295,6 +298,12 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
         return
     }
 
+    if (pickingBuddy) {
+        BuddyPage(s.styledCurrent(s.basePalette(dark) ?: previewPalette(KeyboardTheme.SYSTEM, dark), dark),
+            onOpenPlus = onOpenPlus, onBack = { pickingBuddy = false })
+        return
+    }
+
     SubPageHeader(FeaturePage.GiaoDien.title, onBack)
 
     val active = s.wallpaperActive(wall != null)
@@ -331,6 +340,15 @@ fun ThemePage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
             Text(tr("Hiệu ứng khi bấm phím") + if (fxOn) "" else " · Plus", style = VTType.body, color = c.label,
                 modifier = Modifier.weight(1f))
             Text("${(if (fxOn) com.viettelex.keyboard.KeyEffect.of(keyEffectRaw) else com.viettelex.keyboard.KeyEffect.NONE).title} ›",
+                style = VTType.body, color = c.secondary, maxLines = 1)
+        }
+        // "Bạn đồng hành" (Plus) — mục riêng, mặc định Tắt.
+        RowDivider()
+        VTRow(onClick = { pickingBuddy = true }) {
+            val on = com.viettelex.keyboard.BuddyGate.allows
+            Text(tr("Bạn đồng hành") + if (on) "" else " · Plus", style = VTType.body, color = c.label,
+                modifier = Modifier.weight(1f))
+            Text("${(if (on) com.viettelex.keyboard.BuddyCharacter.of(buddyRaw) else com.viettelex.keyboard.BuddyCharacter.OFF).title} ›",
                 style = VTType.body, color = c.secondary, maxLines = 1)
         }
     }

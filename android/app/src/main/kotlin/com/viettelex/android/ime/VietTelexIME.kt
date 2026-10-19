@@ -343,7 +343,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         val fx = if (setting == com.viettelex.keyboard.KeyEffect.NONE) setting else com.viettelex.keyboard.KeyEffectPolicy.active(
             setting, com.viettelex.keyboard.KeyEffectGate.allows(setting),
             powerSave = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true)
-        session.trackBoundaryWord = fx == com.viettelex.keyboard.KeyEffect.EMOJIWORD
+        session.trackBoundaryWord = fx == com.viettelex.keyboard.KeyEffect.EMOJIWORD || root?.buddy != null
         if (fx == com.viettelex.keyboard.KeyEffect.NONE) {
             r.effects?.halt()
             r.effects = null; kb.effects = null
@@ -355,8 +355,42 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         kb.effects = v
     }
 
+    /**
+     * "Bạn đồng hành" (Plus): nhân vật + cổng Plus + Trình tiết kiệm pin + mùa lễ (theme lễ / ngày) — đọc MỘT lần
+     * mỗi lần hiện. Tắt ⇒ gỡ view, strip không chừa ô (0 chi phí mỗi phím).
+     */
+    private fun applyBuddy(setting: com.viettelex.keyboard.BuddyCharacter, th: ImeTheme, st: StripView) {
+        val r = root ?: return
+        val c = com.viettelex.keyboard.BuddyPolicy.active(setting, com.viettelex.keyboard.BuddyGate.allows(setting))
+        if (c == com.viettelex.keyboard.BuddyCharacter.OFF) {
+            r.buddy = null; st.buddyDp = 0f
+            session.trackBoundaryWord = r.effects?.effect == com.viettelex.keyboard.KeyEffect.EMOJIWORD
+            return
+        }
+        val low = (getSystemService(POWER_SERVICE) as? android.os.PowerManager)?.isPowerSaveMode == true
+        val cal = java.util.Calendar.getInstance()
+        val season = com.viettelex.keyboard.BuddySeason.resolve(th.settings.effectiveTheme.id,
+            cal.get(java.util.Calendar.YEAR), cal.get(java.util.Calendar.MONTH) + 1, cal.get(java.util.Calendar.DAY_OF_MONTH))
+        val old = r.buddy
+        if (old != null && old.character == c && old.season == season) {
+            old.lowPower = low; old.setDark(th.dark)
+        } else {
+            r.buddy = BuddyView(this, c, th.density, th.dark, low, season)
+        }
+        st.buddyDp = StripGeometry.BUDDY_W
+        session.trackBoundaryWord = true
+    }
+
+    /** Bạn đồng hành: phản ứng theo từ vừa chốt (tra O(1), chỉ ở ranh giới). */
+    private fun buddyBoundary() {
+        val b = root?.buddy ?: return
+        val w = session.boundaryWord ?: return
+        b.wordCommitted(w, session.boundaryPrev, session.boundaryPrev2)
+    }
+
     /** "Emoji theo chữ": phím ranh giới vừa chốt từ ⇒ tra bảng O(1) (chỉ khi chọn kiểu này). */
     private fun fxBoundaryEmoji() {
+        buddyBoundary()
         val fx = root?.effects ?: return
         if (fx.effect != com.viettelex.keyboard.KeyEffect.EMOJIWORD) return
         val w = session.boundaryWord ?: return
@@ -451,6 +485,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         kb.keyPreview = settings.keyPreview
         kb.keyPressHighlight = settings.keyPressHighlight
         applyKeyEffect(settings.keyEffect, th, kb)
+        applyBuddy(settings.buddy, th, st)
         kb.configureSpaceFlick(settings.spaceSwipeLanguage, session.language)
         if (session.language == com.viettelex.keyboard.KeyboardLanguage.EN) warmEnglish()
         // Plus + công tắc "Công cụ văn bản" (mặc định bật) + không phải ô mật khẩu.
@@ -552,6 +587,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         strip?.onHidden()
         root?.balloon?.hide()
         root?.effects?.halt()                  // Matrix…: ẩn bàn phím ⇒ dừng hẳn, không còn khung hình
+        root?.buddy?.halt()                    // Bạn đồng hành: không hẹn giờ khi ẩn
         root?.rainbow?.halt()                  // Gaming RGB: đứng yên ở cầu vồng tĩnh
         session.finishInput()
     }
@@ -810,6 +846,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         if (!proxy.begin()) return
         val out = try { session.handle(key, proxy, touch) } finally { proxy.end() }
         if (session.trackBoundaryWord) fxBoundaryEmoji()
+        root?.buddy?.let { if (key == Key.Backspace) it.deletePressed() else it.keyPressed() }
         if (key is Key.MoveCursor) {
             if (key.vertical) proxy.moveCursorVertical(key.delta) else proxy.moveCursor(key.delta)
         }
@@ -877,6 +914,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
     }
 
     override fun onDeleteWord() {
+        root?.buddy?.deletePressed()
         clearSwipeUndo()
         if (!proxy.begin()) return
         try { session.deleteWordBackward(proxy) } finally { proxy.end() }
@@ -1271,6 +1309,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         if (!proxy.begin()) return
         syncShift()
         try { session.acceptSuggestion(item, proxy) } finally { proxy.end() }
+        root?.buddy?.cheer()
         resetIfEditFailed()
         // Chọn gợi ý = gõ một từ: Shift một-lần nhả (session đã hạ keyboardShift), Caps giữ.
         if (session.keyboardShift == SuggestionCase.Shift.OFF) keyboard?.setAutoShift(false)

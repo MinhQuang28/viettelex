@@ -333,6 +333,13 @@ enum L10n {
         "iOS: tiếng bấm bàn phím của hệ thống — theo Cài đặt → Âm thanh & Cảm ứng → Phản hồi bàn phím, không cần Toàn quyền Truy cập. Các kiểu khác là tiếng riêng của VietTelex (cần Toàn quyền Truy cập).": "System click: the iOS keyboard click — follows Settings → Sounds & Haptics → Keyboard Feedback and doesn't need Full Access. The other styles are VietTelex's own sounds (Full Access required).",
         // Hiệu ứng khi bấm phím (KeyEffects.swift)
         "Hiệu ứng khi bấm phím": "Key press effect",
+        // Bạn đồng hành (KeyboardBuddy.swift)
+        "Bạn đồng hành": "Keyboard buddy",
+        "Cô gái": "Girl",
+        "Chàng trai": "Boy",
+        "Mèo": "Cat",
+        "Gà con": "Chick",
+        "Nhân vật nhỏ ở góc phải thanh gợi ý: gõ thì nhảy — gõ càng nhanh nhảy càng sung — ngừng gõ thì cuộn tròn ngủ. Chỉ chuyển động khi đang gõ; Chế độ nguồn điện thấp chỉ hiện dáng đứng yên.": "A little character in the right corner of the suggestion bar: it dances while you type — the faster you type, the livelier it gets — and curls up to sleep when you stop. It only moves while you type; in Low Power Mode it just stands still.",
         "Không": "None",
         "Trái tim": "Hearts",
         "Gợn sóng": "Ripple",

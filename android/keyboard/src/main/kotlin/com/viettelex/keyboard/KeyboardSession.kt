@@ -276,6 +276,8 @@ class KeyboardSession(
     /** Từ vừa chốt ở phím ranh giới gần nhất (null = phím vừa rồi không phải ranh giới có từ). */
     var boundaryWord: String? = null; private set
     var boundaryPrev: String? = null; private set
+    /** Từ trước nữa (bộ ba tục — Bạn đồng hành). */
+    var boundaryPrev2: String? = null; private set
     private var learnEnabled = true
     /** Ẩn danh (thủ công HOẶC IME_FLAG_NO_PERSONALIZED_LEARNING): không học, không lưu clipboard. */
     var incognito = false; private set
@@ -699,6 +701,7 @@ class KeyboardSession(
         val typedWait = typedPending
         val composingBefore = bridge.isComposing
         val prevBefore = lastWord
+        val prev2Before = lastWord2
         var typedCommit: Pair<String, String>? = null      // (từ gõ đã chốt, ranh giới)
         clearSwipe()
         // Từ tiếng Anh vuốt ra đang mở: phím chữ/ranh giới chốt nó (học), phím chữ thêm dấu
@@ -725,7 +728,7 @@ class KeyboardSession(
                     if (typedWait != null && bridge.isComposing) typedPending = typedWait
                 } else {
                     val committed = bridge.boundary(key.text, proxy, expand = expand)
-                    if (trackBoundaryWord) { boundaryWord = committed; boundaryPrev = prevBefore }
+                    if (trackBoundaryWord) { boundaryWord = committed; boundaryPrev = prevBefore; boundaryPrev2 = prev2Before }
                     commitAndLearn(committed)
                     lastWord = null; lastWord2 = null
                     clearUndo()
@@ -741,7 +744,7 @@ class KeyboardSession(
                     restoreUndoRaw = committed; restoreUndoComposed = composedBefore
                 } else { restoreUndoRaw = null; restoreUndoComposed = null }
                 undoOfferActive = false
-                if (trackBoundaryWord) { boundaryWord = committed; boundaryPrev = prevBefore }
+                if (trackBoundaryWord) { boundaryWord = committed; boundaryPrev = prevBefore; boundaryPrev2 = prev2Before }
                 if (literal == null) commitAndLearn(committed)
                 if (typedArm != null && committed == typedArm.word)
                     typedPending = TypedPending(SwipeRevise.Typed(typedArm.word, typedArm.scored, typedArm.case, prevBefore),

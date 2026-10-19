@@ -373,6 +373,7 @@ class ImeRootView(
         // ⇒ trùm từ đỉnh cửa sổ tới đáy vùng phím: preview / popup hàng trên nổi ra ngoài khung.
         balloon.layout(px, 0, px + pw, py + s + keyH)
         effects?.layout(px, 0, px + pw, py + s + keyH)
+        layoutBuddy(px, py, pw, s)
         if (wallpaperFile != null && (wallW != pw || wallH != ph)) loadWallpaperFor(pw, ph) else updateWallMatrix()
         loadThemeBgFor(pw, ph)
     }
@@ -393,6 +394,30 @@ class ImeRootView(
             }
         }
     private var effectsBand = com.viettelex.keyboard.KeyEffectBand.ABOVE_KEYS
+
+    /**
+     * "Bạn đồng hành" ([BuddyView], Plus) — ô ngay trái ⌄ trong strip (StripView chừa [StripView.buddyDp]), cao
+     * trọn strip (không lấn phím). null = tắt (mặc định: không view, 0 chi phí). IME gắn/gỡ mỗi lần hiện.
+     */
+    var buddy: BuddyView? = null
+        set(v) {
+            if (field === v) return
+            field?.let { it.halt(); removeView(it) }
+            field = v
+            if (v != null) addView(v, indexOfChild(strip) + 1)
+            strip.onBuddySlot = if (v == null) null else ({ v.shownInSlot = strip.buddySlotShown() })
+            requestLayout()
+        }
+
+    /** Khung ô nhân vật (px, gốc = khung bàn phím): sát trái zone ⌄, cao = strip (đáy strip = đỉnh hàng phím). */
+    private fun layoutBuddy(px: Int, py: Int, pw: Int, s: Int) {
+        val b = buddy ?: return
+        val r = px + pw - Math.round(theme.dp(KeyLayout.STRIP_ZONE_W))
+        val l = r - Math.round(theme.dp(StripGeometry.BUDDY_W))
+        b.measure(MeasureSpec.makeMeasureSpec(r - l, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(s, MeasureSpec.EXACTLY))
+        b.layout(l, py, r, py + s)
+        b.shownInSlot = strip.buddySlotShown() && s > 0
+    }
 
     /** Bảng phủ đúng vùng phím (lịch sử clipboard); null = không có. Thêm lười khi mở lần đầu. */
     var overlay: android.view.View? = null
@@ -459,6 +484,7 @@ class ImeRootView(
         overlay?.layout(0, s, w, s + keyH)
         balloon.layout(0, 0, w, s + keyH)
         effects?.layout(0, 0, w, s + keyH)
+        layoutBuddy(0, 0, w, s)
     }
 
     private var insetsKnown = false
