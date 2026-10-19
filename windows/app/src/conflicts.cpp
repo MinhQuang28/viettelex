@@ -7,7 +7,10 @@
 
 #include <cwchar>
 
+#include "app.h"
 #include "foreground.h"
+#include "hotkey.h"
+#include "input_switch.h"
 #include "registration.h"
 #include "strings.h"
 #include "tip_control.h"
@@ -114,12 +117,75 @@ void findMicrosoftKeyboards(std::vector<FoundConflict>& out) {
     if (SUCCEEDED(init)) CoUninitialize();
 }
 
+constexpr wchar_t kToggleKey[] = L"Keyboard Layout\\Toggle";
+
+bool readToggleValue(const wchar_t* name, std::string& out) {
+    wchar_t buf[16] = {};
+    DWORD sz = sizeof buf;
+    if (RegGetValueW(HKEY_CURRENT_USER, kToggleKey, name, RRF_RT_REG_SZ, nullptr, buf, &sz) != ERROR_SUCCESS)
+        return false;
+    out = narrowAscii(buf);
+    return true;
+}
+
+WinToggles readWindowsToggles() {
+    std::string lang, legacy, layout;
+    const bool hasLang = readToggleValue(L"Language Hotkey", lang);
+    const bool hasLegacy = readToggleValue(L"Hotkey", legacy);
+    const bool hasLayout = readToggleValue(L"Layout Hotkey", layout);
+    return readWinToggles(hasLang, lang, hasLegacy, legacy, hasLayout, layout);
+}
+
+// Windows' own Ctrl+Shift (input_switch.h winHotkeyClash): one registry read, only when
+// the warning is built (welcome window / Kiểu gõ page).
+void findWindowsHotkey(std::vector<FoundConflict>& out) {
+    bool otherVi = false;
+    for (const FoundConflict& c : out) otherVi = otherVi || c.kind == ConflictKind::MicrosoftVietnamese;
+    const WinToggles w = readWindowsToggles();
+    const WinHotkeyClash clash = winHotkeyClash(parseSwitchHotkey(g_settings.switchHotkey), w, otherVi);
+    if (appLogging())
+        appLog("app", std::string("Windows input hotkeys: language ") + winToggleValue(w.language) + ", layout " +
+                          winToggleValue(w.layout) +
+                          (clash == WinHotkeyClash::None ? "" : " -> clashes with Ctrl+Shift"));
+    if (clash == WinHotkeyClash::None) return;
+    FoundConflict c;
+    c.kind = ConflictKind::WindowsHotkey;
+    c.name = tr(S::WinHotkeyName);
+    out.push_back(c);
+}
+
+// Move Windows' hotkeys off Ctrl+Shift (winToggleFix), then SPI_SETLANGTOGGLE: Windows
+// re-reads HKCU\Keyboard Layout\Toggle (documented for exactly this). User's click only.
+bool fixWindowsHotkey() {
+    const WinToggles before = readWindowsToggles();
+    const WinToggleFix f = winToggleFix(before);
+    HKEY k;
+    if (RegCreateKeyExW(HKEY_CURRENT_USER, kToggleKey, 0, nullptr, 0, KEY_SET_VALUE, nullptr, &k, nullptr) !=
+        ERROR_SUCCESS)
+        return false;
+    auto set = [k](const wchar_t* name, WinToggle t) {
+        const wchar_t v[2] = {static_cast<wchar_t>(winToggleValue(t)[0]), 0};
+        return RegSetValueExW(k, name, 0, REG_SZ, reinterpret_cast<const BYTE*>(v), sizeof v) == ERROR_SUCCESS;
+    };
+    bool ok = true;
+    if (f.changeLanguage) ok = set(L"Language Hotkey", f.language) && set(L"Hotkey", f.language) && ok;
+    if (f.changeLayout) ok = set(L"Layout Hotkey", f.layout) && ok;
+    RegCloseKey(k);
+    SystemParametersInfoW(SPI_SETLANGTOGGLE, 0, nullptr, SPIF_SENDCHANGE);
+    const WinToggles after = readWindowsToggles();
+    ok = ok && after.language != WinToggle::CtrlShift && after.layout != WinToggle::CtrlShift;
+    appLog("app", std::string("Windows input hotkeys -> language ") + winToggleValue(after.language) + ", layout " +
+                      winToggleValue(after.layout) + (ok ? "" : " (failed)"));
+    return ok;
+}
+
 }  // namespace
 
 std::vector<FoundConflict> detectConflicts() {
     std::vector<FoundConflict> v;
     findProcesses(v);
     findMicrosoftKeyboards(v);
+    findWindowsHotkey(v);  // after the keyboards: the layout clash needs them
     if (appLogging()) appLog("app", "other Vietnamese input methods found: " + std::to_string(v.size()));
     return v;
 }
@@ -133,6 +199,15 @@ std::wstring conflictNames(const std::vector<FoundConflict>& list) {
     return s;
 }
 
+std::wstring conflictDescription(const std::vector<FoundConflict>& list) {
+    bool other = false, windows = false;
+    for (const FoundConflict& c : list) (c.kind == ConflictKind::WindowsHotkey ? windows : other) = true;
+    std::wstring s;
+    if (other || !windows) s = tr(S::ConflictDesc);
+    if (windows) s += (s.empty() ? L"" : L" ") + std::wstring(tr(S::WinHotkeyDesc));
+    return s;
+}
+
 void resolveConflicts(HWND owner, const std::vector<FoundConflict>& list) {
     if (list.empty()) {
         MessageBoxW(owner, tr(S::ConflictNone), tr(S::AppName), MB_OK | MB_ICONINFORMATION);
@@ -143,7 +218,10 @@ void resolveConflicts(HWND owner, const std::vector<FoundConflict>& list) {
     std::vector<int> ids;
     for (size_t i = 0; i < list.size(); ++i) {
         const FoundConflict& c = list[i];
-        if (isThirdPartyIme(c.kind)) {
+        if (c.kind == ConflictKind::WindowsHotkey) {
+            labels.push_back(std::wstring(tr(S::WinHotkeyFix)) + L"\n" + tr(S::WinHotkeyFixNote));
+            ids.push_back(500);
+        } else if (isThirdPartyIme(c.kind)) {
             if (!c.path.empty()) {
                 labels.push_back(fmt(tr(S::ConflictOpenLocation), c.name));
                 ids.push_back(100 + static_cast<int>(i));
@@ -159,7 +237,7 @@ void resolveConflicts(HWND owner, const std::vector<FoundConflict>& list) {
     ids.push_back(400);
     std::vector<TASKDIALOG_BUTTON> buttons(labels.size());
     for (size_t i = 0; i < labels.size(); ++i) buttons[i] = {ids[i], labels[i].c_str()};
-    const std::wstring content = std::wstring(tr(S::ConflictDesc)) + L"\n\n" + conflictNames(list);
+    const std::wstring content = conflictDescription(list) + L"\n\n" + conflictNames(list);
     TASKDIALOGCONFIG tc = {};
     tc.cbSize = sizeof tc;
     tc.hwndParent = owner;
@@ -190,6 +268,13 @@ void resolveConflicts(HWND owner, const std::vector<FoundConflict>& list) {
         } else {
             MessageBoxW(owner, tr(S::ConflictRemoveFailed), tr(S::AppName), MB_OK | MB_ICONWARNING);
             ShellExecuteW(owner, L"open", kLanguageSettingsUri, nullptr, nullptr, SW_SHOWNORMAL);
+        }
+    } else if (pressed == 500) {
+        if (fixWindowsHotkey()) {
+            MessageBoxW(owner, tr(S::WinHotkeyFixed), tr(S::AppName), MB_OK | MB_ICONINFORMATION);
+        } else {
+            MessageBoxW(owner, tr(S::WinHotkeyFixFailed), tr(S::AppName), MB_OK | MB_ICONWARNING);
+            ShellExecuteW(owner, L"open", kTypingSettingsUri, nullptr, nullptr, SW_SHOWNORMAL);
         }
     } else if (pressed == 400) {
         ShellExecuteW(owner, L"open", kLanguageSettingsUri, nullptr, nullptr, SW_SHOWNORMAL);

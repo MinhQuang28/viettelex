@@ -604,6 +604,76 @@ TEST(ctrl_shift_from_another_keyboard_activates_viettelex) {
     CHECK(defaultInputAdvice(SwitchHotkey::CtrlShift, 0) == DefaultInputAdvice::None);  // unreadable
     CHECK(defaultInputAdvice(SwitchHotkey::WinSpace, enUS) == DefaultInputAdvice::None);
     CHECK_EQ(defaultLayoutOrTipSpec(0x042A, "{A}", "{B}"), std::string("0x042A:{A}{B}"));
+    // The welcome window pre-ticks the same fix.
+    CHECK(welcomeOffersDefaultInput(SwitchHotkey::CtrlShift, enUS));
+    CHECK(!welcomeOffersDefaultInput(SwitchHotkey::CtrlShift, 0x042A));
+    CHECK(!welcomeOffersDefaultInput(SwitchHotkey::WinSpace, enUS));
+}
+
+// 2026-10 field report (UniKey user): "không chuyển được Việt/Anh dù đã đặt Ctrl+Shift".
+// Windows' own input hotkeys (HKCU\Keyboard Layout\Toggle) on Ctrl+Shift switch the
+// keyboard on the same press as VietTelex's toggle.
+TEST(windows_ctrl_shift_hotkey_clash) {
+    // Parsing: missing / garbage -> the default; "1".."4" as documented.
+    CHECK(parseWinToggle(false, "2", WinToggle::AltShift) == WinToggle::AltShift);
+    CHECK(parseWinToggle(true, "2", WinToggle::AltShift) == WinToggle::CtrlShift);
+    CHECK(parseWinToggle(true, "3", WinToggle::AltShift) == WinToggle::None);
+    CHECK(parseWinToggle(true, "4", WinToggle::AltShift) == WinToggle::Grave);
+    CHECK(parseWinToggle(true, "", WinToggle::CtrlShift) == WinToggle::CtrlShift);
+    CHECK(parseWinToggle(true, "9", WinToggle::CtrlShift) == WinToggle::CtrlShift);
+    CHECK(parseWinToggle(true, "12", WinToggle::CtrlShift) == WinToggle::CtrlShift);
+    for (int i = 1; i <= 4; ++i) {
+        const WinToggle t = static_cast<WinToggle>(i);
+        CHECK(parseWinToggle(true, winToggleValue(t), WinToggle::None) == t);
+    }
+    // Nothing stored: Windows' defaults (languages Left Alt+Shift, layouts Ctrl+Shift).
+    WinToggles w = readWinToggles(false, "", false, "", false, "");
+    CHECK(w.language == WinToggle::AltShift && w.layout == WinToggle::CtrlShift);
+    // "Language Hotkey" wins over the legacy "Hotkey"; the legacy one is used alone.
+    w = readWinToggles(true, "1", true, "2", true, "3");
+    CHECK(w.language == WinToggle::AltShift && w.layout == WinToggle::None);
+    w = readWinToggles(false, "", true, "2", true, "3");
+    CHECK(w.language == WinToggle::CtrlShift);
+
+    // Clash: Ctrl+Shift between languages (the field report).
+    WinToggles lang;
+    lang.language = WinToggle::CtrlShift;
+    lang.layout = WinToggle::None;
+    CHECK(winHotkeyClash(SwitchHotkey::CtrlShift, lang, false) == WinHotkeyClash::LanguageSwitch);
+    CHECK(winHotkeyClash(SwitchHotkey::AltZ, lang, false) == WinHotkeyClash::None);       // not our key
+    CHECK(winHotkeyClash(SwitchHotkey::WinSpace, lang, false) == WinHotkeyClash::None);
+    // Default layout hotkey (Ctrl+Shift): harmless with VietTelex alone in vi-VN...
+    const WinToggles dflt;
+    CHECK(winHotkeyClash(SwitchHotkey::CtrlShift, dflt, false) == WinHotkeyClash::None);
+    // ...but jumps to Microsoft's Vietnamese keyboard when it is in the list too.
+    CHECK(winHotkeyClash(SwitchHotkey::CtrlShift, dflt, true) == WinHotkeyClash::LayoutSwitch);
+
+    // Fix: languages back to Left Alt+Shift, no Ctrl+Shift left anywhere.
+    WinToggleFix f = winToggleFix(lang);
+    CHECK(f.changeLanguage && f.language == WinToggle::AltShift);
+    CHECK(!f.changeLayout);
+    f = winToggleFix(dflt);
+    CHECK(!f.changeLanguage);
+    CHECK(f.changeLayout && f.layout == WinToggle::None);
+    WinToggles grave;  // languages on `, layouts on Ctrl+Shift
+    grave.language = WinToggle::Grave;
+    f = winToggleFix(grave);
+    CHECK(!f.changeLanguage && f.language == WinToggle::Grave);
+    CHECK(f.changeLayout && f.layout == WinToggle::None);
+    WinToggles swapped;  // languages Ctrl+Shift, layouts Alt+Shift: layouts must not collide
+    swapped.language = WinToggle::CtrlShift;
+    swapped.layout = WinToggle::AltShift;
+    f = winToggleFix(swapped);
+    CHECK(f.changeLanguage && f.language == WinToggle::AltShift);
+    CHECK(f.changeLayout && f.layout == WinToggle::None);
+    // After any fix there is no clash left.
+    for (const WinToggles& before : {lang, dflt, grave, swapped}) {
+        const WinToggleFix x = winToggleFix(before);
+        WinToggles after;
+        after.language = x.language;
+        after.layout = x.layout;
+        CHECK(winHotkeyClash(SwitchHotkey::CtrlShift, after, true) == WinHotkeyClash::None);
+    }
 }
 
 // 2026-10 perf audit H1/H2: the default Ctrl+Shift watcher kept WH_MOUSE_LL (and raw

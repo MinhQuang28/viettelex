@@ -21,6 +21,8 @@ struct FoundConflict {
 
 std::vector<FoundConflict> detectConflicts();
 std::wstring conflictNames(const std::vector<FoundConflict>& list);  // "UniKey, Vietnamese Telex"
+// The warning's sentence(s): two IMEs at once, and/or Windows' own Ctrl+Shift.
+std::wstring conflictDescription(const std::vector<FoundConflict>& list);
 // Task dialog: open the other app's folder / how to quit it / remove a Microsoft keyboard
 // from the list (InstallLayoutOrTip ILOT_UNINSTALL, else ms-settings:regionlanguage).
 void resolveConflicts(HWND owner, const std::vector<FoundConflict>& list);

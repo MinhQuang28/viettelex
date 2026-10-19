@@ -58,4 +58,43 @@ std::string defaultLayoutOrTipSpec(unsigned langId, const std::string& clsid, co
     return s + ":" + clsid + profile;
 }
 
+WinToggle parseWinToggle(bool present, const std::string& value, WinToggle dflt) {
+    if (!present || value.size() != 1 || value[0] < '1' || value[0] > '4') return dflt;
+    return static_cast<WinToggle>(value[0] - '0');
+}
+
+const char* winToggleValue(WinToggle t) {
+    switch (t) {
+        case WinToggle::AltShift: return "1";
+        case WinToggle::CtrlShift: return "2";
+        case WinToggle::None: return "3";
+        case WinToggle::Grave: return "4";
+    }
+    return "3";
+}
+
+WinToggles readWinToggles(bool hasLanguage, const std::string& language, bool hasLegacy, const std::string& legacy,
+                          bool hasLayout, const std::string& layout) {
+    WinToggles w;
+    w.language = parseWinToggle(hasLanguage, language, parseWinToggle(hasLegacy, legacy, WinToggle::AltShift));
+    w.layout = parseWinToggle(hasLayout, layout, WinToggle::CtrlShift);
+    return w;
+}
+
+WinHotkeyClash winHotkeyClash(SwitchHotkey ours, const WinToggles& w, bool otherVietnameseKeyboard) {
+    if (ours != SwitchHotkey::CtrlShift) return WinHotkeyClash::None;
+    if (w.language == WinToggle::CtrlShift) return WinHotkeyClash::LanguageSwitch;
+    if (w.layout == WinToggle::CtrlShift && otherVietnameseKeyboard) return WinHotkeyClash::LayoutSwitch;
+    return WinHotkeyClash::None;
+}
+
+WinToggleFix winToggleFix(const WinToggles& w) {
+    WinToggleFix f;
+    f.language = w.language == WinToggle::CtrlShift ? WinToggle::AltShift : w.language;
+    f.changeLanguage = f.language != w.language;
+    f.changeLayout = w.layout == WinToggle::CtrlShift || (w.layout == f.language && w.layout != WinToggle::None);
+    f.layout = f.changeLayout ? WinToggle::None : w.layout;
+    return f;
+}
+
 }  // namespace vtx

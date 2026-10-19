@@ -21,6 +21,10 @@ HICON CreateStateIcon(HINSTANCE module, const std::string& menuIcon, bool vietna
 // Short text ("VI", "EN") as an icon, in `color`, on a transparent background.
 HICON CreateTextIcon(const wchar_t* text, int size, COLORREF color);
 
+// Tray V/E badge (res/icon_ids.h trayBadge): an opaque rounded square in the state colour
+// with a bold white letter. size <= 0: SM_CXSMICON. Caller destroys.
+HICON CreateBadgeIcon(bool vietnamese, int size = 0);
+
 // Copy of `icon` with its alpha multiplied by `opacity` (0..1). Caller destroys both.
 HICON CreateDimmedIcon(HICON icon, int size, float opacity);
 

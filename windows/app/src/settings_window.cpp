@@ -82,6 +82,7 @@ enum Id : int {
     IdComboAddTones,
     IdComboGameHotkey,
     IdComboIndicator,
+    IdComboTrayStyle,
     IdScList = 3000,
     IdScKey,
     IdScValue,
@@ -476,7 +477,7 @@ std::vector<Item> pageItems(int tab) {
             g_conflicts = detectConflicts();
             if (!g_conflicts.empty()) {
                 Item c = buttonItem(S::ConflictTitle, S::ConflictDesc, IdConflicts);
-                c.descText = std::wstring(tr(S::ConflictDesc)) + L" (" + conflictNames(g_conflicts) + L")";
+                c.descText = conflictDescription(g_conflicts) + L" (" + conflictNames(g_conflicts) + L")";
                 v.push_back(c);
             }
             v.push_back(section(S::SecInputStyle));
@@ -513,6 +514,7 @@ std::vector<Item> pageItems(int tab) {
                 v.push_back(picker);
             }
             v.push_back(toggleItem(13));
+            v.push_back(comboItem(S::TrayStyle, S::TrayStyleDesc, IdComboTrayStyle));
             v.push_back(comboItem(S::UiLanguage, S::UiLanguageDesc, IdComboLang));
             break;
         case 1:
@@ -923,6 +925,11 @@ void createControls() {
                         it.hwnd = makeCombo(it.ctlId, labels, 3);
                         break;
                     }
+                    case IdComboTrayStyle: {
+                        const S labels[] = {S::TrayStyleLetter, S::TrayStyleKeyboard};  // TrayStyle order
+                        it.hwnd = makeCombo(it.ctlId, labels, 2);
+                        break;
+                    }
                     case IdComboAddTones: {
                         it.hwnd = makeCtl(L"COMBOBOX", L"", CBS_DROPDOWNLIST | WS_TABSTOP, it.ctlId);
                         for (const HotkeyChoice& c : kAddTonesHotkeys)
@@ -1154,6 +1161,7 @@ void sync() {
             case IdComboAddTones: sel = static_cast<int>(addTonesHotkeyIndex(g_settings.addTonesHotkey)); break;
             case IdComboGameHotkey: sel = static_cast<int>(gameModeHotkeyIndex(g_settings.gameModeHotkey)); break;
             case IdComboIndicator: sel = static_cast<int>(parseSwitchIndicator(g_settings.switchIndicator)); break;
+            case IdComboTrayStyle: sel = static_cast<int>(parseTrayStyle(g_settings.trayIconStyle)); break;
             default: continue;
         }
         SendMessageW(it.hwnd, CB_SETCURSEL, static_cast<WPARAM>(sel), 0);
@@ -1585,6 +1593,12 @@ void onCommand(int id, int code, HWND ctl) {
             if (code == CBN_SELCHANGE && sel() >= 0 && sel() < 3) {
                 g_settings.switchIndicator = switchIndicatorName(static_cast<SwitchIndicator>(sel()));
                 changed();
+            }
+            break;
+        case IdComboTrayStyle:
+            if (code == CBN_SELCHANGE && sel() >= 0 && sel() < 2) {
+                g_settings.trayIconStyle = trayStyleName(static_cast<TrayStyle>(sel()));
+                changed();  // settingsChanged() -> syncTrayIcon() redraws the icon
             }
             break;
         case IdConflicts:

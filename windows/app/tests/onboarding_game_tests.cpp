@@ -121,6 +121,9 @@ TEST(conflict_processes) {
     CHECK(!classifyImeProcess("UniKeyNT.exe", k));  // callers lower-case first
     CHECK(isThirdPartyIme(ConflictKind::UniKey) && !isThirdPartyIme(ConflictKind::MicrosoftVietnamese));
     CHECK(std::string(conflictName(ConflictKind::EVKey)) == "EVKey");
+    // Windows' own Ctrl+Shift is a conflict with a fix of its own, not an app to quit.
+    CHECK(!isThirdPartyIme(ConflictKind::WindowsHotkey));
+    CHECK(std::string(conflictName(ConflictKind::WindowsHotkey)) == "Windows Ctrl+Shift");
 }
 
 TEST(conflict_microsoft_profiles) {

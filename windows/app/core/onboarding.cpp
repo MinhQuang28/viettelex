@@ -76,6 +76,7 @@ const char* conflictName(ConflictKind k) {
         case ConflictKind::VKey: return "VKey";
         case ConflictKind::GoTiengViet: return "GoTiengViet";
         case ConflictKind::MicrosoftVietnamese: return "Microsoft Vietnamese";
+        case ConflictKind::WindowsHotkey: return "Windows Ctrl+Shift";
     }
     return "";
 }

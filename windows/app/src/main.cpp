@@ -74,9 +74,19 @@ bool g_stateVietnamese = true;
 HWINEVENTHOOK g_fgHook = nullptr;
 void CALLBACK fgWinEvent(HWINEVENTHOOK, DWORD, HWND, LONG, LONG, DWORD, DWORD);
 
-HICON trayIcon() { return tip::CreateStateIcon(g_inst, g_settings.menuIcon, g_stateVietnamese); }
+// Default style: the V/E badge (icon_ids.h trayBadge); "keyboard" = the chosen glyph.
+HICON trayIcon() {
+    if (parseTrayStyle(g_settings.trayIconStyle) == TrayStyle::Letter) return tip::CreateBadgeIcon(g_stateVietnamese);
+    return tip::CreateStateIcon(g_inst, g_settings.menuIcon, g_stateVietnamese);
+}
 
 bool g_trayShown = false;
+
+// Tooltip: "VietTelex — bộ gõ tiếng Việt: Tiếng Việt (V)" — the state in words too.
+void setTrayTip(NOTIFYICONDATAW& nid) {
+    const std::wstring tip = std::wstring(tr(S::TrayTip)) + L": " + tr(g_stateVietnamese ? S::TrayStateVi : S::TrayStateEn);
+    lstrcpynW(nid.szTip, tip.c_str(), ARRAYSIZE(nid.szTip));
+}
 
 void addTrayIcon() {
     NOTIFYICONDATAW nid = {};
@@ -86,7 +96,7 @@ void addTrayIcon() {
     nid.uFlags = NIF_ICON | NIF_TIP | NIF_MESSAGE | NIF_SHOWTIP;
     nid.uCallbackMessage = kTrayMsg;
     nid.hIcon = trayIcon();
-    lstrcpynW(nid.szTip, tr(S::TrayTip), ARRAYSIZE(nid.szTip));
+    setTrayTip(nid);
     g_trayShown = Shell_NotifyIconW(NIM_ADD, &nid) != FALSE;
     nid.uVersion = NOTIFYICON_VERSION_4;
     Shell_NotifyIconW(NIM_SETVERSION, &nid);
@@ -102,8 +112,9 @@ void removeTrayIcon() {
     g_trayShown = false;
 }
 
-// The tray icon is OPTIONAL (settings showTrayIcon, default off since 1.0.5): the taskbar
-// input indicator already shows Việt/Anh, and Start menu -> VietTelex opens Settings.
+// The tray icon is OPTIONAL (settings showTrayIcon, default off since 1.0.5; the welcome
+// window pre-ticks it): it is the only lasting Việt/Anh indicator — the taskbar shows the
+// static keyboard icon. Start menu -> VietTelex opens Settings.
 void syncTrayIcon() {
     if (!g_mainWnd) return;
     if (!g_settings.showTrayIcon) {
@@ -125,8 +136,9 @@ void syncTrayIcon() {
     nid.cbSize = sizeof nid;
     nid.hWnd = g_mainWnd;
     nid.uID = kTrayId;
-    nid.uFlags = NIF_ICON;
+    nid.uFlags = NIF_ICON | NIF_TIP | NIF_SHOWTIP;
     nid.hIcon = trayIcon();
+    setTrayTip(nid);
     Shell_NotifyIconW(NIM_MODIFY, &nid);
     if (nid.hIcon) DestroyIcon(nid.hIcon);
 }
