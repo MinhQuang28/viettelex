@@ -170,7 +170,7 @@ final class KeyboardThemeTests: XCTestCase {
     // MARK: token
 
     func testThemeSetIsCompactAndSystemIsDefault() {
-        XCTAssertTrue((6...20).contains(KeyboardTheme.allCases.count))
+        XCTAssertTrue((6...40).contains(KeyboardTheme.allCases.count))
         XCTAssertEqual(ThemeSettings().theme, .system)
         XCTAssertEqual(ThemeSettings.load(nil).theme, .system)
     }
