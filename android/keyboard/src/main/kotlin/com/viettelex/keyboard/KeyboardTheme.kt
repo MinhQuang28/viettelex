@@ -243,6 +243,8 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     XMAS("xmas", "Giáng sinh", true), // l10n-key
     XMAS_SNOW("xmasSnow", "Giáng sinh tuyết", true), // l10n-key
     PIANO("piano", "Piano", true), // l10n-key
+    // Sen Việt (19/10/2026): hồng sen + xanh lá sen, motif hoa sen, âm đàn tranh — id trùng iOS.
+    SEN("sen", "Sen Việt", true), // l10n-key
     // Bộ đủ món 10/2026 (màu + trang trí + hiệu ứng + âm) — id trùng iOS.
     TYPEWRITER("typewriter", "Máy chữ cổ", true), // l10n-key
     RGB("rgb", "Gaming RGB", true), // l10n-key
@@ -307,9 +309,11 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
         const val SNOWFLAKE = "snowflake"
         const val STAR = "star"
         const val NOTES = "notes"
+        const val LOTUS = "lotus"
         const val STARFIELD = "starfield"
         /** Danh sách trắng motif (theme JSON chỉ nhận các id này) — iOS KeyboardDecoration.Motif y hệt. */
-        val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES, STARFIELD)
+        val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES,
+            LOTUS, STARFIELD)
 
         /** Chấm sao nhỏ của motif "starfield": (x, y, bán kính) theo đơn vị motif — iOS starDots y hệt. */
         val STAR_DOTS = arrayOf(doubleArrayOf(-2.6, -0.3, 0.1), doubleArrayOf(-1.4, 0.34, 0.07), doubleArrayOf(1.5, -0.24, 0.08),
@@ -430,6 +434,16 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
                         MotifSub(0.01, 0.3, listOf(doubleArrayOf(0.01, -0.48), doubleArrayOf(0.07, -0.48), doubleArrayOf(0.07, 0.3))),
                         MotifSub(0.07, -0.48, listOf(doubleArrayOf(0.1, -0.3, 0.38, -0.3, 0.3, -0.02),
                             doubleArrayOf(0.3, -0.2, 0.18, -0.26, 0.07, -0.28))))
+                }
+                LOTUS -> {
+                    // Hoa sen (tự vẽ): 5 cánh nhọn toả từ gốc + đài / mặt nước hình thấu kính — y hệt iOS.
+                    val by = 0.28; val up = -Math.PI / 2
+                    fun petal(a: Double, r: Double, d: Double) = MotifSub(0.0, by, listOf(doubleArrayOf(
+                        r * Math.cos(a - d), by + r * Math.sin(a - d), r * Math.cos(a + d), by + r * Math.sin(a + d), 0.0, by)))
+                    listOf(petal(up, 0.95, 0.3), petal(up - 0.5, 0.8, 0.3), petal(up + 0.5, 0.8, 0.3),
+                        petal(up - 1.1, 0.6, 0.32), petal(up + 1.1, 0.6, 0.32),
+                        MotifSub(-0.38, by, listOf(doubleArrayOf(-0.15, by - 0.1, 0.15, by - 0.1, 0.38, by),
+                            doubleArrayOf(0.15, by + 0.16, -0.15, by + 0.16, -0.38, by))))
                 }
                 else -> emptyList()
             }

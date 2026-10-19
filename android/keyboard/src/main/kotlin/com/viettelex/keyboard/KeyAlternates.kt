@@ -40,6 +40,14 @@ object KeyAlternates {
         return m
     }
 
+    /**
+     * Bảng cho "Giữ Shift để gõ số và ký hiệu" ([ShiftHold]): cùng ký tự với [map], nhưng số
+     * q…p vẫn có khi hàng số bật (nhất quán — giữ ⇧ + q luôn ra 1). Tắt / TalkBack ⇒ rỗng.
+     */
+    fun shiftMap(enabled: Boolean, numbers: Boolean, symbols: Boolean, numberRow: Boolean, accessibility: Boolean = false): Map<Char, String> =
+        if (!enabled) emptyMap()
+        else map(numbers || numberRow, symbols, numberRow = false, accessibility = accessibility)
+
     /** Ký tự phụ của phím "," hàng đáy. */
     const val COMMA_ALT = "."
 

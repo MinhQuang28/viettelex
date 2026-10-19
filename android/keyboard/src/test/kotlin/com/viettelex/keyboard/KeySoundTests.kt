@@ -61,9 +61,9 @@ class KeySoundTests {
         assertFalse(KeySoundStyle.CUSTOM in KeySoundStyle.PRESETS)
         // ordinal = seed nhiễu: kiểu cũ giữ vị trí; id + thứ tự Y HỆT iOS allCases.
         assertEquals(listOf("subtle", "wood", "mechanical", "typewriter", "bubble", "custom", "system", "rock", "pop", "water", "vintage",
-            "phao", "jingle", "piano", "scifi"),
+            "phao", "jingle", "piano", "dantranh", "scifi"),
             KeySoundStyle.entries.map { it.id })
-        for (id in listOf("system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano")) assertTrue(id, id in KeySoundStyle.IDS)
+        for (id in listOf("system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano", "dantranh")) assertTrue(id, id in KeySoundStyle.IDS)
         for (st in KeySoundStyle.entries) assertNotNull("$st thiếu bản EN", L10nTable.EN[st.viTitle])
         assertNotNull(L10nTable.EN["Âm thanh gõ"])
     }
@@ -184,7 +184,7 @@ class KeySoundTests {
     /** Danh sách id DUY NHẤT cho "sound" của theme JSON (trùng iOS presetIDs); "theme" (đã bỏ) ⇒ mặc định. */
     @Test fun presetIdsForThemeJson() {
         assertEquals(listOf("subtle", "wood", "mechanical", "typewriter", "bubble", "rock", "pop", "water", "vintage",
-            "phao", "jingle", "scifi", "piano"), KeySoundStyle.PRESET_IDS)
+            "phao", "jingle", "scifi", "piano", "dantranh"), KeySoundStyle.PRESET_IDS)
         for (bad in listOf("system", "custom", "theme")) assertFalse(bad, bad in KeySoundStyle.PRESET_IDS)
         assertEquals(KeySoundStyle.SUBTLE, KeySoundStyle.resolve("theme", true))
         assertEquals("subtle", KeyboardSettings.load { if (it == Keys.KEY_SOUND_STYLE) "theme" else null }.keySoundStyle)

@@ -4,8 +4,8 @@
 # Màu: AARRGGBB (alpha cắt cụt a*255); '-' = không có. fn = nền phím chức năng + phím cách riêng;
 # fnInk = chữ/icon phím chức năng riêng; deco = hoạ tiết nền motif:màu. Hệ thống / Kính khác nhau theo
 # nền tảng (backdrop) nên không có ở đây.
-order	system,oled,contrast,peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,typewriter,rgb,space
-plus	peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,typewriter,rgb,space
+order	system,oled,contrast,peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,sen,typewriter,rgb,space
+plus	peach,mint,sky,lavender,glass,blackHeart,greenFloral,sage,neon,pink,tet,tetMai,xmas,xmasSnow,piano,sen,typewriter,rgb,space
 #theme	dark	bg	key	special	ink	accent	accentInk	border	fn	fnInk	deco
 oled	0	FF000000	FF1C1C1E	FF3A3A3C	FFFFFFFF	FF0A84FF	FFFFFFFF	-	-	-	-
 oled	1	FF000000	FF1C1C1E	FF3A3A3C	FFFFFFFF	FF0A84FF	FFFFFFFF	-	-	-	-
@@ -39,6 +39,8 @@ xmasSnow	0	FFE6F1FA	FFFFFFFF	FFC3DAEE	FF12324F	FFD32F2F	FFFFFFFF	-	FFD6E7F5	FFB7
 xmasSnow	1	FF0C1A2C	FF1B2F49	FF28425F	FFE6F1FA	FFD32F2F	FFFFFFFF	-	FF15263D	FFFFD54F	star:66FFD54F
 piano	0	FF000000	FFFAFAF7	FF85827B	FF111111	FFA4161A	FFFFFFFF	33FFFFFF	FF111111	FFFFFFFF	notes:66D4AF37
 piano	1	FF000000	FFFAFAF7	FF85827B	FF111111	FFA4161A	FFFFFFFF	33FFFFFF	FF111111	FFFFFFFF	notes:66D4AF37
+sen	0	FFFCE4EC	FFFFFFFF	FFF8BBD0	FF14421A	FFEC6A9C	FF33091C	-	FF2E7D32	FFFFFFFF	lotus:66EC6A9C
+sen	1	FF0D1A11	FF1E3324	FF2E4A35	FFFCE4EC	FFEC6A9C	FF33091C	-	FF15281B	FFF48FB1	lotus:66F48FB1
 typewriter	0	FFEFE6D2	FFFBF6E9	FFE3D7BD	FF3A2A1C	FF8B3A1E	FFFFFFFF	668A7356	FFE6DAC1	FF3A2A1C	-
 typewriter	1	FF231B13	FF3A2E22	FF4B3C2C	FFF3E8D2	FF8B3A1E	FFFFFFFF	66C9A97C	FF2E241A	FFF3E8D2	-
 rgb	0	FF0A0A0F	FF15151C	FF1F1F28	FFF2F2F7	FF7C4DFF	FFFFFFFF	-	FF101016	FFE0E0EA	-

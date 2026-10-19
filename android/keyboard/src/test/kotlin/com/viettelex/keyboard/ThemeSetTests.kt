@@ -28,7 +28,8 @@ class ThemeSetTests {
 
     private val newThemes = listOf(KeyboardTheme.BLACK_HEART, KeyboardTheme.GREEN_FLORAL, KeyboardTheme.SAGE,
         KeyboardTheme.NEON, KeyboardTheme.PINK, KeyboardTheme.TET, KeyboardTheme.TET_MAI, KeyboardTheme.XMAS,
-        KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO, KeyboardTheme.TYPEWRITER, KeyboardTheme.RGB, KeyboardTheme.SPACE)
+        KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO,
+        KeyboardTheme.SEN, KeyboardTheme.TYPEWRITER, KeyboardTheme.RGB, KeyboardTheme.SPACE)
     private val pastels = listOf(KeyboardTheme.PEACH, KeyboardTheme.MINT, KeyboardTheme.SKY, KeyboardTheme.LAVENDER)
 
     private fun fixtureLines(): List<List<String>> {
@@ -44,7 +45,7 @@ class ThemeSetTests {
         assertEquals(lines.first { it[0] == "order" }[1].split(','), KeyboardTheme.entries.map { it.id })
         assertEquals(lines.first { it[0] == "plus" }[1].split(','), KeyboardTheme.entries.filter { it.isPlus }.map { it.id })
         val rows = lines.filter { it[0] != "order" && it[0] != "plus" }
-        assertEquals(38, rows.size)
+        assertEquals(40, rows.size)
         for (r in rows) {
             val t = KeyboardTheme.entries.first { it.id == r[0] }
             val p = t.palette(r[1] == "1")!!
@@ -124,6 +125,57 @@ class ThemeSetTests {
                 KeyboardTheme.TYPEWRITER, KeyboardTheme.RGB, KeyboardTheme.SPACE))
             assertNotNull("$t", L10nTable.EN[t.viTitle])
         assertNotNull(L10nTable.EN[ThemeExtras.HINT])
+    }
+
+    /** Sen Việt: Plus, âm đàn tranh + hiệu ứng cánh hoa, motif hoa sen cả hai chế độ, tên vi + en (iOS y hệt). */
+    @Test fun senThemeCarriesDanTranhAndPetal() {
+        val t = KeyboardTheme.SEN
+        assertTrue(t.isPlus)
+        assertEquals("dantranh", t.spec?.sound); assertEquals("petal", t.spec?.effect)
+        assertEquals("Vietnamese Lotus", L10nTable.EN[t.viTitle])
+        assertTrue("dantranh" in ThemeExtraIds.SOUNDS)
+        val light = t.palette(false)!!; val dark = t.palette(true)!!
+        assertFalse(light.isDark); assertTrue(dark.isDark)
+        assertEquals(ThemeColor.rgb(0xFFFFFF), light.keyFill)
+        assertEquals(ThemeColor.rgb(0x2E7D32), light.functionFill)
+        assertEquals(light.action, dark.action)
+        assertEquals(ThemeDecoration.LOTUS, light.decoration!!.motif); assertEquals(ThemeDecoration.LOTUS, dark.decoration!!.motif)
+        val plan = ThemeExtras.plan(ThemeSettings(theme = t).effectiveKeyStyle, false, { true }, { it in ThemeExtraIds.SOUNDS })
+        assertEquals(ThemeExtras.Outcome("petal", "dantranh", true), plan)
+        val base = ThemeJsonActions.Base { th, dk -> th.palette(dk)!! }
+        val text = ThemeJsonActions.copyText(ThemeEditTarget.Builtin(t), ThemeSettings(theme = t), emptyMap(), base)!!
+        val back = ThemeSpecParser.parse(text).spec!!
+        assertEquals("dantranh", back.sound); assertEquals("petal", back.effect)
+        assertEquals(back, ThemeSpecParser.parse(back.canonical).spec)
+    }
+
+    /** Hoa sen: mốc chung iOS testLotusMotifShape; mọi đường con cùng chiều quay (không thủng), trong ô ±0.5. */
+    @Test fun lotusShape() {
+        val subs = ThemeDecoration.shape(ThemeDecoration.LOTUS)
+        assertEquals(6, subs.size)
+        assertEquals(-0.2807, subs[0].segs[0][0], 1e-4)
+        assertEquals(-0.6276, subs[0].segs[0][1], 1e-4)
+        assertEquals(0.5932, subs[4].segs[0][2], 1e-4)
+        var minY = 1.0; var maxY = -1.0; var maxX = 0.0
+        for (sub in subs) {
+            val pts = ArrayList<DoubleArray>(); pts.add(doubleArrayOf(sub.sx, sub.sy))
+            var cx = sub.sx; var cy = sub.sy
+            for (g in sub.segs) {
+                if (g.size == 2) { cx = g[0]; cy = g[1]; pts.add(doubleArrayOf(cx, cy)); continue }
+                for (i in 1..20) {
+                    val t = i / 20.0; val u = 1 - t
+                    pts.add(doubleArrayOf(u * u * u * cx + 3 * u * u * t * g[0] + 3 * u * t * t * g[2] + t * t * t * g[4],
+                        u * u * u * cy + 3 * u * u * t * g[1] + 3 * u * t * t * g[3] + t * t * t * g[5]))
+                }
+                cx = g[4]; cy = g[5]
+            }
+            var area = 0.0
+            for (i in pts.indices) { val a = pts[i]; val b = pts[(i + 1) % pts.size]; area += a[0] * b[1] - b[0] * a[1] }
+            assertTrue("đường con ngược chiều ⇒ thủng", area > 0)
+            for (p in pts) { minY = minOf(minY, p[1]); maxY = maxOf(maxY, p[1]); maxX = maxOf(maxX, Math.abs(p[0])) }
+        }
+        assertEquals(-0.40, minY, 0.01); assertEquals(0.40, maxY, 0.01); assertTrue(maxX <= 0.5)
+        assertTrue(ThemeDecoration.LOTUS in ThemeDecoration.MOTIFS)
     }
 
     // ---- bộ đủ món: Máy chữ cổ / Gaming RGB / Vũ trụ (iOS ThemeSetTests.testFullPackThemes y hệt)
@@ -280,6 +332,7 @@ class ThemeSetTests {
         assertEquals(KeyboardTheme.GREEN_FLORAL.palette(true)!!.decoration!!.motif, ThemeDecoration.FLOWERS)
         val festive = mapOf(KeyboardTheme.TET to ThemeDecoration.MAI, KeyboardTheme.TET_MAI to ThemeDecoration.MAI,
             KeyboardTheme.XMAS to ThemeDecoration.SNOWFLAKE, KeyboardTheme.PIANO to ThemeDecoration.NOTES,
+            KeyboardTheme.SEN to ThemeDecoration.LOTUS,
             KeyboardTheme.SPACE to ThemeDecoration.STARFIELD)
         for ((t, m) in festive) for (dk in listOf(false, true)) assertEquals("$t", m, t.palette(dk)!!.decoration!!.motif)
         assertEquals(ThemeDecoration.SNOWFLAKE, KeyboardTheme.XMAS_SNOW.palette(false)!!.decoration!!.motif)

@@ -632,3 +632,204 @@ final class KeyAlternatesTests: XCTestCase {
         withExtendedLifetime(host) {}
     }
 }
+
+/// "Giữ Shift để gõ số và ký hiệu" (yêu cầu người dùng Văn Việt, Phil duyệt): giữ ⇧ + chạm
+/// q w e ⇒ "123" mà không phải sang bàn số. Máy trạng thái ⇧ THUẦN — cùng bộ ca với Android
+/// ShiftHoldTests.kt.
+final class ShiftHoldTests: XCTestCase {
+    private let digitsOnly = KeyAlternates.shiftMap(enabled: true, numbers: true, symbols: false, numberRow: false)
+    private let all = KeyAlternates.shiftMap(enabled: true, numbers: true, symbols: true, numberRow: false)
+    private let H = ShiftHold.rollover + 0.05
+
+    /// Chạm nhanh ⇧ = viết hoa một lần; chạm đôi = Caps Lock; chạm thứ hai chậm = tắt (như cũ).
+    func testTapDoubleTapUnchanged() {
+        var h = ShiftHold()
+        var s = h.down(.off, now: 1); XCTAssertEqual(s, .once)
+        s = h.up(s); XCTAssertEqual(s, .once)
+        s = h.down(s, now: 1.2); XCTAssertEqual(s, .capsLock)
+        s = h.up(s); XCTAssertEqual(s, .capsLock)
+        s = h.down(s, now: 5); XCTAssertEqual(s, .off)
+        s = h.up(s)
+        s = h.down(s, now: 9); XCTAssertEqual(s, .once)
+        s = h.up(s)
+        s = h.down(s, now: 9 + ShiftHold.doubleTap + 0.01); XCTAssertEqual(s, .off, "chậm ⇒ không phải chạm đôi")
+    }
+
+    /// Giữ ⇧ + q w e ⇒ 1 2 3; nhả KHÔNG để lại viết hoa một lần; lần chạm kế không thành chạm đôi.
+    func testHeldShiftTypesDigitsAndLeavesNoOneShot() {
+        var h = ShiftHold()
+        var s = h.down(.off, now: 1)
+        var out = ""
+        for (i, c) in "qwe".enumerated() { out += h.symbol(c, map: digitsOnly, now: 1 + H + Double(i) * 0.1) ?? "?" }
+        XCTAssertEqual(out, "123")
+        s = h.up(s)
+        XCTAssertEqual(s, .off)
+        XCTAssertFalse(h.held)
+        s = h.down(s, now: 1 + H + 0.25); XCTAssertEqual(s, .once)
+    }
+
+    /// Caps Lock đang bật: giữ ⇧ gõ ký hiệu ⇒ nhả vẫn Caps Lock; chạm đôi rồi giữ ⇒ vẫn Caps.
+    func testCapsLockPreserved() {
+        var h = ShiftHold()
+        XCTAssertNil(h.symbol("q", map: all, now: 0), "không giữ ⇧ ⇒ chữ như cũ")
+        var s = h.down(.capsLock, now: 10)
+        XCTAssertEqual(s, .off)
+        XCTAssertEqual(h.symbol("a", map: all, now: 10 + H), "@")
+        XCTAssertEqual(h.up(s), .capsLock)
+        s = h.down(.off, now: 20); s = h.up(s)
+        s = h.down(s, now: 20.1); XCTAssertEqual(s, .capsLock)
+        XCTAssertEqual(h.symbol("w", map: all, now: 20.1 + H), "2")
+        XCTAssertEqual(h.up(s), .capsLock)
+    }
+
+    /// Gõ chồng ngón nhanh (⇧ rồi chữ, ⇧ chưa nhả) vẫn là chữ hoa — không thành số.
+    func testRolloverStaysCapital() {
+        var h = ShiftHold()
+        _ = h.down(.off, now: 1)
+        XCTAssertNil(h.symbol("q", map: all, now: 1.06))
+        XCTAssertEqual(h.up(.off), .off)
+        _ = h.down(.off, now: 5)
+        XCTAssertNil(h.symbol("q", map: all, now: 5.1))
+        XCTAssertEqual(h.symbol("w", map: all, now: 5 + H), "2")
+        XCTAssertEqual(h.up(.off), .off)
+    }
+
+    /// Tắt cài đặt (bảng rỗng) / phím không có ký tự phụ ⇒ hành vi cũ.
+    func testSettingOffAndNoHintFallBack() {
+        let off = KeyAlternates.shiftMap(enabled: false, numbers: true, symbols: true, numberRow: false)
+        XCTAssertTrue(off.isEmpty)
+        var h = ShiftHold()
+        _ = h.down(.off, now: 0)
+        XCTAssertNil(h.symbol("q", map: off, now: H))
+        XCTAssertNil(h.symbol("a", map: digitsOnly, now: H), "a không có ký tự phụ khi chỉ bật số")
+        XCTAssertEqual(h.up(.once), .once, "không dùng ký tự phụ ⇒ nhả không đụng shift")
+        _ = h.down(.off, now: 10); h.cancel()
+        XCTAssertFalse(h.held)
+        XCTAssertNil(h.symbol("q", map: all, now: 10 + H))
+    }
+
+    /// Phiên thật trên CÙNG instance: chạm, giữ-gõ số, chạm đôi, Caps + giữ, tắt Caps.
+    func testRealisticSessionSequence() {
+        var h = ShiftHold()
+        var t: TimeInterval = 100
+        var s = h.down(.off, now: t); s = h.up(s); XCTAssertEqual(s, .once)
+        s = .off                                                     // gõ "A"
+        t += 1
+        s = h.down(s, now: t)
+        XCTAssertEqual((h.symbol("q", map: all, now: t + H) ?? "") + (h.symbol("w", map: all, now: t + H) ?? ""), "12")
+        s = h.up(s); XCTAssertEqual(s, .off)
+        t += 0.1
+        s = h.down(s, now: t); XCTAssertEqual(s, .once, "không thành chạm đôi"); s = h.up(s)
+        t += 0.15
+        s = h.down(s, now: t); XCTAssertEqual(s, .capsLock); s = h.up(s)
+        t += 2
+        s = h.down(s, now: t); XCTAssertEqual(h.symbol("m", map: all, now: t + H), "?"); s = h.up(s)
+        XCTAssertEqual(s, .capsLock)
+        t += 2
+        s = h.down(s, now: t); s = h.up(s); XCTAssertEqual(s, .off)
+    }
+
+    /// Bảng giữ ⇧ = đúng ký tự phụ giữ lâu (KeyAlternates); hàng số bật vẫn có số; iPad/VoiceOver tắt.
+    func testMapParityWithAlternates() {
+        for n in [true, false] { for sym in [true, false] {
+            XCTAssertEqual(KeyAlternates.shiftMap(enabled: true, numbers: n, symbols: sym, numberRow: false),
+                           KeyAlternates.map(numbers: n, symbols: sym, numberRow: false))
+            let row = KeyAlternates.shiftMap(enabled: true, numbers: n, symbols: sym, numberRow: true)
+            for (k, v) in KeyAlternates.digits { XCTAssertEqual(row[k], v, "hàng số bật: giữ ⇧+\(k) vẫn ra \(v)") }
+            if sym { for (k, v) in KeyAlternates.symbols { XCTAssertEqual(row[k], v) } }
+            else { XCTAssertTrue(KeyAlternates.symbols.keys.allSatisfy { row[$0] == nil }) }
+            XCTAssertTrue(KeyAlternates.shiftMap(enabled: true, numbers: n, symbols: sym, numberRow: false, isPad: true).isEmpty)
+            XCTAssertTrue(KeyAlternates.shiftMap(enabled: true, numbers: n, symbols: sym, numberRow: false, accessibility: true).isEmpty)
+        } }
+    }
+
+    /// Ký tự phụ nguyên văn: VNI chốt từ rồi chèn số (controller bỏ qua vniDigit khi literal).
+    func testHeldDigitIsLiteralInVNI() {
+        var st = KeyboardSettings(); st.vniMode = true
+        let p = MockProxy(), b = EngineBridge(settings: st)
+        b.letter("a", proxy: p)
+        b.boundary("1", proxy: p)                 // đường literal của controller
+        XCTAssertEqual(p.text, "a1")
+        XCTAssertFalse(b.isComposing)
+        let p2 = MockProxy(), b2 = EngineBridge(settings: st)
+        b2.letter("a", proxy: p2)
+        XCTAssertTrue(b2.vniDigit("1", proxy: p2), "đối chứng: số thường (không giữ ⇧) vẫn là dấu VNI")
+        XCTAssertEqual(p2.text, "á")
+    }
+
+    // MARK: KeyboardView (iPhone) — đường router thật
+
+    @MainActor private func makeKeyboard(holdShift: Bool, symbols: Bool = true, numberRow: Bool = false,
+                                         log: @escaping (String, Bool) -> Void) -> (KeyboardView, UIView) {
+        var kbRef: KeyboardView?
+        let kb = KeyboardView(needsGlobe: false, inputController: nil) { k in
+            let lit = kbRef?.literalTextInFlight ?? false
+            switch k {
+            case .letter(let c): log("L\(c)", lit)
+            case .text(let s): log("T\(s)", lit)
+            case .replaceLastLetter(let s): log("R\(s)", lit)
+            default: log("?", lit)
+            }
+        }
+        kbRef = kb
+        let host = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: 320))
+        host.addSubview(kb)
+        kb.frame = host.bounds
+        kb.numberRowEnabled = numberRow
+        kb.configureKeyAlternates(numbers: true, symbols: symbols, holdShift: holdShift)
+        kb.setAutoShift(false)
+        kb.layoutIfNeeded()
+        return (kb, host)
+    }
+
+    @MainActor func testHoldShiftTypesHintsLiterally() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad, "iPad: ⇧ như cũ")
+        var out: [String] = [], literal: [Bool] = []
+        let (kb, host) = makeKeyboard(holdShift: true) { out.append($0); literal.append($1) }
+        kb.debugShiftDown(at: 100)
+        XCTAssertTrue(kb.debugShiftOn)
+        for (i, c) in ["q", "w", "e", "a"].enumerated() { kb.debugTapLetter(c, at: 100.3 + Double(i) * 0.2) }
+        XCTAssertEqual(out, ["T1", "T2", "T3", "T@"])
+        XCTAssertEqual(literal, [true, true, true, true], "controller chèn nguyên văn (VNI không bỏ dấu)")
+        kb.debugShiftUp()
+        XCTAssertFalse(kb.debugShiftOn, "nhả ⇧ không để lại viết hoa một lần")
+        out = []; literal = []
+        kb.debugTapLetter("q", at: 102)
+        XCTAssertEqual(out, ["Lq"])
+        XCTAssertEqual(literal, [false])
+        withExtendedLifetime(host) {}
+    }
+
+    /// Hàng số bật (số không còn là nhãn phụ): giữ ⇧ + q vẫn ra 1 — nhất quán.
+    @MainActor func testHoldShiftNumberRowConsistent() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad)
+        var out: [String] = []
+        let (kb, host) = makeKeyboard(holdShift: true, symbols: false, numberRow: true) { s, _ in out.append(s) }
+        kb.debugShiftDown(at: 100)
+        kb.debugTapLetter("q", at: 100.4)
+        kb.debugTapLetter("a", at: 100.6)        // không ký tự phụ ⇒ chữ hoa như cũ
+        kb.debugShiftUp()
+        XCTAssertEqual(out, ["T1", "LA"])
+        XCTAssertFalse(kb.debugShiftOn)
+        withExtendedLifetime(host) {}
+    }
+
+    /// Tắt cài đặt ⇒ giữ ⇧ + chữ là chữ hoa (một lần) như cũ; rollover nhanh cũng là chữ hoa.
+    @MainActor func testSettingOffAndRolloverKeepCapitals() throws {
+        try XCTSkipIf(UIDevice.current.userInterfaceIdiom == .pad)
+        var out: [String] = []
+        let (kb, host) = makeKeyboard(holdShift: false) { s, _ in out.append(s) }
+        kb.debugShiftDown(at: 100)
+        kb.debugTapLetter("q", at: 100.4)
+        kb.debugTapLetter("w", at: 100.6)
+        kb.debugShiftUp()
+        XCTAssertEqual(out, ["LQ", "Lw"])
+        let (kb2, host2) = makeKeyboard(holdShift: true) { s, _ in out.append(s) }
+        out = []
+        kb2.debugShiftDown(at: 200)
+        kb2.debugTapLetter("q", at: 200.05)      // chồng ngón
+        kb2.debugShiftUp()
+        XCTAssertEqual(out, ["LQ"])
+        withExtendedLifetime((host, host2)) {}
+    }
+}

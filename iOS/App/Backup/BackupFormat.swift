@@ -86,6 +86,7 @@ enum BackupSettings {
         Spec(key: "swipeKeyCommands", kind: .bool(false)),   // "Vuốt phím để sao chép/dán"
         Spec(key: "longPressNumbers", kind: .bool(true)),
         Spec(key: "longPressSymbols", kind: .bool(false)),
+        Spec(key: "holdShiftSymbols", kind: .bool(true)),
         Spec(key: "autoSpaceAfterPunct", kind: .bool(false)),
         Spec(key: "keyboardTransparency", kind: .int(0, 0...100)),
         Spec(key: "keyLabelTransparency", kind: .int(0, 0...100)),
@@ -114,6 +115,7 @@ enum BackupSettings {
         Spec(key: "systemBackdropXmas", kind: .bool(false)),
         Spec(key: "systemBackdropXmasSnow", kind: .bool(false)),
         Spec(key: "systemBackdropPiano", kind: .bool(false)),
+        Spec(key: "systemBackdropSen", kind: .bool(false)),
         Spec(key: "systemBackdropTypewriter", kind: .bool(false)),
         Spec(key: "systemBackdropRgb", kind: .bool(false)),
         Spec(key: "systemBackdropSpace", kind: .bool(false)),

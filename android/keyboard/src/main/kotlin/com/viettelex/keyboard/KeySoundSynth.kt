@@ -30,6 +30,8 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
     JINGLE("jingle", "Chuông"), // l10n-key
     /** Mỗi phím một nốt ([PianoMap]/[PianoSynth]) — không dùng đường 3 tiếng. */
     PIANO("piano", "Piano"), // l10n-key
+    /** Theme "Sen Việt" (19/10/2026): mỗi phím một nốt đàn tranh ([KeyInstrument.DANTRANH]). */
+    DANTRANH("dantranh", "Đàn tranh"), // l10n-key
     /** Bộ đủ món 10/2026 (theme Vũ trụ): "bíp" synth mềm, nhỏ — công thức đầu iOS/Shared/KeySoundSynth.swift. */
     SCIFI("scifi", "Bíp sci-fi"); // l10n-key
 
@@ -41,8 +43,8 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
         val DEFAULT = SUBTLE
         /** Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức [KeySoundSynth.baseRecipe]. */
         val PRESETS = listOf(SUBTLE, WOOD, MECHANICAL, TYPEWRITER, BUBBLE, ROCK, POP, WATER, VINTAGE, PHAO, JINGLE, SCIFI)
-        /** Mọi kiểu dựng sẵn (3 tiếng + Piano mỗi phím một nốt). */
-        val ALL_PRESETS = PRESETS + PIANO
+        /** Mọi kiểu dựng sẵn (3 tiếng + nhạc cụ mỗi phím một nốt: Piano, Đàn tranh). */
+        val ALL_PRESETS = PRESETS + PIANO + DANTRANH
         /**
          * DANH SÁCH DUY NHẤT id hợp lệ cho trường "sound" của theme JSON (chọn theme ⇒ đặt
          * keySoundStyle). Không gồm "system"/"custom". iOS: KeySoundStyle.presetIDs — test chốt trùng.
@@ -88,7 +90,7 @@ object KeySoundSynth {
         Noise(amp, delay, hp, lp, tau)
 
     fun baseRecipe(s: KeySoundStyle): Recipe = when (s) {
-        KeySoundStyle.SUBTLE, KeySoundStyle.CUSTOM, KeySoundStyle.SYSTEM, KeySoundStyle.PIANO -> Recipe(
+        KeySoundStyle.SUBTLE, KeySoundStyle.CUSTOM, KeySoundStyle.SYSTEM, KeySoundStyle.PIANO, KeySoundStyle.DANTRANH -> Recipe(
             listOf(t(1.0, 500.0, 360.0, tau = 0.007), t(0.24, 1050.0, 900.0, tau = 0.0025)),
             listOf(n(0.30, lp = 1900.0, tau = 0.002)), 0.0016, 0.032, 2600.0, 0.80)
         KeySoundStyle.WOOD -> Recipe(

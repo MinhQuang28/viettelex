@@ -117,6 +117,8 @@ struct KeyboardSettings {
     var longPressNumbers = true
     /// Giữ a–l, z–m ra ký hiệu — mặc định TẮT. KeyAlternates.
     var longPressSymbols = false
+    /// "Giữ Shift để gõ số và ký hiệu" (ShiftHold) — mặc định BẬT. Giống Android.
+    var holdShiftSymbols = true
 
     static func load() -> KeyboardSettings {
         var s = KeyboardSettings()
@@ -157,6 +159,7 @@ struct KeyboardSettings {
             ("emojiSuggest", \.emojiSuggest), ("pasteButton", \.pasteButton),
             ("autoCapitalize", \.autoCapitalize), ("spaceSwipeLanguage", \.spaceSwipeLanguage),
             ("longPressNumbers", \.longPressNumbers), ("longPressSymbols", \.longPressSymbols),
+            ("holdShiftSymbols", \.holdShiftSymbols),
             ("autoCorrect", \.autoCorrect), ("autoSpaceAfterPunct", \.autoSpaceAfterPunct),
             ("swipeKeyCommands", \.swipeKeyCommands)]
         for (k, kp) in flags where d.object(forKey: k) != nil { s[keyPath: kp] = d.bool(forKey: k) }

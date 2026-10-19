@@ -864,6 +864,7 @@ final class ThemeSetTests: XCTestCase {
 
     static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .neon, .pink,
                                              .tet, .tetMai, .xmas, .xmasSnow, .piano,
+                                             .sen,
                                              .typewriter, .rgb, .space]
     static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
 
@@ -899,7 +900,7 @@ final class ThemeSetTests: XCTestCase {
         let f = try fixture()
         XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
         XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
-        XCTAssertEqual(f.rows.count, 38)
+        XCTAssertEqual(f.rows.count, 40)
         for r in f.rows {
             let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
             let p = t.palette(systemDark: r.dark)
@@ -1007,6 +1008,65 @@ final class ThemeSetTests: XCTestCase {
         for t in [KeyboardTheme.tet, .tetMai, .xmas, .xmasSnow, .piano, .typewriter, .rgb, .space] {
             XCTAssertEqual(L10n.en[t.title] != nil || L10n.en[t.spec!.nameVi] != nil, true, t.rawValue)
         }
+    }
+
+    /// Sen Việt: Plus, âm đàn tranh + hiệu ứng cánh hoa (màu nhấn hồng sen), motif hoa sen cả hai chế độ; bản sáng
+    /// nền kem hồng / phím trắng / phím chức năng xanh lá, bản tối nền xanh đen; tên vi + en. Android y hệt.
+    func testSenThemeCarriesDanTranhAndPetal() throws {
+        let t = KeyboardTheme.sen
+        XCTAssertTrue(t.isPlus)
+        XCTAssertEqual(t.spec?.sound, "dantranh"); XCTAssertEqual(t.spec?.effect, "petal")
+        XCTAssertEqual(t.spec?.nameVi, "Sen Việt"); XCTAssertEqual(t.spec?.nameEn, "Vietnamese Lotus")
+        XCTAssertEqual(L10n.en[t.spec!.nameVi], "Vietnamese Lotus")
+        XCTAssertTrue(ThemeExtras.soundAllowed("dantranh"))
+        XCTAssertEqual(ThemeSettings(theme: .sen).effectiveKeyStyle.sound, "dantranh")
+        let light = t.palette(systemDark: false), dark = t.palette(systemDark: true)
+        XCTAssertFalse(light.isDark); XCTAssertTrue(dark.isDark)
+        XCTAssertEqual(light.keyFill, RGBA(hex: 0xFFFFFF))
+        XCTAssertEqual(light.functionFill, RGBA(hex: 0x2E7D32))
+        XCTAssertEqual(light.accent, dark.accent)
+        XCTAssertEqual(light.decoration?.motif, .lotus); XCTAssertEqual(dark.decoration?.motif, .lotus)
+        // Chọn theme: lưu kiểu âm đàn tranh + hiệu ứng cánh hoa, KHÔNG bật âm thanh phím.
+        let plan = ThemeExtras.plan(ThemeSettings(theme: .sen).effectiveKeyStyle, soundOn: false,
+                                    effectAllowed: { _ in true }, soundAllowed: ThemeExtras.soundAllowed)
+        XCTAssertEqual(plan, ThemeExtras.Outcome(effect: "petal", sound: "dantranh", soundHint: true))
+        // JSON chép → dán trọn vòng.
+        let text = try XCTUnwrap(ThemeJSONActions.copyText(.builtin(.sen), settings: ThemeSettings(theme: .sen), store: [:]))
+        let back = try XCTUnwrap(ThemeSpecParser.parse(text).spec)
+        XCTAssertEqual(back.sound, "dantranh"); XCTAssertEqual(back.effect, "petal")
+        XCTAssertEqual(back.light.deco?.motif, .lotus)
+        XCTAssertEqual(ThemeSpecParser.parse(back.canonical).spec, back)
+    }
+
+    /// Hoa sen: mọi đường con cùng chiều quay (tô nonzero = hợp, không thủng) + nằm trọn trong ô ±0.5.
+    func testLotusMotifShape() {
+        let subs = KeyboardDecoration.shape(.lotus)
+        XCTAssertEqual(subs.count, 6)
+        let box = KeyboardDecoration(motif: .lotus, color: .white).path([KeyboardDecoration.Placement(x: 0, y: 0, size: 1)]).boundingBoxOfPath
+        XCTAssertGreaterThanOrEqual(box.minX, -0.5); XCTAssertLessThanOrEqual(box.maxX, 0.5)
+        XCTAssertGreaterThanOrEqual(box.minY, -0.5); XCTAssertLessThanOrEqual(box.maxY, 0.5)
+        XCTAssertEqual(Double(box.minY), -0.40, accuracy: 0.01); XCTAssertEqual(Double(box.maxY), 0.40, accuracy: 0.01)
+        // Diện tích có dấu (đa giác từ điểm đầu + điểm cuối từng đoạn, cubic lấy mẫu) cùng dấu.
+        for sub in subs {
+            var pts: [(Double, Double)] = [sub.start]
+            var cur = sub.start
+            for g in sub.segs {
+                if g.count == 2 { cur = (g[0], g[1]); pts.append(cur); continue }
+                for i in 1...20 {
+                    let t = Double(i) / 20, u = 1 - t
+                    pts.append((u * u * u * cur.0 + 3 * u * u * t * g[0] + 3 * u * t * t * g[2] + t * t * t * g[4],
+                                u * u * u * cur.1 + 3 * u * u * t * g[1] + 3 * u * t * t * g[3] + t * t * t * g[5]))
+                }
+                cur = (g[4], g[5])
+            }
+            var area = 0.0
+            for i in 0..<pts.count { let a = pts[i], b = pts[(i + 1) % pts.count]; area += a.0 * b.1 - b.0 * a.1 }
+            XCTAssertGreaterThan(area, 0, "đường con ngược chiều ⇒ thủng")
+        }
+        // Mốc chung Android (ThemeSetTests.lotusShape).
+        XCTAssertEqual(subs[0].segs[0][0], -0.2807, accuracy: 1e-4)
+        XCTAssertEqual(subs[0].segs[0][1], -0.6276, accuracy: 1e-4)
+        XCTAssertEqual(subs[4].segs[0][2], 0.5932, accuracy: 1e-4)
     }
 
     // MARK: bộ đủ món — Máy chữ cổ / Gaming RGB / Vũ trụ
@@ -1205,6 +1265,7 @@ final class ThemeSetTests: XCTestCase {
                 case .xmas: XCTAssertEqual(m, .snowflake)
                 case .xmasSnow: XCTAssertEqual(m, dark ? .star : .snowflake)
                 case .piano: XCTAssertEqual(m, .notes)
+                case .sen: XCTAssertEqual(m, .lotus)
                 case .space: XCTAssertEqual(m, .starfield)
                 default: XCTAssertNil(m, t.rawValue)
                 }
@@ -1250,7 +1311,7 @@ final class ThemeSetTests: XCTestCase {
         let d = UserDefaultsProvider.shared
         let saved = d?.object(forKey: ThemeSettings.themeKey)
         defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
-        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano, .space] {
+        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano, .sen, .space] {
             for dark in [false, true] {
                 d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
                 let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }
