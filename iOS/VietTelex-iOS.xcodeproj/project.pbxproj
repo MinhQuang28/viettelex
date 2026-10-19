@@ -162,11 +162,11 @@
 		59184856DB1424FEC29F3781 /* TouchLog.swift in Sources */ = {isa = PBXBuildFile; fileRef = A73661E1643A0CAA02517C00 /* TouchLog.swift */; };
 		593AA8DEA7AFB11D6005F173 /* EngineBridge.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AD709650C25830CA926EBCF /* EngineBridge.swift */; };
 		5996B5BAD4D3204CEF8FE6CC /* KeySoundSynth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6F98B87CC6DBF96F8D09A899 /* KeySoundSynth.swift */; };
-		59C66E8A96CED913A07EA832 /* sample-shortcuts.yml in Resources */ = {isa = PBXBuildFile; fileRef = 24A08F7D2F73879EBEC99BEB /* sample-shortcuts.yml */; };
 		5A5A4CFF71EA497935A2961D /* KeyboardViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 853A101B912DF1524B01E1A2 /* KeyboardViewController.swift */; };
 		5A863B519CEB4DFF869913D0 /* SwipeEnglishTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC4C7AA642979C79BA435C61 /* SwipeEnglishTests.swift */; };
 		5B52F74F525D2FE790784DEB /* AdjacentKeyFixer.swift in Sources */ = {isa = PBXBuildFile; fileRef = 08A25C830B85508BCD22F38A /* AdjacentKeyFixer.swift */; };
 		5C1E68D1CE795950C634F366 /* PlanePolicy.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7C832E4FAF0818129299FF52 /* PlanePolicy.swift */; };
+		5C8F1EE6BAB02C26B41ADB14 /* sample-shortcuts.yml in Resources */ = {isa = PBXBuildFile; fileRef = 0BF3163802F8DFBA22192752 /* sample-shortcuts.yml */; };
 		5CA3CB101E504E9B3DF8B3A9 /* VietTelexApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 03B539001F2CE763F663710B /* VietTelexApp.swift */; };
 		5D4E6E65DD77BBA816CD4938 /* WallpaperEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F537D71E7DF6CC1F3FA95C1B /* WallpaperEditorView.swift */; };
 		5E88C6DD76B1FF760FC20D3D /* AutoCorrectTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D44937FCA0854428DB368FC7 /* AutoCorrectTests.swift */; };
@@ -285,6 +285,7 @@
 		A2CEEACB594EB47AF40541A3 /* swipe-paths-timed.txt in Resources */ = {isa = PBXBuildFile; fileRef = A42C0808FA2107FC8B2A9D05 /* swipe-paths-timed.txt */; };
 		A354F35BE23603DF53A32A80 /* SpaceLogoEN@2x.png in Resources */ = {isa = PBXBuildFile; fileRef = 0B0AEDFB5FDC699CA97C4DE2 /* SpaceLogoEN@2x.png */; };
 		A3ACE14C8F0F55490A23732E /* FutoSwipeTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8FA4464DCB74D34A8A55E14B /* FutoSwipeTests.swift */; };
+		A3BB802468EAD5366DCCFFCD /* EdgeTouchDelayTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 515867D60976AB481872E0F2 /* EdgeTouchDelayTests.swift */; };
 		A502757FCDB7FBD09FE8CD1D /* ClipboardPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = B42E3B1AEEBA29C8D4693932 /* ClipboardPanel.swift */; };
 		A5D63AF8B31BCC530FDD52B0 /* SuggestTrigramTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = D61FEE31733E89BE49DAF48E /* SuggestTrigramTests.swift */; };
 		A612DF363A05FED5AFB1C7B4 /* PlusConfig.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8E0F66BB47D978962BA91434 /* PlusConfig.swift */; };
@@ -510,6 +511,7 @@
 		0A6B5A4EF96EB6E3DFBA7109 /* SwipeDecoderTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwipeDecoderTests.swift; sourceTree = "<group>"; };
 		0B0AEDFB5FDC699CA97C4DE2 /* SpaceLogoEN@2x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "SpaceLogoEN@2x.png"; sourceTree = "<group>"; };
 		0B235B84E86F71BBBB10E836 /* EmojiAtlas.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EmojiAtlas.swift; sourceTree = "<group>"; };
+		0BF3163802F8DFBA22192752 /* sample-shortcuts.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = "sample-shortcuts.yml"; sourceTree = "<group>"; };
 		0C290F16D4A2A71703AFCDE2 /* SpaceLogoEN@3x.png */ = {isa = PBXFileReference; lastKnownFileType = image.png; path = "SpaceLogoEN@3x.png"; sourceTree = "<group>"; };
 		0D77A862B4CBC51471E43C21 /* KeyLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyLayout.swift; sourceTree = "<group>"; };
 		0DBDDC2765D27AF7C83556EE /* KeyboardHeightTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardHeightTests.swift; sourceTree = "<group>"; };
@@ -536,7 +538,6 @@
 		222EF2EE5A6F795385492BEA /* playfair-display.ttf */ = {isa = PBXFileReference; lastKnownFileType = file; path = "playfair-display.ttf"; sourceTree = "<group>"; };
 		22BDEAB6EAD0F1EA689B388A /* CompositionSync.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionSync.swift; sourceTree = "<group>"; };
 		23D9F4828FBAE93DCCEB2271 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist; path = Info.plist; sourceTree = "<group>"; };
-		24A08F7D2F73879EBEC99BEB /* sample-shortcuts.yml */ = {isa = PBXFileReference; lastKnownFileType = text.yaml; path = "sample-shortcuts.yml"; sourceTree = "<group>"; };
 		27D10BA36AFF204B214098B2 /* HostRewriteCompositionTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HostRewriteCompositionTests.swift; sourceTree = "<group>"; };
 		283B18B560C805EFBE10D839 /* backup-too-new.json */ = {isa = PBXFileReference; lastKnownFileType = text.json; path = "backup-too-new.json"; sourceTree = "<group>"; };
 		2A5ACFCC85098E199869C169 /* MainDebouncer.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainDebouncer.swift; sourceTree = "<group>"; };
@@ -576,6 +577,7 @@
 		4F35DEB1416616443DB332E0 /* VTCatch.m */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.objc; path = VTCatch.m; sourceTree = "<group>"; };
 		4F980E450F0B3851CDC5361F /* ClipDetect.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ClipDetect.swift; sourceTree = "<group>"; };
 		5143281A235F9FF66DF0ABAE /* KeyboardBenchTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeyboardBenchTests.swift; sourceTree = "<group>"; };
+		515867D60976AB481872E0F2 /* EdgeTouchDelayTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = EdgeTouchDelayTests.swift; sourceTree = "<group>"; };
 		52D5175437869F54D6E628A5 /* SuggestionBarHeight.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SuggestionBarHeight.swift; sourceTree = "<group>"; };
 		532D1B26A4AA10CD402E4D31 /* CompositionSyncTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CompositionSyncTests.swift; sourceTree = "<group>"; };
 		56C41B594797A8B06ED5012D /* UserDictionaryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserDictionaryTests.swift; sourceTree = "<group>"; };
@@ -842,13 +844,13 @@
 			isa = PBXGroup;
 			children = (
 				E07A3B8533DF185DE4EC05F4 /* ios-mau-cau.yml */,
+				D49583604C48DA3FF2751E66 /* agent-a41cd87a7d4f14139 */,
 				C9D01CBA8ACF33359DB0C0BD /* App */,
 				D31F988D110CA9E478B35C27 /* Keyboard */,
 				9F75E32DB55D92888E77DE61 /* KeyboardTests */,
 				DF35FD668408A625226DFE82 /* Packages */,
 				7D398E9EE329A73C8620EBFB /* Shared */,
 				FAFFB2CAD61DDABA741DAA0D /* StoreKit */,
-				968E2C214A1AF99C3F83F278 /* VietTelex */,
 				D1587473BF6CB453210A7CCB /* VTTranslate */,
 				01272B6532043F67ED824A91 /* Frameworks */,
 				ACA2EF74601F7B3D920485DD /* Products */,
@@ -956,15 +958,6 @@
 			path = Backup;
 			sourceTree = "<group>";
 		};
-		968E2C214A1AF99C3F83F278 /* VietTelex */ = {
-			isa = PBXGroup;
-			children = (
-				24A08F7D2F73879EBEC99BEB /* sample-shortcuts.yml */,
-			);
-			name = VietTelex;
-			path = ..;
-			sourceTree = "<group>";
-		};
 		9F75E32DB55D92888E77DE61 /* KeyboardTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -977,6 +970,7 @@
 				532D1B26A4AA10CD402E4D31 /* CompositionSyncTests.swift */,
 				B81DF7C11BC56071493CA007 /* CuratedPairsTests.swift */,
 				ACF0C397A9C6E378B4465FAE /* DomainPopupTests.swift */,
+				515867D60976AB481872E0F2 /* EdgeTouchDelayTests.swift */,
 				A9F6973DD8764DB934C95323 /* EmojiAtlasTests.swift */,
 				104D515FA297531BCEF3AA25 /* EmojiDataTests.swift */,
 				AC1AFC01B017992B476A591C /* EmojiEnglishTests.swift */,
@@ -1224,6 +1218,15 @@
 			path = Keyboard;
 			sourceTree = "<group>";
 		};
+		D49583604C48DA3FF2751E66 /* agent-a41cd87a7d4f14139 */ = {
+			isa = PBXGroup;
+			children = (
+				0BF3163802F8DFBA22192752 /* sample-shortcuts.yml */,
+			);
+			name = "agent-a41cd87a7d4f14139";
+			path = ..;
+			sourceTree = "<group>";
+		};
 		DF35FD668408A625226DFE82 /* Packages */ = {
 			isa = PBXGroup;
 			children = (
@@ -1424,7 +1427,7 @@
 				9E05D33874006BB326EDC4C6 /* math-results.txt in Resources */,
 				DF225D04D7CF81C8C54070B8 /* number-chips.txt in Resources */,
 				B6C7B7E478B6AEAF66C2D94B /* safety-cases.txt in Resources */,
-				59C66E8A96CED913A07EA832 /* sample-shortcuts.yml in Resources */,
+				5C8F1EE6BAB02C26B41ADB14 /* sample-shortcuts.yml in Resources */,
 				93E768311710062913552601 /* suggest-dev.txt in Resources */,
 				B92E282E8D0ABE8BEBD693E7 /* suggest-trigram-parity.txt in Resources */,
 				2ADC518FE5C55961C93038B7 /* swipe-lang-sentences.txt in Resources */,
@@ -1678,6 +1681,7 @@
 				36C564FD8BADBFB0BCC1E645 /* DisplayCase.swift in Sources */,
 				4AB730B9742118C7208D887A /* DomainPopup.swift in Sources */,
 				DD2DD4A8FC64DD7B498864FA /* DomainPopupTests.swift in Sources */,
+				A3BB802468EAD5366DCCFFCD /* EdgeTouchDelayTests.swift in Sources */,
 				21079B460094A0461A80E0FC /* EmojiAtlas.swift in Sources */,
 				E18FE2085B406DE00BC80F1F /* EmojiAtlasBuilder.swift in Sources */,
 				AF03C3FA3C926EB5533D8A96 /* EmojiAtlasTests.swift in Sources */,

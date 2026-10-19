@@ -948,7 +948,35 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     override func didMoveToWindow() {
         super.didMoveToWindow()
         landscapeCache = nil; phoneFormCache = nil
-        if window != nil { lastLayoutWidth = -1; setNeedsLayout() }
+        if window != nil { lastLayoutWidth = -1; setNeedsLayout(); Self.releaseSystemTouchDelays(for: self) }
+    }
+
+    /// Phím sát mép trái/phải (q a p l ⇧ ⌫ …) ăn chậm khi bấm/giữ: window extension có
+    /// recognizer cổng cử chỉ hệ thống (_UISystemGestureGateGestureRecognizer…) với
+    /// delaysTouchesBegan = true — gần mép màn hình iOS giữ touchesBegan ~0.3–1s để phân xử
+    /// vuốt hệ thống, phím giữa thì không. Tắt trì hoãn trên recognizer của window + chuỗi
+    /// superview (KHÔNG cancel, không đổi việc nhận diện — chỉ giao touch ngay). Chạy 1 lần
+    /// mỗi lần gắn window (didMoveToWindow + viewDidAppear), vài recognizer, 0 việc mỗi phím.
+    /// Trả số recognizer đã đổi (test / log).
+    @discardableResult
+    static func releaseSystemTouchDelays(for view: UIView) -> Int {
+        var all: [UIGestureRecognizer] = []
+        var v: UIView? = view.superview
+        while let cur = v { all += cur.gestureRecognizers ?? []; v = cur.superview }
+        if let w = view.window, w !== view.superview { all += w.gestureRecognizers ?? [] }
+        return releaseTouchDelays(all)
+    }
+
+    /// Hàm thuần: tắt delaysTouchesBegan/Ended của từng recognizer; trả số cái đã đổi.
+    @discardableResult
+    static func releaseTouchDelays(_ recognizers: [UIGestureRecognizer]) -> Int {
+        var changed = 0
+        for g in recognizers where g.delaysTouchesBegan || g.delaysTouchesEnded {
+            g.delaysTouchesBegan = false
+            g.delaysTouchesEnded = false
+            changed += 1
+        }
+        return changed
     }
 
     private var chromeMode: KeyLayout.ChromeMode {

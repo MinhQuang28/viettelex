@@ -1237,11 +1237,11 @@ final class KeyboardViewController: UIInputViewController {
     private var ctxCacheKey: String?
     private var ctxCache: Set<String> = []
 
-    /// iOS defer touch gần mép ~1s để phân xử system gesture — nguồn số 1 của
-    /// "ấn phím hàng dưới không ăn". Xin quyền nhận touch trước ở mép dưới.
-    /// (A/B 25/09/2026: bật/tắt cờ này không đổi tỉ lệ rớt phím — nguyên nhân thật
-    /// là nền trong suốt, xem KeyboardView.touchableClear.)
-    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { [.bottom] }
+    /// iOS defer touch gần mép ~1s để phân xử system gesture. Xin quyền nhận touch trước ở
+    /// MỌI mép (trước chỉ .bottom — phím mép trái/phải vẫn chậm). Cờ này một mình không đủ
+    /// trong extension (A/B 25/09/2026 hàng dưới) — phần chính là tắt delaysTouchesBegan của
+    /// recognizer cổng hệ thống, xem KeyboardView.releaseSystemTouchDelays.
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
 
     // needsInputModeSwitchKey chỉ đáng tin sau khi nối host — gọi 1 LẦN ở
     // viewDidAppear (gọi mỗi layout pass làm iOS 26 spam warning; đã dính).
@@ -1270,6 +1270,9 @@ final class KeyboardViewController: UIInputViewController {
         }
         #endif
         super.viewDidAppear(animated)
+        // Recognizer cổng cử chỉ hệ thống có thể gắn vào window sau didMoveToWindow ⇒ tắt
+        // trì hoãn lần nữa khi đã hiện hẳn (phím mép trái/phải ăn ngay như phím giữa).
+        KeyboardView.releaseSystemTouchDelays(for: view)
         if appearance.didAppear(tornDown: keyboard?.isTornDown ?? true) {
             TouchLog.write("appear: didAppear without config (torn=\(keyboard?.isTornDown == true ? 1 : 0)) → configure")
             configureForAppearance()
