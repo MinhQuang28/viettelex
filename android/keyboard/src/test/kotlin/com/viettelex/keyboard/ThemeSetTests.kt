@@ -29,7 +29,8 @@ class ThemeSetTests {
     private val newThemes = listOf(KeyboardTheme.BLACK_HEART, KeyboardTheme.GREEN_FLORAL, KeyboardTheme.SAGE,
         KeyboardTheme.NEON, KeyboardTheme.PINK, KeyboardTheme.TET, KeyboardTheme.TET_MAI, KeyboardTheme.XMAS,
         KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO,
-        KeyboardTheme.SEN, KeyboardTheme.TRUNG_THU, KeyboardTheme.VALENTINE, KeyboardTheme.HALLOWEEN)
+        KeyboardTheme.SEN, KeyboardTheme.TYPEWRITER, KeyboardTheme.RGB, KeyboardTheme.SPACE,
+        KeyboardTheme.TRUNG_THU, KeyboardTheme.VALENTINE, KeyboardTheme.HALLOWEEN)
     private val pastels = listOf(KeyboardTheme.PEACH, KeyboardTheme.MINT, KeyboardTheme.SKY, KeyboardTheme.LAVENDER)
 
     private fun fixtureLines(): List<List<String>> {
@@ -45,7 +46,7 @@ class ThemeSetTests {
         assertEquals(lines.first { it[0] == "order" }[1].split(','), KeyboardTheme.entries.map { it.id })
         assertEquals(lines.first { it[0] == "plus" }[1].split(','), KeyboardTheme.entries.filter { it.isPlus }.map { it.id })
         val rows = lines.filter { it[0] != "order" && it[0] != "plus" }
-        assertEquals(40, rows.size)
+        assertEquals(46, rows.size)
         for (r in rows) {
             val t = KeyboardTheme.entries.first { it.id == r[0] }
             val p = t.palette(r[1] == "1")!!
@@ -58,7 +59,8 @@ class ThemeSetTests {
 
     @Test fun darkVariantsDifferAndFollowSystem() {
         val fixed = setOf(KeyboardTheme.OLED, KeyboardTheme.CONTRAST, KeyboardTheme.BLACK_HEART, KeyboardTheme.NEON,
-            KeyboardTheme.TET, KeyboardTheme.XMAS, KeyboardTheme.PIANO, KeyboardTheme.TRUNG_THU, KeyboardTheme.HALLOWEEN)
+            KeyboardTheme.TET, KeyboardTheme.XMAS, KeyboardTheme.PIANO, KeyboardTheme.RGB, KeyboardTheme.SPACE,
+            KeyboardTheme.TRUNG_THU, KeyboardTheme.HALLOWEEN)
         for (t in KeyboardTheme.entries) {
             val light = t.palette(false) ?: continue
             val dark = t.palette(true)!!
@@ -114,8 +116,8 @@ class ThemeSetTests {
 
     // ---- âm / hiệu ứng đi kèm theme ("sound" / "effect") — iOS ThemeSetTests y hệt
 
-    /** Bộ đủ món 10/2026 — iOS testFullPackThemes y hệt. */
-    @Test fun fullPackThemes() {
+    /** Bộ đủ món Trung Thu / Valentine / Halloween — iOS testFestivalFullPackThemes y hệt. */
+    @Test fun festivalFullPackThemes() {
         val want = listOf(
             listOf(KeyboardTheme.TRUNG_THU, "trong", "lantern", ThemeDecoration.LANTERN, ThemeDecoration.MOON, "Mid-Autumn"),
             listOf(KeyboardTheme.VALENTINE, "pop", "heart", ThemeDecoration.HEARTS, null, "Valentine"),
@@ -182,7 +184,8 @@ class ThemeSetTests {
         assertEquals("piano", KeyboardTheme.PIANO.spec?.sound); assertNull(KeyboardTheme.PIANO.spec?.effect)
         assertNull(KeyboardTheme.PEACH.spec?.sound); assertNull(KeyboardTheme.PEACH.spec?.effect)
         assertEquals("phao", ThemeSettings(theme = KeyboardTheme.TET).effectiveKeyStyle.sound)
-        for (t in listOf(KeyboardTheme.TET, KeyboardTheme.TET_MAI, KeyboardTheme.XMAS, KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO))
+        for (t in listOf(KeyboardTheme.TET, KeyboardTheme.TET_MAI, KeyboardTheme.XMAS, KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO,
+                KeyboardTheme.TYPEWRITER, KeyboardTheme.RGB, KeyboardTheme.SPACE))
             assertNotNull("$t", L10nTable.EN[t.viTitle])
         assertNotNull(L10nTable.EN[ThemeExtras.HINT])
     }
@@ -236,6 +239,54 @@ class ThemeSetTests {
         }
         assertEquals(-0.40, minY, 0.01); assertEquals(0.40, maxY, 0.01); assertTrue(maxX <= 0.5)
         assertTrue(ThemeDecoration.LOTUS in ThemeDecoration.MOTIFS)
+    }
+
+    // ---- bộ đủ món: Máy chữ cổ / Gaming RGB / Vũ trụ (iOS ThemeSetTests.testFullPackThemes y hệt)
+
+    @Test fun fullPackThemes() {
+        val tw = KeyboardTheme.TYPEWRITER.spec!!
+        assertEquals("Vintage Typewriter", tw.nameEn)
+        assertEquals("typewriter", tw.sound); assertEquals("ink", tw.effect)
+        val entry = BuiltinFonts.list.first { it.id == "xanh-mono" }
+        assertEquals("theme trỏ đúng phông có sẵn (url + sha256)", entry.ref, tw.assets.font!!.ref)
+        assertEquals(0xFFEFE6D2.toInt(), tw.palette(false).bg)
+        assertEquals(80, tw.corner)
+        val rgb = KeyboardTheme.RGB.spec!!
+        assertEquals("mechanical", rgb.sound); assertEquals("combo", rgb.effect)
+        for (dk in listOf(false, true)) {
+            assertTrue(KeyboardTheme.RGB.palette(dk)!!.rainbowBorder)
+            assertNull("viền thường nhường chỗ cầu vồng", KeyboardTheme.RGB.palette(dk)!!.keyBorder)
+        }
+        val sp = KeyboardTheme.SPACE.spec!!
+        assertEquals("Outer Space", sp.nameEn)
+        assertEquals("scifi", sp.sound); assertEquals("meteor", sp.effect)
+        for (t in listOf(KeyboardTheme.TYPEWRITER, KeyboardTheme.RGB, KeyboardTheme.SPACE)) {
+            assertTrue("$t", t.spec!!.sound in ThemeExtraIds.SOUNDS)
+            assertTrue("$t", t.spec!!.effect in ThemeExtraIds.EFFECTS)
+            assertTrue("$t", t.isPlus)
+        }
+        for (t in KeyboardTheme.entries) if (t != KeyboardTheme.RGB) assertFalse("$t", t.palette(false)?.rainbowBorder ?: false)
+    }
+
+    /** "borderFx": đọc / chuẩn hoá / lỗi; bản vá bỏ cầu vồng ("none") và thêm cho theme khác (iOS y hệt). */
+    @Test fun borderFxParseAndPatch() {
+        val base = """{"v":1,"name":{"vi":"x"},"light":{"key":"#000000","special":"#111111","ink":"#FFFFFF","accent":"#7C4DFF","borderFx":"rainbow"}}"""
+        val s = ThemeSpecParser.parse(base).spec!!
+        assertEquals("rainbow", s.light.borderFx)
+        assertTrue(s.palette(false).rainbowBorder)
+        assertTrue(s.canonical.contains(""""borderFx":"rainbow""""))
+        assertEquals(s.canonical, ThemeSpecParser.parse(s.canonical).spec!!.canonical)
+        for (bad in listOf(""""borderFx":"disco"""", """"borderFx":1""", """"borderFx":true""")) {
+            assertNull(bad, ThemeSpecParser.parse(base.replace(""""borderFx":"rainbow"""", bad)).spec)
+        }
+        val rgbSlots = KeyboardTheme.RGB.spec!!.light
+        val off = rgbSlots.copy(borderFx = null)
+        val patch = off.patchFrom(rgbSlots).first
+        assertEquals("none", patch.borderFx)
+        val pal = KeyStyle(light = patch, dark = patch).applyPatch(KeyboardTheme.RGB.palette(false)!!, false)
+        assertFalse(pal.rainbowBorder)
+        val on = ThemeSlots(borderFx = "rainbow")
+        assertTrue(KeyStyle(light = on, dark = on).applyPatch(KeyboardTheme.NEON.palette(true)!!, true).rainbowBorder)
     }
 
     /** Chép JSON → sửa → dán: "sound" / "effect" đi trọn vòng (theme có sẵn, bản vá, theme tự tạo). */
@@ -345,6 +396,7 @@ class ThemeSetTests {
         val festive = mapOf(KeyboardTheme.TET to ThemeDecoration.MAI, KeyboardTheme.TET_MAI to ThemeDecoration.MAI,
             KeyboardTheme.XMAS to ThemeDecoration.SNOWFLAKE, KeyboardTheme.PIANO to ThemeDecoration.NOTES,
             KeyboardTheme.SEN to ThemeDecoration.LOTUS,
+            KeyboardTheme.SPACE to ThemeDecoration.STARFIELD,
             KeyboardTheme.TRUNG_THU to ThemeDecoration.LANTERN, KeyboardTheme.VALENTINE to ThemeDecoration.HEARTS,
             KeyboardTheme.HALLOWEEN to ThemeDecoration.PUMPKIN)
         for ((t, m) in festive) for (dk in listOf(false, true)) assertEquals("$t", m, t.palette(dk)!!.decoration!!.motif)

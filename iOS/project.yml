@@ -37,6 +37,8 @@ targets:
       - Keyboard/Wallpaper.swift
       # Hiệu ứng khi bấm phím: xem thử ở trang chọn (cùng overlay với bàn phím).
       - Keyboard/KeyEffects.swift
+      # Viền cầu vồng (Gaming RGB): thẻ xem trước dùng cùng dải màu.
+      - Keyboard/RainbowBorder.swift
       - Keyboard/Shortcuts.swift
       - Shared
       # Từ điển cá nhân: app đọc/sửa userlm.plist bằng chính model của bàn phím.
@@ -180,6 +182,7 @@ targets:
       - App/ThemeAssetDownloader.swift
       - Keyboard/Wallpaper.swift
       - Keyboard/KeyEffects.swift
+      - Keyboard/RainbowBorder.swift
       - Keyboard/KeyCommitQueue.swift
       - Keyboard/AdjacentKeyFixer.swift
       - Keyboard/AutoCorrect.swift

@@ -542,12 +542,18 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
             val pad = if (large) 6.dp.toPx() else 3.dp.toPx()
             val gap = if (large) 5.dp.toPx() else 2.dp.toPx()
             val r = if (large) 6.dp.toPx() else 2.dp.toPx()
+            val rainbow = if (p.rainbowBorder) com.viettelex.keyboard.RainbowBorder.stops().let { (cols, pos) ->
+                Brush.horizontalGradient(*Array(cols.size) { pos[it].toFloat() to Color(cols[it] or (0xFF shl 24)) },
+                    startX = 0f, endX = size.width * 2)
+            } else null
             val kw = (size.width - pad * 2 - gap * 9) / 10
             val kh = (size.height - bottomPadDp.dp.toPx() - pad * 2 - gap * 3) / 4
             fun key(x: Float, y: Float, w: Float, fill: Int) {
                 val kr = KeyStyle.cornerRadius(keyStyle.corner, w, kh, r)
                 drawRoundRect(Color(fill), Offset(x, y), Size(w, kh), CornerRadius(kr))
                 p.keyBorder?.let { drawRoundRect(Color(it), Offset(x, y), Size(w, kh), CornerRadius(kr), style = Stroke(1.dp.toPx())) }
+                // Gaming RGB: viền cầu vồng tĩnh — MỘT gradient ngang trải cả bản thu nhỏ (như bàn phím thật lúc nghỉ).
+                rainbow?.let { drawRoundRect(it, Offset(x, y), Size(w, kh), CornerRadius(kr), style = Stroke((if (large) 1.5f else 1f) * density)) }
                 if (large && labelPaint == null) drawCircle(Color(p.keyInk).copy(alpha = 0.8f * p.labelAlpha), minOf(w, kh) * 0.09f, Offset(x + w / 2, y + kh / 2))
             }
             fun label(text: String, x: Float, y: Float, w: Float, ink: Int, size: Float) {

@@ -53,6 +53,8 @@ FONTS = [
     ("playfair-display", "Playfair Display", "playfairdisplay", "PlayfairDisplay[wght].ttf", "PlayfairDisplay-Regular", 400),
     ("lexend", "Lexend", "lexend", "Lexend[wght].ttf", "Lexend-Regular", 400),
     ("montserrat", "Montserrat", "montserrat", "Montserrat[wght].ttf", "Montserrat-Regular", 400),
+    # Phông máy chữ cho theme "Máy chữ cổ" (typewriter): đơn cách có chân, đủ chữ Việt (Courier Prime thiếu ơ/ư/ạ…).
+    ("xanh-mono", "Xanh Mono", "xanhmono", "XanhMono-Regular.ttf", "XanhMono-Regular", 400),
 ]
 
 UNICODES = (

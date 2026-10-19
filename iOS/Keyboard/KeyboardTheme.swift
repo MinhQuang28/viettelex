@@ -79,6 +79,9 @@ struct KeyboardPalette: Equatable {
     var functionInk: RGBA? = nil
     /// Hoạ tiết vẽ MỘT lần vào lớp nền (tim / hoa) — nil = nền phẳng. Không vẽ gì mỗi phím.
     var decoration: KeyboardDecoration? = nil
+    /// Viền phím cầu vồng (Gaming RGB, slot "borderFx":"rainbow"): MỘT lớp gradient che bằng hình viền mọi phím
+    /// (RainbowBorder) — chỉ xoay màu khi đang gõ, nghỉ thì đứng yên. Android `rainbowBorder` cùng ý nghĩa.
+    var rainbowBorder = false
     /// Người dùng chọn "Màu nhấn" (KeyStyle.accentColor) ⇒ phím ⇧ bật / Caps tô `accent` + `accentInk`
     /// (mặc định: nền trắng glyph đen như stock). Android cùng ý nghĩa (`accentShift`).
     var accentShift = false
@@ -250,6 +253,8 @@ enum KeyboardTheme: String, CaseIterable {
     case tet, tetMai, xmas, xmasSnow, piano
     // Sen Việt (19/10/2026): hồng sen + xanh lá sen, motif hoa sen, âm đàn tranh.
     case sen
+    // Bộ đủ món 10/2026 (màu + trang trí + hiệu ứng + âm): Máy chữ cổ, Gaming RGB, Vũ trụ.
+    case typewriter, rgb, space
     // Bộ đủ món 10/2026 (màu + hoạ tiết + hiệu ứng + âm): Trung Thu, Valentine, Halloween.
     case trungthu, valentine, halloween
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
@@ -276,6 +281,9 @@ enum KeyboardTheme: String, CaseIterable {
         case .xmasSnow: return L("Giáng sinh tuyết")
         case .piano: return L("Piano")
         case .sen: return L("Sen Việt")
+        case .typewriter: return L("Máy chữ cổ")
+        case .rgb: return L("Gaming RGB")
+        case .space: return L("Vũ trụ")
         case .trungthu: return L("Trung Thu")
         case .valentine: return L("Valentine")
         case .halloween: return L("Halloween")
@@ -305,6 +313,7 @@ enum KeyboardTheme: String, CaseIterable {
              .blackHeart, .greenFloral, .sage, .neon, .pink,
              .tet, .tetMai, .xmas, .xmasSnow, .piano,
              .sen,
+             .typewriter, .rgb, .space,
              .trungthu, .valentine, .halloween: return true
         }
     }
@@ -366,6 +375,8 @@ struct KeyboardDecoration: Equatable {
         case hearts, flowers, mai, dao, snowflake, star, notes
         // Sen Việt (19/10/2026).
         case lotus
+        // Vũ trụ (bộ đủ món 10/2026).
+        case starfield
         // Trung Thu / Halloween (10/2026, vector tự vẽ): đèn lồng, trăng khuyết, bí ngô, dơi.
         case lantern, moon, pumpkin, bat
     }
@@ -471,6 +482,10 @@ struct KeyboardDecoration: Equatable {
         return path
     }
 
+    /// Chấm sao nhỏ của motif "starfield": (x, y, bán kính) theo đơn vị motif — Android STAR_DOTS y hệt.
+    static let starDots: [(Double, Double, Double)] = [(-2.6, -0.3, 0.1), (-1.4, 0.34, 0.07), (1.5, -0.24, 0.08),
+                                                        (2.7, 0.3, 0.11), (0.8, 0.4, 0.05)]
+
     /// Một đường con khép kín: điểm đầu + các đoạn ([x, y] thẳng / [c1x, c1y, c2x, c2y, x, y] cubic).
     struct Sub: Equatable { var start: (Double, Double); var segs: [[Double]]
         static func == (a: Sub, b: Sub) -> Bool { a.start == b.start && a.segs == b.segs }
@@ -498,6 +513,15 @@ struct KeyboardDecoration: Equatable {
         func poly(_ q: [[Double]]) -> Sub { Sub(start: (q[0][0], q[0][1]), segs: Array(q.dropFirst())) }
         switch m {
         case .hearts, .flowers: return []
+        case .starfield:
+            // Vũ trụ: một sao lấp lánh 4 cánh (to) + vài chấm sao nhỏ trải NGANG trong khe (dọc vẫn ±0.45 —
+            // không chạm phím). Chấm = hình thoi nhỏ, cùng chiều quay với sao.
+            let pts = (0..<8).map { k in pol(k % 2 == 0 ? 0.5 : 0.13, Double(k) * .pi / 4 - .pi / 2) }
+            var out = [Sub(start: (pts[0][0], pts[0][1]), segs: Array(pts.dropFirst()))]
+            for d in Self.starDots {
+                out.append(Sub(start: (d.0 + d.2, d.1), segs: [[d.0, d.1 + d.2], [d.0 - d.2, d.1], [d.0, d.1 - d.2]]))
+            }
+            return out
         case .mai:
             // Mai: 5 cánh tròn đầy (mỗi cánh một vòng cubic từ tâm).
             return (0..<5).map { i in
@@ -1076,6 +1100,7 @@ struct KeyStyle: Equatable {
         if let dc = s.deco {
             q.decoration = dc.motif.map { KeyboardDecoration(motif: $0, color: c(dc.color), density: dc.density, alt: dc.alt) }
         }
+        if let fx = s.borderFx { q.rainbowBorder = fx == ThemeSlots.rainbow }
         return q
     }
 

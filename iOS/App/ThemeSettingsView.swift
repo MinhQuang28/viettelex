@@ -563,6 +563,14 @@ struct ThemePreview: View {
                     Color(wl.overlay.ui)
                 }
                 keys(in: geo.size)
+                // Gaming RGB: viền cầu vồng tĩnh (một gradient che bằng viền phím — như bàn phím thật lúc nghỉ).
+                if palette.rainbowBorder {
+                    LinearGradient(stops: RainbowBorder.stops().map {
+                        Gradient.Stop(color: Color(RGBA(hex: $0.color).ui), location: $0.location)
+                    }, startPoint: .leading, endPoint: UnitPoint(x: 2, y: 0.5))
+                    .mask(keys(in: geo.size, outline: true))
+                    .allowsHitTesting(false)
+                }
             }
         }
     }
@@ -595,7 +603,7 @@ struct ThemePreview: View {
         return Path(path).applying(CGAffineTransform(scaleX: k, y: k)).fill(Color(d.color.ui))
     }
 
-    private func keys(in size: CGSize) -> some View {
+    private func keys(in size: CGSize, outline: Bool = false) -> some View {
         let gap: CGFloat = large ? 5 : 2
         let pad: CGFloat = large ? 6 : 3
         let keyW = (size.width - pad * 2 - gap * 9) / 10
@@ -606,23 +614,36 @@ struct ThemePreview: View {
             ForEach(Self.rows, id: \.self) { row in
                 HStack(spacing: gap) {
                     ForEach(Array(row), id: \.self) { ch in
-                        key(large ? String(ch) : "", w: keyW, h: keyH, r: radius, custom: custom)
+                        key(large ? String(ch) : "", w: keyW, h: keyH, r: radius, custom: custom, outline: outline)
                     }
                 }
             }
             HStack(spacing: gap) {
                 key(large ? "123" : "", w: keyW * 2, h: keyH, r: radius, custom: custom,
-                    fill: palette.functionFill ?? palette.specialFill, ink: palette.fnInk)
-                key(large ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius, custom: custom, fill: palette.fnFill)
+                    fill: palette.functionFill ?? palette.specialFill, ink: palette.fnInk, outline: outline)
+                key(large ? L("dấu cách") : "", w: keyW * 5 + gap * 4, h: keyH, r: radius, custom: custom, fill: palette.fnFill,
+                    outline: outline)
                 key(large ? "return" : "", w: keyW * 2 + gap, h: keyH, r: radius, custom: custom, fill: palette.accent,
-                    ink: palette.accentInk)
+                    ink: palette.accentInk, outline: outline)
             }
         }
         .padding(pad)
     }
 
+    @ViewBuilder
     private func key(_ label: String, w: CGFloat, h: CGFloat, r: CGFloat, custom: CTFontDescriptor?,
-                     fill: RGBA? = nil, ink: RGBA? = nil) -> some View {
+                     fill: RGBA? = nil, ink: RGBA? = nil, outline: Bool = false) -> some View {
+        if outline {
+            let rr = KeyStyle.cornerRadius(percent: keyStyle.corner, size: CGSize(width: w, height: h), fallback: r)
+            RoundedRectangle(cornerRadius: rr).strokeBorder(Color.black, lineWidth: large ? 1.5 : 1)
+                .frame(width: max(w, 1), height: max(h, 1))
+        } else {
+            keyFace(label, w: w, h: h, r: r, custom: custom, fill: fill, ink: ink)
+        }
+    }
+
+    private func keyFace(_ label: String, w: CGFloat, h: CGFloat, r: CGFloat, custom: CTFontDescriptor?,
+                         fill: RGBA?, ink: RGBA?) -> some View {
         let r = KeyStyle.cornerRadius(percent: keyStyle.corner, size: CGSize(width: w, height: h), fallback: r)
         let base: CGFloat = label.count > 1 ? 11 : 15
         let font: Font = KeyLabelFonts.previewFont(keyStyle, custom: custom,

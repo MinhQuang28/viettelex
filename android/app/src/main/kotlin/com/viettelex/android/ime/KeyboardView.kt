@@ -552,9 +552,24 @@ class KeyboardView(
         if (k is Key.Letter || k is Key.Text || k == Key.Space || k == Key.DoubleSpacePeriod) fx.burst(fxX, fxY, fxW, fxH)
     }
 
+    /** Viền cầu vồng (theme Gaming RGB, [RainbowBorderView]) — null = theme khác: đường phím chỉ đọc một biến null. */
+    var rainbow: RainbowBorderView? = null
+
+    /** Viền mọi phím đang hiện (toạ độ view này) thụt [inset] — mặt nạ của [RainbowBorderView]. Bo góc như [drawKey]. */
+    fun keyOutlines(out: android.graphics.Path, inset: Float) {
+        out.reset()
+        for (k in keys) {
+            if (k.width <= 2 * inset || k.height <= 2 * inset) continue
+            val r = if (k.kind == KeyKind.RETURN && theme.keyStyle.corner == null) minOf(k.width, k.height) / 2
+                else theme.keyRadius(k.width, k.height, radius)
+            val rr = maxOf(0f, r - inset)
+            out.addRoundRect(k.left + inset, k.top + inset, k.right - inset, k.bottom - inset, rr, rr, android.graphics.Path.Direction.CW)
+        }
+    }
+
     /** Mọi phím đi qua đây: plane tìm emoji giữ phím cho ô tìm, còn lại tới IME. */
     private fun emit(k: Key) {
-        if (plane != Plane.EMOJI_SEARCH) { listener?.onKey(k); fxAfter(k); return }
+        if (plane != Plane.EMOJI_SEARCH) { listener?.onKey(k); fxAfter(k); rainbow?.poke(); return }
         fxPending = false
         when (k) {
             is Key.Letter -> search.type(k.ch)

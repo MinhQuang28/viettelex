@@ -44,6 +44,20 @@ class FeedbackSoundTest {
         assertEquals(KeySoundSynth.Kind.LETTER, Feedback.soundKind(Feedback.LETTER))
     }
 
+    /** Máy chữ: Enter có WAV "ding" riêng (ghi một lần, đúng mẫu tổng hợp); kiểu khác / custom ⇒ không có. */
+    @Test fun typewriterReturnDingFile() {
+        val dir = Files.createTempDirectory("keysound").toFile()
+        try {
+            val f = Feedback.returnFile(dir, "typewriter")!!
+            val (s, rate) = KeySoundSynth.parseWav(f.readBytes())!!
+            assertEquals(KeySoundSynth.SAMPLE_RATE.toDouble(), rate, 0.0)
+            assertEquals(KeySoundSynth.returnSamples(KeySoundStyle.TYPEWRITER)!!.size, s.size)
+            val stamp = f.lastModified()
+            assertEquals(f, Feedback.returnFile(dir, "typewriter")); assertEquals(stamp, f.lastModified())
+            for (id in listOf("subtle", "wood", "scifi", "custom", "system", "piano", "loud")) assertEquals(id, null, Feedback.returnFile(dir, id))
+        } finally { dir.deleteRecursively() }
+    }
+
     /** WAV nốt piano: tất định, đúng tần số mẫu (thường 22.05 kHz, ngân 11.025 kHz), ghi một lần. */
     @Test fun pianoWavCache() {
         val dir = Files.createTempDirectory("keysound").toFile()

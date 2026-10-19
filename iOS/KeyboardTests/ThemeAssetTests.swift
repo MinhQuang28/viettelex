@@ -201,7 +201,7 @@ final class ThemeAssetTests: XCTestCase {
     }
 
     func testBuiltinFontsList() throws {
-        XCTAssertEqual(BuiltinFonts.list.count, 12)
+        XCTAssertEqual(BuiltinFonts.list.count, 13)
         for e in BuiltinFonts.list {
             XCTAssertTrue(e.ref.url.hasPrefix("https://viettelex.com/fonts/"), e.id)
             XCTAssertNotNil(e.ref.sha256)
@@ -672,7 +672,7 @@ final class ThemeAssetTests: XCTestCase {
         XCTAssertEqual(KeyboardView.keyFont(20).fontName, "VTLobster-Regular")
     }
 
-    /// Cả 12 phông có sẵn: tên trong builtin-fonts.json = họ phông trong tệp (bản đầy đủ docs/fonts + bản xem trước
+    /// Cả 13 phông có sẵn: tên trong builtin-fonts.json = họ phông trong tệp (bản đầy đủ docs/fonts + bản xem trước
     /// "Vt" trong app), tên PostScript = tên bỏ dấu cách + "-Regular"/"-Medium"; 4 phông đổi tên (RFN) mang "VT ".
     func testBuiltinFontNamesMatchFiles() throws {
         let manifest = try JSONSerialization.jsonObject(with: Data(contentsOf: Self.repo.appendingPathComponent("docs/fonts/manifest.json"))) as? [String: Any]
@@ -680,7 +680,7 @@ final class ThemeAssetTests: XCTestCase {
             guard let id = d["id"] as? String, let r = d["renamed"] as? Bool else { return nil }
             return (id, r)
         })
-        XCTAssertEqual(BuiltinFonts.list.count, 12)
+        XCTAssertEqual(BuiltinFonts.list.count, 13)
         XCTAssertEqual(renamed.values.filter { $0 }.count, 4)
         for e in BuiltinFonts.list {
             XCTAssertEqual(e.name.hasPrefix("VT "), renamed[e.id], e.id)

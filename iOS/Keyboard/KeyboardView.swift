@@ -358,6 +358,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         spaceBar = nil; spaceLogo = nil; spaceCode = nil; indentedRow = nil
         overlayPanel?.removeFromSuperview(); overlayPanel = nil
         keyEffects?.halt(); keyEffects = nil; fxRect = nil
+        rainbow?.halt(); rainbow = nil
         wallpaperView.image = nil
         wallpaperLoadedFor = .zero
         themeImageView.image = nil; foregroundView.image = nil; themeScreenLoadedFor = nil
@@ -1943,6 +1944,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             v.frame = bounds
         }
         layoutDecoration()
+        layoutRainbow()
     }
 
     /// Hoạ tiết theme: bật/tắt + màu (mỗi lần đổi theme / sáng-tối). Không theme nào có hoạ tiết
@@ -2046,6 +2048,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         applyKeyStyle(themeSettings.effectiveKeyStyle)
         resolvePalette()
         configureKeyEffects()
+        configureRainbow()
         // Chiều cao hàng phím ±10pt (Settings → Giao diện) — đọc mỗi lần hiện. Bản cũ (có công
         // tắc "Kích thước như bàn phím iPhone") chưa được app chuyển đổi ⇒ tính trong bộ nhớ,
         // không ghi (KeyGeometry.RowAdjust.effectiveAdjust).
@@ -2305,7 +2308,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         letterGeometryCache = nil
         // Hoạ tiết nền (chỉ theme có hoạ tiết): hàng phím mới ⇒ lượt layout kế đo lại khe giữa hàng
         // (khe không đổi thì không dựng lại path).
-        if palette.decoration != nil { setNeedsLayout() }
+        if palette.decoration != nil || rainbow != nil { setNeedsLayout() }   // + viền cầu vồng: khung phím mới
         activeAlts = currentAlts()
         shiftAlts = currentShiftAlts()
         updateSuggestionChrome()
@@ -4104,9 +4107,18 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if pianoActive { piano(.space, typed: false); return }
         feedback(.modifier)
     }
-    /// Enter: Piano ⇒ hợp âm "kết" (chủ + năm); kiểu khác ⇒ tiếng phím chức năng.
+    /// Enter: Piano ⇒ hợp âm "kết" (chủ + năm); Máy chữ ⇒ tiếng phím + "ding" về dòng (KeySound.playReturn);
+    /// kiểu khác ⇒ tiếng phím chức năng.
     static func clickReturn() {
         if pianoActive { piano(.returnKey, typed: false); return }
+        if customSoundEnabled {
+            KeySound.shared.playReturn()
+            #if DEBUG
+            debugLastClickRoute = "custom:return"
+            #endif
+            if hapticsEnabled { impact() }
+            return
+        }
         feedback(.modifier)
     }
     /// Phím Shift vừa bấm, `result` = trạng thái SAU khi bấm. Piano ⇒ tiếng pedal (xuống) hoặc damper
@@ -5954,6 +5966,45 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if handleSearchKey(key) { return }
         onKey(key)
         if let fx, let o = keyEffects { o.emit(key: fx) }
+        rainbow?.poke()                          // Gaming RGB: theme khác ⇒ nil, chỉ đọc một optional
+    }
+
+    // MARK: Viền phím cầu vồng (RainbowBorder.swift) — chỉ theme có "borderFx":"rainbow"; khác ⇒ nil (0 chi phí).
+    private(set) var rainbow: RainbowBorderView?
+
+    /// Lúc hiện / đổi theme: gắn hoặc gỡ lớp viền cầu vồng (trên hàng phím, dưới hiệu ứng / ô phóng to).
+    private func configureRainbow() {
+        guard palette.rainbowBorder else {
+            rainbow?.halt(); rainbow?.removeFromSuperview(); rainbow = nil
+            return
+        }
+        let v = rainbow ?? RainbowBorderView()
+        if v.superview !== self {
+            v.frame = bounds
+            v.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+            insertSubview(v, aboveSubview: rowsContainer)
+        }
+        rainbow = v
+        layoutRainbow()
+    }
+
+    /// Khung phím đang hiện → mặt nạ viền (chỉ dựng lại path khi khung đổi — RainbowBorderView.setKeys).
+    private func layoutRainbow() {
+        guard let v = rainbow else { return }
+        if v.frame != bounds { v.frame = bounds }
+        var frames: [CGRect] = [], radii: [CGFloat] = []
+        if !rowsContainer.isHidden {
+            // Khung phím của lượt layout NÀY (hàng xếp lồng nhau — như hoạ tiết): đo sau khi hàng đã xếp.
+            rowsContainer.layoutIfNeeded()
+            for row in rowsContainer.arrangedSubviews where !row.isHidden { row.layoutIfNeeded() }
+            func walk(_ x: UIView) {
+                if let b = x as? KeyButton {
+                    if !b.isHidden, b.bounds.width > 0 { frames.append(b.convert(b.bounds, to: v)); radii.append(b.layer.cornerRadius) }
+                } else { x.subviews.forEach(walk) }
+            }
+            walk(rowsContainer)
+        }
+        v.setKeys(frames, radii: radii)
     }
 
     // MARK: Hiệu ứng khi bấm phím (KeyEffects.swift) — TẮT ⇒ overlay nil, đường phím chỉ đọc optional.

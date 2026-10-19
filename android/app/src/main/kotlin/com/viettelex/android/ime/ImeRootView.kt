@@ -81,12 +81,27 @@ class ImeRootView(
         dd.setRowGaps(com.viettelex.keyboard.ThemeDecoration.rowGaps(spans))
     }
 
+    /**
+     * Viền phím cầu vồng (theme Gaming RGB — "borderFx":"rainbow"): ngay TRÊN phím, dưới strip / tiền cảnh / vệt /
+     * hiệu ứng / balloon; cùng khung KeyboardView. Theme khác ⇒ null (không có view).
+     */
+    val rainbow: RainbowBorderView? = if (theme.palette.rainbowBorder) RainbowBorderView(context, theme.density) else null
+    private val rainbowPath = android.graphics.Path()
+
+    /** Mặt nạ viền theo khung phím hiện tại (gọi khi dựng phím / layout — không mỗi phím). */
+    private fun updateRainbowOutline() {
+        val r = rainbow ?: return
+        keyboard.keyOutlines(rainbowPath, r.lineWidthPx / 2)
+        r.setOutline(rainbowPath)
+    }
+
     init {
         background = bgDrawable
-        if (bgDrawable is ThemeDecorDrawable) keyboard.onKeysLaidOut = { updateDecorGaps() }
+        if (bgDrawable is ThemeDecorDrawable || rainbow != null) keyboard.onKeysLaidOut = { updateDecorGaps(); updateRainbowOutline() }
         if (wallpaperFile != null || themeBgFile != null) setWillNotDraw(false)
         isMotionEventSplittingEnabled = true
         addView(keyboard)
+        rainbow?.let { addView(it); keyboard.rainbow = it }
         addView(strip)
         foreground?.let { addView(it) }
         addView(trail)
@@ -347,7 +362,9 @@ class ImeRootView(
                 android.graphics.Path.Direction.CW)
         }
         keyboard.layout(px, py + s, px + pw, py + s + keyH)
+        rainbow?.layout(px, py + s, px + pw, py + s + keyH)
         updateDecorGaps()
+        updateRainbowOutline()
         strip.layout(px, py, px + pw, py + strip.measuredHeight)
         trail.layout(px, py + s, px + pw, py + s + keyH)
         foreground?.layout(px, py, px + pw, py + s + keyH)
@@ -393,6 +410,7 @@ class ImeRootView(
         val s = stripPx()
         val h = ImeInsets.totalHeight(s, keyH, navInset + raisePx)
         keyboard.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
+        rainbow?.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
         strip.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY),
             MeasureSpec.makeMeasureSpec(strip.viewHeightPx(), MeasureSpec.EXACTLY))
         trail.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
@@ -416,6 +434,7 @@ class ImeRootView(
         val h = maxOf(avail, FloatingKeyboard.panelHeight(s, keyH, handlePx))
         val ew = MeasureSpec.makeMeasureSpec(pw, MeasureSpec.EXACTLY)
         keyboard.measure(ew, MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
+        rainbow?.measure(ew, MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
         strip.measure(ew, MeasureSpec.makeMeasureSpec(strip.viewHeightPx(), MeasureSpec.EXACTLY))
         trail.measure(ew, MeasureSpec.makeMeasureSpec(keyH, MeasureSpec.EXACTLY))
         foreground?.measure(ew, MeasureSpec.makeMeasureSpec(s + keyH, MeasureSpec.EXACTLY))
@@ -431,7 +450,9 @@ class ImeRootView(
         val s = stripPx()
         val keyH = keyboard.measuredHeight
         keyboard.layout(0, s, w, s + keyH)
+        rainbow?.layout(0, s, w, s + keyH)
         updateDecorGaps()
+        updateRainbowOutline()
         strip.layout(0, 0, w, strip.measuredHeight)
         trail.layout(0, s, w, s + keyH)
         foreground?.layout(0, 0, w, s + keyH)

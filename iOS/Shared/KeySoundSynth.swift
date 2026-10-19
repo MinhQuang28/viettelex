@@ -41,6 +41,13 @@
 //   Piano: mỗi phím một nốt — xem PianoMap / PianoSynth cuối file.
 //   Đàn tranh (dantranh, theme Sen Việt): mỗi phím một nốt dây gảy, ngũ cung điệu Bắc — DanTranhSynth cuối file.
 //
+// Bộ đủ món 10/2026 (theme Máy chữ cổ / Vũ trụ):
+//   Sci-fi (scifi, theme Vũ trụ): "bíp" synth mềm hai nhịp — 1100→1400 Hz trượt LÊN (glide 5 ms) τ8 ms + bồi 2×
+//     (0.16) + nhịp hai 1650 Hz (quãng năm) trễ 11 ms τ5 ms (0.45); không nhiễu; mở 2 ms; 36 ms; outLP 2.8 kHz;
+//     đỉnh 0.50 — NHỎ (RMS + đỉnh < Gõ gỗ, test chốt). Không nhiễu ⇒ checksum không phụ thuộc vị trí case.
+//   Máy chữ — Enter "ding" (chuông về dòng): tiếng phím chức năng của Máy chữ + chuông 1568 Hz (G6) τ80 ms (0.9)
+//     + bồi phi điều hoà 2.76× τ20 ms (0.25) trễ 12 ms; 280 ms; đỉnh 0.60 (RMS ≤ Gõ gỗ). Thuộc KIỂU âm Máy chữ
+//     (`returnSamples`), không thuộc theme ⇒ ai chọn Máy chữ cũng nghe "ding"; kiểu khác Enter như cũ.
 // Bộ theme đủ món 10/2026 (Trung Thu, Halloween) — NHỎ hơn "Gõ gỗ" (đỉnh + RMS, test chốt):
 //   Trống lân (trong): tiếng "thùng" trầm nhẹ — thân 150→100 Hz (glide 6 ms) τ16 ms + mode màng 1.59× τ5 ms
 //     (0.30) + nhiễu dùi hp 80 lp 900 Hz τ1.5 ms (0.22); mở 1 ms; 54 ms; outLP 1.4 kHz; đỉnh 0.50.
@@ -65,6 +72,8 @@ enum KeySoundStyle: String, CaseIterable {
     case subtle, wood, mechanical, typewriter, bubble, custom, system, rock, pop, water, vintage, phao, jingle, piano
     // Theme "Sen Việt" (19/10/2026): mỗi phím một nốt đàn tranh (KeyInstrument.dantranh).
     case dantranh
+    // Bộ đủ món 10/2026 (theme Vũ trụ).
+    case scifi
     // Bộ theme đủ món 10/2026: Trống lân (Trung Thu), Ma quái (Halloween).
     case trong, boo
 
@@ -72,7 +81,7 @@ enum KeySoundStyle: String, CaseIterable {
     static let defaultStyle: KeySoundStyle = .subtle
     /// Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức `baseRecipe`.
     static let presets: [KeySoundStyle] = [.subtle, .wood, .mechanical, .typewriter, .bubble, .rock, .pop, .water, .vintage, .phao, .jingle,
-                                           .trong, .boo]
+                                           .scifi, .trong, .boo]
     /// Mọi kiểu dựng sẵn (3 tiếng + nhạc cụ mỗi phím một nốt: Piano, Đàn tranh).
     static let allPresets: [KeySoundStyle] = presets + [.piano, .dantranh]
     /// DANH SÁCH DUY NHẤT id hợp lệ cho trường "sound" của theme JSON (chọn theme ⇒ đặt keySoundStyle).
@@ -107,6 +116,7 @@ enum KeySoundStyle: String, CaseIterable {
         case .jingle: return LK("Chuông")
         case .piano: return LK("Piano")
         case .dantranh: return LK("Đàn tranh")
+        case .scifi: return LK("Bíp sci-fi")
         case .trong: return LK("Trống lân")
         case .boo: return LK("Ma quái")
         }
@@ -189,6 +199,11 @@ enum KeySoundSynth {
                                   t(0.22, 880 * 2.76, 880 * 2.76, tau: 0.005)],
                           noises: [],
                           attack: 0.0008, duration: 0.054, outLP: 3600, peak: 0.62)
+        case .scifi:
+            return Recipe(tones: [t(1.0, 1100, 1400, glide: 0.005, tau: 0.008), t(0.16, 2200, 2800, glide: 0.005, tau: 0.005),
+                                  t(0.45, 1650, 1650, tau: 0.005, delay: 0.011)],
+                          noises: [],
+                          attack: 0.002, duration: 0.036, outLP: 2800, peak: 0.50)
         case .trong:
             return Recipe(tones: [t(1.0, 150, 100, glide: 0.006, tau: 0.016), t(0.30, 150 * 1.59, 100 * 1.59, glide: 0.006, tau: 0.005)],
                           noises: [n(0.22, hp: 80, lp: 900, tau: 0.0015)],
@@ -199,6 +214,22 @@ enum KeySoundSynth {
                           noises: [n(0.06, hp: 200, lp: 1200, tau: 0.004)],
                           attack: 0.004, duration: 0.054, outLP: 2000, peak: 0.45)
         }
+    }
+
+    /// Tiếng Enter RIÊNG của kiểu (nil = như phím chức năng). Máy chữ: tiếng phím chức năng + "ding" chuông về
+    /// dòng. Seed cố định theo (typewriter, modifier) ⇒ không đổi khi thêm kiểu mới. Android y hệt.
+    static func returnRecipe(_ s: KeySoundStyle) -> Recipe? {
+        guard s == .typewriter else { return nil }
+        var r = recipe(.typewriter, .modifier)
+        r.tones += [t(0.9, 1568, 1568, tau: 0.08, delay: 0.012), t(0.25, 1568 * 2.76, 1568 * 2.76, tau: 0.02, delay: 0.012)]
+        r.duration = 0.28
+        r.peak = 0.60
+        return r
+    }
+
+    /// Mẫu Enter riêng của kiểu (nil = dùng tiếng phím chức năng).
+    static func returnSamples(_ s: KeySoundStyle) -> [Float]? {
+        returnRecipe(s).map { render($0, seed: seed(s, .modifier)) }
     }
 
     /// Công thức theo loại phím: xoá trầm hơn chút; phím chức năng trầm + dài hơn.

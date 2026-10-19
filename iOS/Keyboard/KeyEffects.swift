@@ -1,6 +1,6 @@
 // "Hiệu ứng khi bấm phím" (Plus, Phil 19/10/2026 — kiểu Laban Key): Trái tim, Bong bóng, Gợn sóng,
 // Cánh hoa, Pháo hoa, Nháy sáng, Matrix, Tia sét, Emoji theo chữ, Hoa đào / mai, Lửa combo, Mực loang,
-// Sóng nước, Tuyết rơi, Đèn lồng, Sương ma; "Không" = mặc định. Song sinh android/keyboard/.../KeyEffect.kt (cùng khoá
+// Sóng nước, Tuyết rơi, Sao băng, Đèn lồng, Sương ma; "Không" = mặc định. Song sinh android/keyboard/.../KeyEffect.kt (cùng khoá
 // `keyEffect`, cùng id, cùng quỹ đạo / cùng hàm thuần: tia sét, mảnh vỡ, combo, nháy sáng, emoji).
 //
 // Luật hiệu năng (feature-flags-perf-policy — gõ mượt là số 1):
@@ -20,6 +20,8 @@ enum KeyEffect: String, CaseIterable {
     case flash, matrix, lightning
     case emojiword, blossom, combo, ink, wave
     case snow
+    // Bộ đủ món (theme Vũ trụ, 10/2026). Chỉ thêm CUỐI (id sao lưu / theme JSON).
+    case meteor
     // Bộ theme đủ món 10/2026: Đèn lồng (Trung Thu), Sương ma (Halloween) — đốm sáng mềm dựng sẵn (GlowSprite).
     case lantern, smoke
 
@@ -49,6 +51,7 @@ enum KeyEffect: String, CaseIterable {
         case .ink: return L("Mực loang")
         case .wave: return L("Sóng nước")
         case .snow: return L("Tuyết rơi")
+        case .meteor: return L("Sao băng")
         case .lantern: return L("Đèn lồng")
         case .smoke: return L("Sương ma")
         }
@@ -58,7 +61,7 @@ enum KeyEffect: String, CaseIterable {
     var isPlus: Bool { self != .none }
 
     /// Kiểu "hạt bay ra từ phím" (chùm hạt vector, quỹ đạo `trajectory`).
-    static let particleCases: [KeyEffect] = [.heart, .bubble, .ripple, .petal, .firework, .blossom, .combo, .snow,
+    static let particleCases: [KeyEffect] = [.heart, .bubble, .ripple, .petal, .firework, .blossom, .combo, .snow, .meteor,
                                              .lantern, .smoke]
     /// Hạt là ẢNH đốm sáng mềm dựng sẵn (GlowSprite — một lần mỗi màu), không path: Đèn lồng, Sương ma.
     var usesGlow: Bool { self == .lantern || self == .smoke }
@@ -78,6 +81,7 @@ enum KeyEffect: String, CaseIterable {
         case .blossom: return [0xFF8FB1, 0xFFC93C]            // đào hồng, mai vàng
         case .combo: return [0xFF7A1A, 0xFFC21A, 0xFF3B30]     // cam, vàng, đỏ
         case .snow: return [0xFFFFFF]
+        case .meteor: return [MeteorStreak.color]
         case .matrix: return [MatrixRain.green]
         case .lantern: return [0xFFA03C, 0xFFD27A]                // cam đèn lồng, vàng nến
         case .smoke: return [0xA594C8, 0x8B7BAA, 0xC2B8D6]        // tím xám
@@ -90,7 +94,7 @@ enum KeyEffect: String, CaseIterable {
     var particlesPerTap: Int {
         switch self {
         case .heart, .bubble, .petal, .blossom, .combo: return 3
-        case .ripple: return 1
+        case .ripple, .meteor: return 1
         case .firework: return 6
         case .snow: return 4
         case .lantern: return 2
@@ -159,6 +163,10 @@ enum KeyEffect: String, CaseIterable {
             return KeyEffectTrajectory(dx: t * 14, dy: 40 + Double(v % 3) * 8, scaleFrom: 0.8,
                                        scaleTo: 1.0 + Double(v % 2) * 0.15, rotation: t * 1.2,
                                        duration: 1.2, sway: 7)
+        case .meteor:    // vệt sáng lao CHÉO lên phải theo đúng góc của hình (không xoay), dài ra rồi tắt
+            let d = MeteorStreak.distance + Double(v % 2) * 8
+            return KeyEffectTrajectory(dx: cos(MeteorStreak.angle) * d, dy: sin(MeteorStreak.angle) * d,
+                                       scaleFrom: 0.55, scaleTo: 1.0, rotation: 0, duration: MeteorStreak.duration)
         case .lantern:   // đốm sáng bay LÊN chậm như đèn trời, nhỏ dần (xa dần), lắc nhẹ
             return KeyEffectTrajectory(dx: t * 10, dy: -(56 + Double(v % 2) * 10), scaleFrom: 1.0,
                                        scaleTo: 0.55 + Double(v % 2) * 0.1, rotation: 0,
@@ -425,6 +433,32 @@ enum InkBloom {
 }
 
 /// "Matrix": cột chữ xanh rơi — ảnh dải cột dựng MỘT lần, chỉ animate vị trí (GPU).
+/// "Sao băng" (theme Vũ trụ): MỘT hạt vector — vệt thon (đuôi dài phía sau, đầu tròn sáng) đặt sẵn theo góc
+/// bay, lao chéo từ tâm phím rồi tắt. Không xoay, không ảnh ⇒ dùng chung đường hạt (pool, CA / RenderThread).
+/// Android MeteorStreak y hệt (test số chung).
+enum MeteorStreak {
+    /// Hướng bay (rad, y xuống): lên-phải ≈ −35°.
+    static let angle = -0.61
+    static let distance = 56.0
+    static let duration = 0.5
+    static let length = 26.0, headRadius = 2.4, arcSteps = 6
+    /// Vàng ấm như sao băng (theme sáng có viền mảnh để thấy trên phím sáng).
+    static let color: UInt32 = 0xFFE7A0
+    static let edge: UInt32 = 0xB07A1A
+
+    /// Hình giọt (pt, tâm đầu tại gốc): nửa vòng đầu tròn phía trước (arcSteps đoạn) rồi mũi đuôi dài phía sau —
+    /// MỘT đa giác (không chồng hình ⇒ tô không thủng).
+    static func polygon() -> [(x: Double, y: Double)] {
+        var out: [(x: Double, y: Double)] = []
+        for k in 0...arcSteps {
+            let phi = angle + .pi / 2 - Double(k) * .pi / Double(arcSteps)
+            out.append((headRadius * cos(phi), headRadius * sin(phi)))
+        }
+        out.append((-cos(angle) * length, -sin(angle) * length))
+        return out
+    }
+}
+
 enum MatrixRain {
     static let green: UInt32 = 0x00FF41
     static let head: UInt32 = 0xD8FFE0
@@ -1167,6 +1201,10 @@ final class KeyEffectOverlay: UIView {
             l.fillColor = nil
             l.strokeColor = c.withAlphaComponent(0.8).cgColor
             l.lineWidth = 2
+        case .meteor:
+            l.fillColor = c.cgColor
+            l.strokeColor = dark ? nil : UIColor(rgb: MeteorStreak.edge).cgColor
+            l.lineWidth = dark ? 0 : 0.6
         case .snow:
             // Trắng; theme sáng: ánh xanh nhẹ + viền để thấy trên phím sáng.
             l.fillColor = (dark ? UIColor.white : UIColor(rgb: 0xDCEBFF)).cgColor
@@ -1375,6 +1413,7 @@ enum KeyEffectShapes {
         case .blossom: return i % 2 == 0 ? flower(7) : petal(6)
         case .combo: return flame(9)
         case .snow: return snowflake(6)
+        case .meteor: return meteor()
         // Đèn lồng / Sương ma vẽ bằng ảnh đốm sáng (GlowSprite); path = khung tròn của đốm (đo / dự phòng).
         case .lantern, .smoke:
             let r = CGFloat(GlowSprite.size / 2)
@@ -1441,6 +1480,16 @@ enum KeyEffectShapes {
                    control2: CGPoint(x: s * 0.75, y: s * 0.7))
         p.addCurve(to: CGPoint(x: 0, y: -s), control1: CGPoint(x: -s * 0.75, y: s * 0.7),
                    control2: CGPoint(x: -s * 0.9, y: -s * 0.1))
+        p.closeSubpath()
+        return p
+    }
+
+    /// Sao băng: giọt thon theo hướng bay — đầu tròn, đuôi dài (MeteorStreak).
+    static func meteor() -> CGPath {
+        let p = CGMutablePath()
+        let pts = MeteorStreak.polygon()
+        p.move(to: CGPoint(x: pts[0].x, y: pts[0].y))
+        for q in pts.dropFirst() { p.addLine(to: CGPoint(x: q.x, y: q.y)) }
         p.closeSubpath()
         return p
     }

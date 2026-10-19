@@ -35,7 +35,7 @@ final class KeyEffectTests: XCTestCase {
 
     func testIdsMatchAndroidAndDefaultIsNone() {
         // Cùng id với android/keyboard/.../KeyEffect.kt (sao lưu chéo nền tảng).
-        XCTAssertEqual(KeyEffect.allCases.map(\.rawValue), ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "lantern", "smoke"])
+        XCTAssertEqual(KeyEffect.allCases.map(\.rawValue), ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "meteor", "lantern", "smoke"])
         XCTAssertEqual(KeyEffect.key, "keyEffect")
         XCTAssertEqual(KeyEffect.defaultValue, .none)
         XCTAssertEqual(KeyEffect.parse(nil), .none)
@@ -57,7 +57,7 @@ final class KeyEffectTests: XCTestCase {
 
     func testBackupSpecWhitelistsIds() {
         let spec = BackupSettings.all.first { $0.key == KeyEffect.key }
-        XCTAssertEqual(spec?.kind, .string("none", ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "lantern", "smoke"]))
+        XCTAssertEqual(spec?.kind, .string("none", ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "meteor", "lantern", "smoke"]))
     }
 
     func testTitlesBilingual() {
@@ -449,6 +449,34 @@ final class KeyEffectTests: XCTestCase {
 // MARK: - Đợt 2 (Phil 19/10/2026): Nháy sáng, Matrix, Tia sét, Emoji theo chữ, Hoa đào / mai, Lửa combo,
 // Mực loang, Sóng nước, Tuyết rơi. Số tham chiếu (tia sét, cột Matrix) GIỐNG HỆT android KeyEffectTests.
 extension KeyEffectTests {
+    /// "Sao băng" (theme Vũ trụ): MỘT hạt / lần bấm, bay CHÉO lên-phải đúng góc của hình (không xoay), tắt trong
+    /// 0,5 s; hình giọt một đa giác — số tham chiếu GIỐNG HỆT Android KeyEffectFxTests.meteorParity.
+    func testMeteorModelAndShapeParity() {
+        let m = KeyEffect.meteor
+        XCTAssertTrue(m.isParticle); XCTAssertTrue(m.isPlus); XCTAssertEqual(m.band, .aboveKeys)
+        XCTAssertEqual(m.particlesPerTap, 1)
+        XCTAssertEqual(m.fixedColors, [0xFFE7A0])
+        XCTAssertLessThanOrEqual(m.burstSlots * m.layersPerBurst, KeyEffectPool.cap)
+        let ref: [(Double, Double)] = [(45.900289, -32.080578), (52.457473, -36.663517)]
+        for v in 0..<m.variantCount {
+            let t = m.trajectory(v)
+            XCTAssertEqual(t.dx, ref[v].0, accuracy: 1e-5); XCTAssertEqual(t.dy, ref[v].1, accuracy: 1e-5)
+            XCTAssertEqual(t.rotation, 0, "vệt không xoay — hình đã đặt theo hướng bay")
+            XCTAssertEqual(atan2(t.dy, t.dx), MeteorStreak.angle, accuracy: 1e-9, "bay đúng hướng vệt")
+            XCTAssertEqual(t.duration, 0.5, accuracy: 1e-9)
+        }
+        let poly = MeteorStreak.polygon()
+        let want: [(Double, Double)] = [(1.374882, 1.967155), (2.174260, 1.016165), (2.391047, -0.207105), (1.967155, -1.374882),
+                                        (1.016165, -2.174260), (-0.207105, -2.391047), (-1.374882, -1.967155), (-21.310848, 14.894554)]
+        XCTAssertEqual(poly.count, want.count)
+        for (a, b) in zip(poly, want) { XCTAssertEqual(a.x, b.0, accuracy: 1e-5); XCTAssertEqual(a.y, b.1, accuracy: 1e-5) }
+        // Đuôi nằm ngược hướng bay (phía dưới-trái), đầu tròn quanh gốc.
+        XCTAssertLessThan(poly.last!.x, 0); XCTAssertGreaterThan(poly.last!.y, 0)
+        let box = KeyEffectShapes.meteor().boundingBoxOfPath
+        XCTAssertLessThan(box.width, 30); XCTAssertLessThan(box.height, 22)
+        XCTAssertNotNil(KeyEffectShapes.path(.meteor))
+    }
+
     func testNewEffectsModel() {
         XCTAssertEqual(KeyEffect.allCases.filter { $0.band == .belowKeys }, [.matrix, .ink, .wave])
         for e in KeyEffect.allCases where e != .none { XCTAssertTrue(e.isPlus, e.rawValue) }
