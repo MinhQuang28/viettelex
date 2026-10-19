@@ -47,7 +47,10 @@ struct KeyEffectPickerView: View {
         let selected = current == e
         return VStack(spacing: 6) {
             Button { tap(e, locked: locked) } label: {
+                // Lớp SwiftUI trong suốt PHỦ lên ô xem trước UIKit: hit-test vào UIViewRepresentable
+                // không tới được Button ⇒ chạm ô không chọn được (Phil 19/10/2026).
                 KeyEffectPreview(effect: e, palette: palette, play: plays[e, default: 0])
+                    .overlay(Color.clear.contentShape(Rectangle()))
                     .frame(height: 84)
                     .clipShape(RoundedRectangle(cornerRadius: 10))
                     .overlay(RoundedRectangle(cornerRadius: 10)
@@ -60,7 +63,7 @@ struct KeyEffectPickerView: View {
                     }
                     .opacity(locked ? 0.5 : 1)
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)   // nhiều nút trong MỘT hàng List: .plain để List nuốt chạm
             .accessibilityLabel(e.title + (selected ? L(", đang chọn") : "") + (locked ? " · Plus" : ""))
             .accessibilityAddTraits(selected ? .isSelected : [])
             HStack(spacing: 4) {

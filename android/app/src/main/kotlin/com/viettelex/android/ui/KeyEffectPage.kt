@@ -67,13 +67,15 @@ internal fun KeyEffectPage(palette: ThemePalette, onOpenPlus: () -> Unit, onBack
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         Box(Modifier.fillMaxWidth().height(84.dp).clip(RoundedCornerShape(10.dp))
                             .border(if (selected) 3.dp else 1.dp, if (selected) c.accent else c.separator, RoundedCornerShape(10.dp))
-                            .alpha(if (locked) 0.5f else 1f)
-                            .clickable {
-                                if (locked) onOpenPlus() else { raw = e.id; plays[e] = (plays[e] ?: 0) + 1 }
-                            }) {
+                            .alpha(if (locked) 0.5f else 1f)) {
                             val play = plays[e] ?: 0
                             AndroidView(factory = { KeyEffectPreviewView(it) }, modifier = Modifier.matchParentSize(),
                                 update = { it.update(e, palette, play) })
+                            // Lớp Compose phủ TRÊN AndroidView nhận chạm: View con nhận sự kiện trước nên
+                            // clickable đặt ở Box cha không chắc tới được (iOS bị đúng lỗi này, 19/10/2026).
+                            Box(Modifier.matchParentSize().clickable {
+                                if (locked) onOpenPlus() else { raw = e.id; plays[e] = (plays[e] ?: 0) + 1 }
+                            })
                             if (selected) Text("✓", style = VTType.body, color = c.accent,
                                 modifier = Modifier.align(Alignment.TopEnd).padding(6.dp))
                         }
