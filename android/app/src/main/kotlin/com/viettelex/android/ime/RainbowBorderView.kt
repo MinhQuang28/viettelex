@@ -14,7 +14,7 @@ import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import com.viettelex.keyboard.RainbowBorder
-import com.viettelex.keyboard.RainbowClock
+import com.viettelex.keyboard.RainbowDriver
 
 /**
  * Viền phím cầu vồng — theme "Gaming RGB" (iOS RainbowBorderView song sinh). Chỉ tồn tại khi theme có
@@ -22,11 +22,13 @@ import com.viettelex.keyboard.RainbowClock
  *
  * MỘT dải gradient ([Strip], rộng gấp đôi bàn phím, cầu vồng lặp 2 chu kỳ) bị che bởi MỘT Path là viền mọi phím:
  * display list của view này = saveLayer · viền (đục) · dải (SRC_IN) · restore — ghi MỘT lần (dựng lại chỉ khi
- * khung phím đổi). Trượt màu = đổi translationX của dải: chỉ là thuộc tính RenderNode ⇒ không ghi lại display list,
- * RenderThread / GPU vẽ. Không animation từng phím.
+ * khung phím đổi). Trượt màu = translationX, độ sáng = alpha của dải: chỉ là thuộc tính RenderNode ⇒ không ghi lại
+ * display list, RenderThread / GPU vẽ. Không animation từng phím. Độ lệch luôn lấy dư theo chu kỳ ⇒ dải 2W luôn phủ
+ * [0, W] (mọi bề ngang / xoay).
  *
- * Chỉ chạy KHI ĐANG GÕ: phím đầu hẹn khung hình (postOnAnimation, tự đếm giờ — tắt hiệu ứng động hệ thống không
- * làm đứng); nghỉ [RainbowBorder.IDLE_AFTER] giây ⇒ thôi hẹn, đứng yên ở cầu vồng tĩnh (0 khung hình, 0 CPU).
+ * Chỉ chạy KHI ĐANG GÕ ([RainbowDriver], thuần — test JVM): phím đầu hẹn khung hình (postOnAnimation, tự đếm giờ —
+ * tắt hiệu ứng động hệ thống không làm đứng), tăng tốc + sáng 100%; nghỉ [RainbowBorder.IDLE_AFTER] giây ⇒ giảm tốc
+ * tới dừng + mờ dần xuống ánh nghỉ (~1 s) rồi THÔI hẹn khung (0 khung hình, 0 CPU khi nghỉ).
  */
 @SuppressLint("ViewConstructor")
 class RainbowBorderView(context: Context, private val density: Float) : ViewGroup(context) {
@@ -39,6 +41,8 @@ class RainbowBorderView(context: Context, private val density: Float) : ViewGrou
                 FloatArray(pos.size) { pos[it].toFloat() }, Shader.TileMode.CLAMP)
         }
         override fun onDraw(canvas: Canvas) { canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint) }
+        /** Một hình chữ nhật ⇒ alpha < 1 không cần lớp offscreen. */
+        override fun hasOverlappingRendering() = false
     }
 
     private val strip = Strip(context)
@@ -46,11 +50,9 @@ class RainbowBorderView(context: Context, private val density: Float) : ViewGrou
     private val outlinePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         style = Paint.Style.STROKE; strokeWidth = (RainbowBorder.LINE_WIDTH * density).toFloat(); color = 0xFF000000.toInt()
     }
-    private val clock = RainbowClock()
-    /** Độ lệch (0…1 bề ngang) khi đứng yên. */
-    var phase = 0.0
-        private set
-    private var runStart = 0.0
+    private val driver = RainbowDriver()
+    /** Độ lệch đang hiện (0…1 bề ngang). */
+    val phase: Double get() = driver.offset(now())
     private var framePosted = false
     private val frame = Runnable { onFrame() }
 
@@ -66,6 +68,7 @@ class RainbowBorderView(context: Context, private val density: Float) : ViewGrou
         importantForAccessibility = IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS
         setWillNotDraw(false)
         addView(strip)
+        strip.alpha = RainbowBorder.REST_ALPHA.toFloat()
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -82,37 +85,36 @@ class RainbowBorderView(context: Context, private val density: Float) : ViewGrou
 
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val w = MeasureSpec.getSize(widthMeasureSpec); val h = MeasureSpec.getSize(heightMeasureSpec)
-        strip.measure(MeasureSpec.makeMeasureSpec(2 * w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+        strip.measure(MeasureSpec.makeMeasureSpec(RainbowBorder.STRIP_PERIODS * w, MeasureSpec.EXACTLY),
+            MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
         setMeasuredDimension(w, h)
     }
 
     override fun onLayout(changed: Boolean, l: Int, t: Int, r: Int, b: Int) {
-        strip.layout(0, 0, 2 * (r - l), b - t)
-        applyPhase()
+        strip.layout(0, 0, RainbowBorder.STRIP_PERIODS * (r - l), b - t)
+        apply(now())
     }
 
     override fun dispatchDraw(canvas: Canvas) {
         if (outline.isEmpty) return
         val sc = canvas.saveLayer(0f, 0f, width.toFloat(), height.toFloat(), null)
         canvas.drawPath(outline, outlinePaint)
-        super.dispatchDraw(canvas)                 // dải (RenderNode con, translationX) SRC_IN ⇒ chỉ còn viền
+        super.dispatchDraw(canvas)                 // dải (RenderNode con, translationX / alpha) SRC_IN ⇒ chỉ còn viền
         canvas.restoreToCount(sc)
     }
 
     /** Một phím vừa tới IME (chữ đã chèn). Nghỉ → chạy: hẹn khung hình. Đang chạy: chỉ ghi giờ. */
     fun poke() {
         val t0 = System.nanoTime()
-        val now = SystemClock.uptimeMillis() / 1000.0
-        if (clock.poke(now)) {
-            runStart = now
-            if (!framePosted) { framePosted = true; postOnAnimation(frame) }
-        }
+        if (driver.poke(now()) && !framePosted) { framePosted = true; postOnAnimation(frame) }
         costNs += System.nanoTime() - t0
     }
 
-    /** Ẩn bàn phím: đứng yên ngay. */
+    /** Ẩn bàn phím: đứng yên ngay ở ánh nghỉ. */
     fun halt() {
-        if (clock.running) freeze(SystemClock.uptimeMillis() / 1000.0)
+        val now = now()
+        driver.halt(now)
+        apply(now)
         removeCallbacks(frame); framePosted = false
     }
 
@@ -121,33 +123,29 @@ class RainbowBorderView(context: Context, private val density: Float) : ViewGrou
         halt()
     }
 
-    val running: Boolean get() = clock.running
+    val running: Boolean get() = driver.running
+
+    private fun now() = SystemClock.uptimeMillis() / 1000.0
 
     private fun onFrame() {
         framePosted = false
-        if (!clock.running) return
-        val now = SystemClock.uptimeMillis() / 1000.0
-        if (clock.idleRemaining(now) <= 0) { freeze(now); return }
+        val now = now()
+        val more = driver.frame(now)
+        apply(now)
+        if (!more) return                          // đã dừng + mờ xong ⇒ thôi hẹn khung
         frames++
-        setOffset(RainbowBorder.offset(phase, now - runStart))
         framePosted = true
         postOnAnimation(frame)
     }
 
-    private fun freeze(now: Double) {
-        phase = RainbowBorder.offset(phase, now - runStart)
-        clock.stop()
-        applyPhase()
-    }
-
-    private fun applyPhase() = setOffset(phase)
-
-    /** Dịch dải (thuộc tính RenderNode — không vẽ lại / không ghi lại display list). */
-    private fun setOffset(o: Double) {
-        val tx = (-o * width).toFloat()
+    /** Dịch dải + độ sáng (thuộc tính RenderNode — không vẽ lại / không ghi lại display list). */
+    private fun apply(now: Double) {
+        val tx = (-driver.offset(now) * width).toFloat()
         if (strip.translationX != tx) strip.translationX = tx
+        val a = driver.alpha(now).toFloat()
+        if (strip.alpha != a) strip.alpha = a
     }
 
     /** Test: chỉnh thời gian nghỉ. */
-    internal fun setIdleForTest(s: Double) { clock.idleAfter = s }
+    internal fun setIdleForTest(s: Double) { driver.clock.idleAfter = s }
 }
