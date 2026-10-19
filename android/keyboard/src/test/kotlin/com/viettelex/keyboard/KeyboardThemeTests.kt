@@ -27,14 +27,15 @@ class KeyboardThemeTests {
     // ---- token
 
     @Test fun compactSetSystemDefault() {
-        assertTrue(KeyboardTheme.entries.size in 6..20)
+        assertTrue(KeyboardTheme.entries.size in 6..24)
         assertEquals(KeyboardTheme.SYSTEM, ThemeSettings().theme)
         assertNull("Hệ thống dùng màu Material You trong resources", KeyboardTheme.SYSTEM.palette(false))
     }
 
     @Test fun sameIdsAsIOS() {
         assertEquals(listOf("system", "oled", "contrast", "peach", "mint", "sky", "lavender", "glass",
-            "blackHeart", "greenFloral", "sage", "neon", "pink", "tet", "tetMai", "xmas", "xmasSnow", "piano"),
+            "blackHeart", "greenFloral", "sage", "neon", "pink", "tet", "tetMai", "xmas", "xmasSnow", "piano",
+            "trungthu", "valentine", "halloween"),
             KeyboardTheme.entries.map { it.id })
     }
 

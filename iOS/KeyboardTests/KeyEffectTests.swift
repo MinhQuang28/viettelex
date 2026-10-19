@@ -35,7 +35,7 @@ final class KeyEffectTests: XCTestCase {
 
     func testIdsMatchAndroidAndDefaultIsNone() {
         // Cùng id với android/keyboard/.../KeyEffect.kt (sao lưu chéo nền tảng).
-        XCTAssertEqual(KeyEffect.allCases.map(\.rawValue), ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow"])
+        XCTAssertEqual(KeyEffect.allCases.map(\.rawValue), ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "lantern", "smoke"])
         XCTAssertEqual(KeyEffect.key, "keyEffect")
         XCTAssertEqual(KeyEffect.defaultValue, .none)
         XCTAssertEqual(KeyEffect.parse(nil), .none)
@@ -57,7 +57,7 @@ final class KeyEffectTests: XCTestCase {
 
     func testBackupSpecWhitelistsIds() {
         let spec = BackupSettings.all.first { $0.key == KeyEffect.key }
-        XCTAssertEqual(spec?.kind, .string("none", ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow"]))
+        XCTAssertEqual(spec?.kind, .string("none", ["none", "heart", "bubble", "ripple", "petal", "firework", "flash", "matrix", "lightning", "emojiword", "blossom", "combo", "ink", "wave", "snow", "lantern", "smoke"]))
     }
 
     func testTitlesBilingual() {
@@ -781,6 +781,48 @@ extension KeyEffectTests {
         var w: CGFloat = 0
         UIColor(cgColor: sl[0].fillColor!).getWhite(&w, alpha: nil)
         XCTAssertEqual(w, 1, accuracy: 0.01, "tuyết trắng (theme tối)")
+    }
+
+    // MARK: Đèn lồng / Sương ma (bộ theme đủ món 10/2026)
+
+    func testLanternSmokeModel() {
+        for e in [KeyEffect.lantern, .smoke] {
+            XCTAssertTrue(e.isParticle && e.usesGlow && e.isPlus, e.rawValue)
+            XCTAssertEqual(e.band, .aboveKeys)
+            XCTAssertFalse(e.fixedColors.isEmpty, "màu cố định, không theo màu nhấn")
+            for v in 0..<e.variantCount {
+                let t = e.trajectory(v)
+                XCTAssertLessThan(t.dy, 0, "\(e) bay LÊN")
+                XCTAssertGreaterThan(t.sway, 0)
+            }
+        }
+        XCTAssertFalse(KeyEffect.heart.usesGlow)
+        // Đèn trời: bay cao + nhỏ dần (xa dần); sương: phồng to, tan.
+        XCTAssertLessThan(KeyEffect.lantern.trajectory(0).dy, -50)
+        XCTAssertLessThan(KeyEffect.lantern.trajectory(0).scaleTo, KeyEffect.lantern.trajectory(0).scaleFrom)
+        XCTAssertGreaterThan(KeyEffect.smoke.trajectory(0).scaleTo, KeyEffect.smoke.trajectory(0).scaleFrom)
+        // Mốc chung Android (KeyEffectFxTests.lanternSmokeModel).
+        XCTAssertEqual(KeyEffect.lantern.trajectory(3).dx, 10, accuracy: 1e-9)
+        XCTAssertEqual(KeyEffect.lantern.trajectory(3).dy, -66, accuracy: 1e-9)
+        XCTAssertEqual(KeyEffect.smoke.trajectory(5).duration, 1.1, accuracy: 1e-9)
+        XCTAssertEqual(GlowSprite.stops(.lantern).count, 4)
+        XCTAssertEqual(L10n.en["Đèn lồng"], "Lantern glow"); XCTAssertEqual(L10n.en["Sương ma"], "Spooky mist")
+    }
+
+    /// Đốm sáng: ảnh dựng MỘT lần mỗi màu lúc cài; mỗi lần bấm chỉ dời layer (không vẽ lại ảnh), ≤ trần layer.
+    @MainActor func testGlowParticlesUseSharedImages() throws {
+        let host = UIView(frame: CGRect(x: 0, y: 0, width: 390, height: 260))
+        for e in [KeyEffect.lantern, .smoke] {
+            let o = try XCTUnwrap(KeyEffectOverlay.install(e, color: .blue, dark: true, in: host, existing: nil))
+            XCTAssertEqual(o.debugGlowCount, e.fixedColors.count)
+            for i in 0..<60 { o.emit(at: CGPoint(x: 10 + i, y: 100)); o.flush() }
+            XCTAssertLessThanOrEqual(o.debugParticleCount, KeyEffectPool.cap)
+            let layers = o.debugBursts.flatMap { $0.sublayers ?? [] }
+            XCTAssertTrue(layers.allSatisfy { $0.contents != nil && !($0 is CAShapeLayer) }, e.rawValue)
+            let images = Set(layers.map { ObjectIdentifier($0.contents as AnyObject) })
+            XCTAssertLessThanOrEqual(images.count, e.fixedColors.count, "dùng chung ảnh, không dựng mỗi phím")
+            _ = KeyEffectOverlay.install(.none, color: .blue, in: host, existing: o)
+        }
     }
 
     /// Bộ chậm: Matrix sau khi dừng KHÔNG tốn CPU main (so với không có hiệu ứng). In "KEYFX-IDLE".

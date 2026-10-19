@@ -170,7 +170,7 @@ final class KeyboardThemeTests: XCTestCase {
     // MARK: token
 
     func testThemeSetIsCompactAndSystemIsDefault() {
-        XCTAssertTrue((6...20).contains(KeyboardTheme.allCases.count))
+        XCTAssertTrue((6...24).contains(KeyboardTheme.allCases.count))
         XCTAssertEqual(ThemeSettings().theme, .system)
         XCTAssertEqual(ThemeSettings.load(nil).theme, .system)
     }
@@ -193,7 +193,7 @@ final class KeyboardThemeTests: XCTestCase {
     /// Theme tối cố định (OLED, Tương phản cao, Tim đen, Neon) không đổi theo hệ thống; mọi theme
     /// nền đục khác có bản tối riêng (bug 10/2026: "giao diện plus ở chế độ tối không chuyển tối").
     func testFixedThemesIgnoreSystemAppearance() {
-        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon, .tet, .xmas, .piano]
+        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon, .tet, .xmas, .piano, .trungthu, .halloween]
         for t in KeyboardTheme.allCases where t != .system && t != .glass {
             XCTAssertNotNil(t.palette(systemDark: false).background, "\(t) cần nền đục")
             if fixed.contains(t) {
@@ -863,7 +863,8 @@ final class ThemeSetTests: XCTestCase {
     }
 
     static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .neon, .pink,
-                                             .tet, .tetMai, .xmas, .xmasSnow, .piano]
+                                             .tet, .tetMai, .xmas, .xmasSnow, .piano,
+                                             .trungthu, .valentine, .halloween]
     static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
 
     // MARK: bảng màu chung iOS ↔ Android
@@ -898,11 +899,11 @@ final class ThemeSetTests: XCTestCase {
         let f = try fixture()
         XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
         XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
-        XCTAssertEqual(f.rows.count, 32)
+        XCTAssertEqual(f.rows.count, 38)
         for r in f.rows {
             let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
             let p = t.palette(systemDark: r.dark)
-            let deco = p.decoration.map { "\($0.motif.rawValue):\(Self.hex($0.color))" } ?? "-"
+            let deco = p.decoration.map { "\($0.motif.rawValue)\($0.alt.map { "+" + $0.rawValue } ?? ""):\(Self.hex($0.color))" } ?? "-"
             let got = [Self.hex(p.background), Self.hex(p.keyFill), Self.hex(p.specialFill), Self.hex(p.ink),
                        Self.hex(p.accent), Self.hex(p.accentInk), Self.hex(p.keyBorder), Self.hex(p.functionFill),
                        Self.hex(p.functionInk), deco]
@@ -1007,6 +1008,75 @@ final class ThemeSetTests: XCTestCase {
             XCTAssertEqual(L10n.en[t.title] != nil || L10n.en[t.spec!.nameVi] != nil, true, t.rawValue)
         }
     }
+
+    /// Bộ đủ món 10/2026: Trung Thu / Valentine / Halloween mang đủ màu + hoạ tiết + hiệu ứng + âm (Android y hệt).
+    func testFullPackThemes() throws {
+        let want: [(KeyboardTheme, String, String, KeyboardDecoration.Motif, KeyboardDecoration.Motif?)] = [
+            (.trungthu, "trong", "lantern", .lantern, .moon), (.valentine, "pop", "heart", .hearts, nil),
+            (.halloween, "boo", "smoke", .pumpkin, .bat)]
+        for (t, snd, fx, m, alt) in want {
+            let spec = try XCTUnwrap(t.spec, t.rawValue)
+            XCTAssertEqual(spec.sound, snd); XCTAssertEqual(spec.effect, fx)
+            XCTAssertTrue(KeySoundStyle.presetIDs.contains(snd)); XCTAssertNotNil(KeyEffect(rawValue: fx))
+            XCTAssertTrue(t.isPlus, t.rawValue)
+            XCTAssertNotNil(L10n.en[t.title], t.rawValue)
+            XCTAssertEqual(spec.nameEn, ["trungthu": "Mid-Autumn", "valentine": "Valentine", "halloween": "Halloween"][t.rawValue])
+            for dark in [false, true] {
+                let d = try XCTUnwrap(t.palette(systemDark: dark).decoration, t.rawValue)
+                XCTAssertEqual(d.motif, m); XCTAssertEqual(d.alt, alt)
+            }
+            // Chọn theme ⇒ đặt hiệu ứng + kiểu âm, KHÔNG bật âm thanh phím.
+            let yes: (String) -> Bool = { _ in true }
+            XCTAssertEqual(ThemeExtras.plan(ThemeSettings(theme: t).effectiveKeyStyle, soundOn: false, effectAllowed: yes, soundAllowed: yes),
+                           ThemeExtras.Outcome(effect: fx, sound: snd, soundHint: true))
+        }
+        // Trung Thu / Halloween nền tối cố định; Valentine có bản sáng hồng + bản tối đỏ rượu.
+        XCTAssertTrue(KeyboardTheme.trungthu.palette(systemDark: false).isDark)
+        XCTAssertTrue(KeyboardTheme.halloween.palette(systemDark: false).isDark)
+        XCTAssertFalse(KeyboardTheme.valentine.palette(systemDark: false).isDark)
+        XCTAssertTrue(KeyboardTheme.valentine.palette(systemDark: true).isDark)
+    }
+
+    /// Motif thứ hai xen kẽ ("alt"): vị trí chẵn = motif, lẻ = alt; chép JSON giữ nguyên; không alt ⇒ như cũ.
+    func testDecorationAltAlternates() throws {
+        typealias D = KeyboardDecoration
+        let d = D(motif: .pumpkin, color: .white, alt: .bat)
+        XCTAssertEqual((0..<4).map(d.motif(at:)), [.pumpkin, .bat, .pumpkin, .bat])
+        XCTAssertEqual(D(motif: .hearts, color: .white).motif(at: 1), .hearts)
+        // Path xen kẽ ≠ path một motif (cùng vị trí).
+        let pts = [D.Placement(x: 20, y: 20, size: 8), D.Placement(x: 60, y: 20, size: 8)]
+        XCTAssertNotEqual(d.path(pts), D(motif: .pumpkin, color: .white).path(pts))
+        XCTAssertEqual(D(motif: .pumpkin, color: .white, alt: .pumpkin).path(pts), D(motif: .pumpkin, color: .white).path(pts))
+        // Khứ hồi JSON theme có sẵn.
+        let text = try XCTUnwrap(ThemeJSONActions.copyText(.builtin(.halloween), settings: ThemeSettings(theme: .halloween), store: [:]))
+        XCTAssertTrue(text.contains("\"alt\""), text)
+        let back = try XCTUnwrap(ThemeSpecParser.parse(text).spec)
+        XCTAssertEqual(back.light.deco?.alt, .bat)
+        XCTAssertEqual(ThemeSpec.palette(back.light).decoration, KeyboardTheme.halloween.palette(systemDark: false).decoration)
+    }
+
+    /// Hình motif mới (đèn lồng, trăng, bí ngô, dơi): mọi đường con cùng chiều (diện tích có dấu > 0 — tô nonzero
+    /// không thủng), nằm trong ô ±0.5; tổng toạ độ = mốc chung Android (ThemeSetTests.newMotifShapesParity).
+    func testNewMotifShapesWindingBoundsAndParity() {
+        for m in [KeyboardDecoration.Motif.lantern, .moon, .pumpkin, .bat] {
+            let subs = KeyboardDecoration.shape(m)
+            XCTAssertFalse(subs.isEmpty, m.rawValue)
+            var sum = 0.0
+            for sub in subs {
+                var pts = [[sub.start.0, sub.start.1]]
+                for g in sub.segs { var i = 0; while i < g.count { pts.append([g[i], g[i + 1]]); i += 2 } }
+                var a = 0.0
+                for i in 0..<pts.count { let p = pts[i], q = pts[(i + 1) % pts.count]; a += p[0] * q[1] - q[0] * p[1] }
+                XCTAssertGreaterThan(a, 0, "\(m) chiều quay")
+                for p in pts {
+                    XCTAssertLessThanOrEqual(abs(p[0]), 0.5 + 1e-9, m.rawValue); XCTAssertLessThanOrEqual(abs(p[1]), 0.5 + 1e-9, m.rawValue)
+                    sum += p[0] * 3 + p[1] * 7
+                }
+            }
+            XCTAssertEqual(sum, Self.motifChecksums[m.rawValue] ?? .nan, accuracy: 1e-6, m.rawValue)
+        }
+    }
+    static let motifChecksums: [String: Double] = ["lantern": 0.55, "moon": 6.8533471195, "pumpkin": -4.65, "bat": -26.67]
 
     /// Chép JSON → sửa → dán: "sound" / "effect" đi trọn vòng (theme có sẵn, bản vá, theme tự tạo).
     func testSoundEffectRoundTrip() throws {
@@ -1132,6 +1202,9 @@ final class ThemeSetTests: XCTestCase {
                 case .xmas: XCTAssertEqual(m, .snowflake)
                 case .xmasSnow: XCTAssertEqual(m, dark ? .star : .snowflake)
                 case .piano: XCTAssertEqual(m, .notes)
+                case .trungthu: XCTAssertEqual(m, .lantern)
+                case .valentine: XCTAssertEqual(m, .hearts)
+                case .halloween: XCTAssertEqual(m, .pumpkin)
                 default: XCTAssertNil(m, t.rawValue)
                 }
             }
@@ -1176,7 +1249,7 @@ final class ThemeSetTests: XCTestCase {
         let d = UserDefaultsProvider.shared
         let saved = d?.object(forKey: ThemeSettings.themeKey)
         defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
-        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano] {
+        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano, .trungthu, .halloween] {
             for dark in [false, true] {
                 d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
                 let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }

@@ -9,6 +9,7 @@ import Foundation
 //    "light":{"bg":"#FBE3E1","key":"#FFF8F7","special":"#F1C4BF","ink":"#4A2226","accent":"#C2505A",
 //             "accentInk":"#FFFFFF","border":"#4CAF6E","fn":"#A9BFA3","fnInk":"#C2255C",
 //             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100}},
+//             (deco "alt": motif thứ hai xen kẽ, vd {"motif":"pumpkin","alt":"bat",…})
 //    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold",
 //    "sound":"phao", "effect":"blossom"}
 //
@@ -408,6 +409,8 @@ struct ThemeDeco: Equatable {
     var color: UInt32 = 0
     /// Mật độ % (bước ngang = stepX × 100 / density), kẹp 50…200.
     var density = 100
+    /// Motif thứ hai xen kẽ ("alt", tuỳ chọn) — chỉ có khi `motif` khác nil.
+    var alt: KeyboardDecoration.Motif? = nil
     static let densityRange = 50...200
 }
 
@@ -750,7 +753,7 @@ enum ThemeSpecParser {
     private static func deco(_ v: StrictJSON, _ p: String, _ c: inout Ctx) -> ThemeDeco? {
         guard case .object(let m) = v else { c.err(.wrongType, p); return nil }
         let d = Dictionary(m, uniquingKeysWith: { a, _ in a })
-        for (k, _) in m where !["motif", "color", "density"].contains(k) { c.err(.unknownKey, p + "." + k) }
+        for (k, _) in m where !["motif", "alt", "color", "density"].contains(k) { c.err(.unknownKey, p + "." + k) }
         var out = ThemeDeco(motif: nil)
         switch d["motif"] {
         case .string("none")?: out.motif = nil
@@ -770,6 +773,14 @@ enum ThemeSpecParser {
             }
         } else if d["color"] != nil {
             if case .string(let s)? = d["color"], ThemeColorCode.parse(s) != nil {} else { c.err(.badColor, p + ".color") }
+        }
+        // "alt": motif thứ hai xen kẽ (không "none"; bỏ qua khi motif = "none").
+        switch d["alt"] {
+        case nil: break
+        case .string(let s)?:
+            guard let mo = KeyboardDecoration.Motif(rawValue: s) else { c.err(.badValue, p + ".alt"); return nil }
+            if out.motif != nil { out.alt = mo }
+        default: c.err(.wrongType, p + ".alt"); return nil
         }
         switch d["density"] {
         case nil: break
@@ -1003,6 +1014,7 @@ extension ThemeSpec {
         if let d = s.deco {
             var dm: [(String, StrictJSON)] = [("motif", .string(d.motif?.rawValue ?? "none"))]
             if d.motif != nil {
+                if let a = d.alt { dm.append(("alt", .string(a.rawValue))) }
                 dm.append(("color", .string(ThemeColorCode.format(d.color))))
                 if d.density != 100 { dm.append(("density", .int(d.density))) }
             }
@@ -1045,7 +1057,7 @@ extension ThemeSpec {
             }
         }
         if let dc = s.deco, let m = dc.motif {
-            p.decoration = KeyboardDecoration(motif: m, color: c(dc.color), density: dc.density)
+            p.decoration = KeyboardDecoration(motif: m, color: c(dc.color), density: dc.density, alt: dc.alt)
         }
         return p
     }
@@ -1062,7 +1074,7 @@ extension ThemeSpec {
         s.fnInk = p.functionInk.map(a)
         if a(p.balloon) != a(p.keyFill) { s.balloon = a(p.balloon) }
         if a(p.trail) != a(p.accent.alpha(0.6)) { s.trail = a(p.trail) }
-        if let d = p.decoration { s.deco = ThemeDeco(motif: d.motif, color: a(d.color), density: d.density) }
+        if let d = p.decoration { s.deco = ThemeDeco(motif: d.motif, color: a(d.color), density: d.density, alt: d.alt) }
         return s
     }
 

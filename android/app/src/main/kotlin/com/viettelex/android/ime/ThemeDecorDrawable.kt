@@ -36,7 +36,7 @@ class ThemeDecorDrawable(private val bg: Int, private val decoration: ThemeDecor
 
     private fun rebuild() {
         decorPath(path, decoration.motif, ThemeDecoration.placements(bounds.width() / density.toDouble(), gaps, decoration.density),
-            density, bounds.left.toFloat(), 0f)
+            density, bounds.left.toFloat(), 0f, decoration.alt)
     }
 
     override fun draw(canvas: Canvas) {
@@ -52,18 +52,22 @@ class ThemeDecorDrawable(private val bg: Int, private val decoration: ThemeDecor
 
 /** Dựng path hoạ tiết vào [path] từ [placements] (dp), [unitPx] px mỗi dp, gốc (left, top). Nền IME + xem trước. */
 fun decorPath(path: Path, motif: String, placements: List<ThemeDecoration.Placement>, unitPx: Float,
-              left: Float = 0f, top: Float = 0f) {
+              left: Float = 0f, top: Float = 0f, alt: String? = null) {
     path.rewind()
     val d = unitPx.toDouble()
-    // Mai / đào / bông tuyết / sao / nốt nhạc: dữ liệu hình chung iOS — tính MỘT lần mỗi lần dựng path.
-    val shape = ThemeDecoration.shape(motif)
-    for (p in placements) {
+    // Mai / đào / bông tuyết / sao / nốt nhạc / đèn lồng…: dữ liệu hình chung iOS — tính MỘT lần mỗi lần dựng path.
+    // [alt]: motif thứ hai xen kẽ (vị trí lẻ) — Trung Thu đèn lồng + trăng, Halloween bí ngô + dơi.
+    val motifs = arrayOf(motif, alt ?: motif)
+    val shapes = arrayOf(ThemeDecoration.shape(motifs[0]), ThemeDecoration.shape(motifs[1]))
+    for ((k, p) in placements.withIndex()) {
+        val m = motifs[k % 2]
+        val shape = shapes[k % 2]
         val s = p.size * d
         val ox = left + p.x * d; val oy = top + p.y * d
         fun x(u: Double) = (ox + u * s).toFloat()
         fun y(u: Double) = (oy + u * s).toFloat()
         when {
-            motif == ThemeDecoration.HEARTS -> {
+            m == ThemeDecoration.HEARTS -> {
                 path.moveTo(x(ThemeDecoration.HEART_START[0]), y(ThemeDecoration.HEART_START[1]))
                 for (c in ThemeDecoration.HEART_CUBICS) path.cubicTo(x(c[0]), y(c[1]), x(c[2]), y(c[3]), x(c[4]), y(c[5]))
                 path.close()

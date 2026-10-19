@@ -61,9 +61,9 @@ class KeySoundTests {
         assertFalse(KeySoundStyle.CUSTOM in KeySoundStyle.PRESETS)
         // ordinal = seed nhiễu: kiểu cũ giữ vị trí; id + thứ tự Y HỆT iOS allCases.
         assertEquals(listOf("subtle", "wood", "mechanical", "typewriter", "bubble", "custom", "system", "rock", "pop", "water", "vintage",
-            "phao", "jingle", "piano"),
+            "phao", "jingle", "piano", "trong", "boo"),
             KeySoundStyle.entries.map { it.id })
-        for (id in listOf("system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano")) assertTrue(id, id in KeySoundStyle.IDS)
+        for (id in listOf("system", "rock", "pop", "water", "vintage", "phao", "jingle", "piano", "trong", "boo")) assertTrue(id, id in KeySoundStyle.IDS)
         for (st in KeySoundStyle.entries) assertNotNull("$st thiếu bản EN", L10nTable.EN[st.viTitle])
         assertNotNull(L10nTable.EN["Âm thanh gõ"])
     }
@@ -124,7 +124,8 @@ class KeySoundTests {
         val golden = mapOf(KeySoundStyle.SUBTLE to 169.1699, KeySoundStyle.WOOD to 192.4240,
             KeySoundStyle.MECHANICAL to 239.0849, KeySoundStyle.TYPEWRITER to 139.7659, KeySoundStyle.BUBBLE to 233.6785,
             KeySoundStyle.ROCK to 128.7247, KeySoundStyle.POP to 154.4214, KeySoundStyle.WATER to 246.5762, KeySoundStyle.VINTAGE to 139.9505,
-            KeySoundStyle.PHAO to 61.5246, KeySoundStyle.JINGLE to 206.7064)
+            KeySoundStyle.PHAO to 61.5246, KeySoundStyle.JINGLE to 206.7064,
+            KeySoundStyle.TRONG to 215.6880, KeySoundStyle.BOO to 218.0905)
         for ((st, want) in golden) {
             val s = KeySoundSynth.samples(st, KeySoundSynth.Kind.LETTER).sumOf { abs(it).toDouble() }
             assertEquals("$st", want, s, 0.01)
@@ -135,7 +136,8 @@ class KeySoundTests {
     @Test fun crossPlatformChecksumsNewKinds() {
         val golden = listOf(Triple(KeySoundStyle.ROCK, 125.7988, 176.4305), Triple(KeySoundStyle.POP, 153.6654, 183.0577),
             Triple(KeySoundStyle.WATER, 236.6294, 280.8465), Triple(KeySoundStyle.VINTAGE, 167.8816, 218.2744),
-            Triple(KeySoundStyle.PHAO, 69.1895, 93.5815), Triple(KeySoundStyle.JINGLE, 212.6919, 254.5561))
+            Triple(KeySoundStyle.PHAO, 69.1895, 93.5815), Triple(KeySoundStyle.JINGLE, 212.6919, 254.5561),
+            Triple(KeySoundStyle.TRONG, 224.8199, 280.9894), Triple(KeySoundStyle.BOO, 217.3713, 252.9794))
         for ((st, del, mod) in golden) {
             assertEquals("$st", del, KeySoundSynth.samples(st, KeySoundSynth.Kind.DELETE).sumOf { abs(it).toDouble() }, 0.01)
             assertEquals("$st", mod, KeySoundSynth.samples(st, KeySoundSynth.Kind.MODIFIER).sumOf { abs(it).toDouble() }, 0.01)
@@ -157,10 +159,25 @@ class KeySoundTests {
             .contentEquals(KeySoundSynth.samples(KeySoundStyle.PHAO, KeySoundSynth.Kind.DELETE)))
     }
 
+    /** Trống lân / Ma quái KHÔNG to hơn "Gõ gỗ" (đỉnh + RMS), trầm êm, ≤ 62 ms (iOS testTrongBooQuietAndShort). */
+    @Test fun trongBooQuiet() {
+        for (k in KeySoundSynth.Kind.entries) {
+            val wood = KeySoundSynth.samples(KeySoundStyle.WOOD, k)
+            for (st in listOf(KeySoundStyle.TRONG, KeySoundStyle.BOO)) {
+                val a = KeySoundSynth.samples(st, k)
+                assertTrue("$st/$k", KeySoundSynth.rms(a) < KeySoundSynth.rms(wood))
+                assertTrue("$st/$k", a.maxOf { abs(it) } < wood.maxOf { abs(it) })
+                assertTrue("$st/$k", a.size.toDouble() / KeySoundSynth.SAMPLE_RATE < 0.062)
+                assertTrue("$st/$k", KeySoundSynth.spectralCentroid(a) < if (st == KeySoundStyle.TRONG) 400.0 else 800.0)
+            }
+        }
+        assertEquals("Lion drum", L10nTable.EN["Trống lân"]); assertEquals("Spooky", L10nTable.EN["Ma quái"])
+    }
+
     /** Danh sách id DUY NHẤT cho "sound" của theme JSON (trùng iOS presetIDs); "theme" (đã bỏ) ⇒ mặc định. */
     @Test fun presetIdsForThemeJson() {
         assertEquals(listOf("subtle", "wood", "mechanical", "typewriter", "bubble", "rock", "pop", "water", "vintage",
-            "phao", "jingle", "piano"), KeySoundStyle.PRESET_IDS)
+            "phao", "jingle", "trong", "boo", "piano"), KeySoundStyle.PRESET_IDS)
         for (bad in listOf("system", "custom", "theme")) assertFalse(bad, bad in KeySoundStyle.PRESET_IDS)
         assertEquals(KeySoundStyle.SUBTLE, KeySoundStyle.resolve("theme", true))
         assertEquals("subtle", KeyboardSettings.load { if (it == Keys.KEY_SOUND_STYLE) "theme" else null }.keySoundStyle)

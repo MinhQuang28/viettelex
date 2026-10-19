@@ -130,7 +130,7 @@ data class KeyStyle(
         s.fnInk?.let { q = q.copy(functionInk = it) }
         s.balloon?.let { q = q.copy(balloon = it, popup = it) }
         s.trail?.let { q = q.copy(trail = it) }
-        s.deco?.let { d -> q = q.copy(decoration = d.motif?.let { ThemeDecoration(it, d.color, d.density) }) }
+        s.deco?.let { d -> q = q.copy(decoration = d.motif?.let { ThemeDecoration(it, d.color, d.density, d.alt) }) }
         return q
     }
 

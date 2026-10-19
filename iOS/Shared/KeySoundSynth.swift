@@ -40,6 +40,12 @@
 //     kim loại) + bồi phi điều hoà 2.76× τ5 ms (0.22); mở 0.8 ms; 54 ms; đỉnh 0.62.
 //   Piano: mỗi phím một nốt — xem PianoMap / PianoSynth cuối file.
 //
+// Bộ theme đủ món 10/2026 (Trung Thu, Halloween) — NHỎ hơn "Gõ gỗ" (đỉnh + RMS, test chốt):
+//   Trống lân (trong): tiếng "thùng" trầm nhẹ — thân 150→100 Hz (glide 6 ms) τ16 ms + mode màng 1.59× τ5 ms
+//     (0.30) + nhiễu dùi hp 80 lp 900 Hz τ1.5 ms (0.22); mở 1 ms; 54 ms; outLP 1.4 kHz; đỉnh 0.50.
+//   Ma quái (boo): "u~u" vui ngắn — sine trượt LÊN 330→520 Hz (glide 12 ms) τ17 ms + giọng đôi lệch 2 % (0.45)
+//     + hoạ âm 3× (0.10) + hơi thở nhiễu lp 1.2 kHz (0.06); mở 4 ms (êm, không "tách"); 54 ms; đỉnh 0.45.
+//
 // THỨ TỰ case = chỉ số seed nhiễu (KeySoundSynth.seed) ⇒ CHỈ THÊM CUỐI, không chèn giữa (giữ mẫu cũ
 // + checksum chung với Android). Thứ tự hiển thị là `menuOrder`.
 //
@@ -56,11 +62,14 @@ enum KeySoundKind: Int, CaseIterable {
 enum KeySoundStyle: String, CaseIterable {
     // Chỉ thêm CUỐI (chỉ số case = seed nhiễu, chung với Android).
     case subtle, wood, mechanical, typewriter, bubble, custom, system, rock, pop, water, vintage, phao, jingle, piano
+    // Bộ theme đủ món 10/2026: Trống lân (Trung Thu), Ma quái (Halloween).
+    case trong, boo
 
     /// Bật "Âm thanh phím" lần đầu ⇒ "Nhẹ nhàng" (bật công tắc phải NGHE khác đi; "iOS" = như lúc tắt).
     static let defaultStyle: KeySoundStyle = .subtle
     /// Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức `baseRecipe`.
-    static let presets: [KeySoundStyle] = [.subtle, .wood, .mechanical, .typewriter, .bubble, .rock, .pop, .water, .vintage, .phao, .jingle]
+    static let presets: [KeySoundStyle] = [.subtle, .wood, .mechanical, .typewriter, .bubble, .rock, .pop, .water, .vintage, .phao, .jingle,
+                                           .trong, .boo]
     /// Mọi kiểu dựng sẵn (3 tiếng + Piano mỗi phím một nốt).
     static let allPresets: [KeySoundStyle] = presets + [.piano]
     /// DANH SÁCH DUY NHẤT id hợp lệ cho trường "sound" của theme JSON (chọn theme ⇒ đặt keySoundStyle).
@@ -94,6 +103,8 @@ enum KeySoundStyle: String, CaseIterable {
         case .phao: return LK("Pháo")
         case .jingle: return LK("Chuông")
         case .piano: return LK("Piano")
+        case .trong: return LK("Trống lân")
+        case .boo: return LK("Ma quái")
         }
     }
 
@@ -174,6 +185,15 @@ enum KeySoundSynth {
                                   t(0.22, 880 * 2.76, 880 * 2.76, tau: 0.005)],
                           noises: [],
                           attack: 0.0008, duration: 0.054, outLP: 3600, peak: 0.62)
+        case .trong:
+            return Recipe(tones: [t(1.0, 150, 100, glide: 0.006, tau: 0.016), t(0.30, 150 * 1.59, 100 * 1.59, glide: 0.006, tau: 0.005)],
+                          noises: [n(0.22, hp: 80, lp: 900, tau: 0.0015)],
+                          attack: 0.001, duration: 0.054, outLP: 1400, peak: 0.50)
+        case .boo:
+            return Recipe(tones: [t(1.0, 330, 520, glide: 0.012, tau: 0.017), t(0.45, 336.6, 530.4, glide: 0.012, tau: 0.017),
+                                  t(0.10, 990, 1560, glide: 0.012, tau: 0.010)],
+                          noises: [n(0.06, hp: 200, lp: 1200, tau: 0.004)],
+                          attack: 0.004, duration: 0.054, outLP: 2000, peak: 0.45)
         }
     }
 

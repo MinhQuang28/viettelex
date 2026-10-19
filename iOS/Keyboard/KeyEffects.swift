@@ -1,6 +1,6 @@
 // "Hiệu ứng khi bấm phím" (Plus, Phil 19/10/2026 — kiểu Laban Key): Trái tim, Bong bóng, Gợn sóng,
 // Cánh hoa, Pháo hoa, Nháy sáng, Matrix, Tia sét, Emoji theo chữ, Hoa đào / mai, Lửa combo, Mực loang,
-// Sóng nước, Tuyết rơi; "Không" = mặc định. Song sinh android/keyboard/.../KeyEffect.kt (cùng khoá
+// Sóng nước, Tuyết rơi, Đèn lồng, Sương ma; "Không" = mặc định. Song sinh android/keyboard/.../KeyEffect.kt (cùng khoá
 // `keyEffect`, cùng id, cùng quỹ đạo / cùng hàm thuần: tia sét, mảnh vỡ, combo, nháy sáng, emoji).
 //
 // Luật hiệu năng (feature-flags-perf-policy — gõ mượt là số 1):
@@ -20,6 +20,8 @@ enum KeyEffect: String, CaseIterable {
     case flash, matrix, lightning
     case emojiword, blossom, combo, ink, wave
     case snow
+    // Bộ theme đủ món 10/2026: Đèn lồng (Trung Thu), Sương ma (Halloween) — đốm sáng mềm dựng sẵn (GlowSprite).
+    case lantern, smoke
 
     static let key = "keyEffect"
     static let defaultValue: KeyEffect = .none
@@ -47,6 +49,8 @@ enum KeyEffect: String, CaseIterable {
         case .ink: return L("Mực loang")
         case .wave: return L("Sóng nước")
         case .snow: return L("Tuyết rơi")
+        case .lantern: return L("Đèn lồng")
+        case .smoke: return L("Sương ma")
         }
     }
 
@@ -54,7 +58,10 @@ enum KeyEffect: String, CaseIterable {
     var isPlus: Bool { self != .none }
 
     /// Kiểu "hạt bay ra từ phím" (chùm hạt vector, quỹ đạo `trajectory`).
-    static let particleCases: [KeyEffect] = [.heart, .bubble, .ripple, .petal, .firework, .blossom, .combo, .snow]
+    static let particleCases: [KeyEffect] = [.heart, .bubble, .ripple, .petal, .firework, .blossom, .combo, .snow,
+                                             .lantern, .smoke]
+    /// Hạt là ẢNH đốm sáng mềm dựng sẵn (GlowSprite — một lần mỗi màu), không path: Đèn lồng, Sương ma.
+    var usesGlow: Bool { self == .lantern || self == .smoke }
     var isParticle: Bool { Self.particleCases.contains(self) }
 
     /// Dải z: Matrix / Mực loang / Sóng nước vẽ trên nền nhưng DƯỚI phím.
@@ -72,6 +79,9 @@ enum KeyEffect: String, CaseIterable {
         case .combo: return [0xFF7A1A, 0xFFC21A, 0xFF3B30]     // cam, vàng, đỏ
         case .snow: return [0xFFFFFF]
         case .matrix: return [MatrixRain.green]
+        case .lantern: return [0xFFA03C, 0xFFD27A]                // cam đèn lồng, vàng nến
+        case .smoke: return [0xA594C8, 0x8B7BAA, 0xC2B8D6]        // tím xám
+
         default: return []
         }
     }
@@ -83,6 +93,8 @@ enum KeyEffect: String, CaseIterable {
         case .ripple: return 1
         case .firework: return 6
         case .snow: return 4
+        case .lantern: return 2
+        case .smoke: return 3
         default: return 0
         }
     }
@@ -147,6 +159,14 @@ enum KeyEffect: String, CaseIterable {
             return KeyEffectTrajectory(dx: t * 14, dy: 40 + Double(v % 3) * 8, scaleFrom: 0.8,
                                        scaleTo: 1.0 + Double(v % 2) * 0.15, rotation: t * 1.2,
                                        duration: 1.2, sway: 7)
+        case .lantern:   // đốm sáng bay LÊN chậm như đèn trời, nhỏ dần (xa dần), lắc nhẹ
+            return KeyEffectTrajectory(dx: t * 10, dy: -(56 + Double(v % 2) * 10), scaleFrom: 1.0,
+                                       scaleTo: 0.55 + Double(v % 2) * 0.1, rotation: 0,
+                                       duration: 1.2 - Double(1 - v % 2) * 0.1, sway: 4)
+        case .smoke:     // làn sương phồng to, bốc lên ít, tan
+            return KeyEffectTrajectory(dx: t * 12, dy: -(26 + Double(v % 3) * 6), scaleFrom: 0.5,
+                                       scaleTo: 1.7 + Double(v % 2) * 0.3, rotation: 0,
+                                       duration: 0.9 + Double(v % 3) * 0.1, sway: 5)
         default:
             return KeyEffectTrajectory(dx: 0, dy: 0, scaleFrom: 1, scaleTo: 1, rotation: 0, duration: 0)
         }
@@ -168,6 +188,21 @@ struct KeyEffectTrajectory: Equatable {
     var duration: Double
     /// Lắc ngang (pt): x cộng thêm sway·sin(2π·f) — tuyết / hoa trôi.
     var sway: Double = 0
+}
+
+/// Đốm sáng mềm (Đèn lồng / Sương ma): ảnh gradient tròn dựng MỘT lần mỗi màu lúc đổi kiểu — bấm phím chỉ
+/// dời / co giãn / mờ layer (GPU), không vẽ CPU. Điểm dừng gradient (vị trí 0…1, độ đậm) = Android GlowSprite.
+enum GlowSprite {
+    /// Đường kính ảnh (pt / dp).
+    static let size = 26.0
+    /// Lõi sáng ấm của đèn lồng (tâm đốm).
+    static let core: UInt32 = 0xFFF4D6
+    static func stops(_ e: KeyEffect) -> [(pos: Double, alpha: Double)] {
+        switch e {
+        case .lantern: return [(0, 1), (0.28, 0.9), (0.6, 0.35), (1, 0)]
+        default: return [(0, 0.5), (0.45, 0.32), (1, 0)]      // sương: mờ, mép tan
+        }
+    }
 }
 
 /// Cổng Plus: hiệu ứng đi cùng quyền theme cao cấp (như ảnh nền / tuỳ chỉnh nâng cao).
@@ -554,6 +589,8 @@ final class KeyEffectOverlay: UIView {
     private var emojiImages: [String: CGImage] = [:]
     // Mực loang
     private var blob: CGImage?
+    // Đèn lồng / Sương ma — một ảnh mỗi màu cố định
+    private var glows: [CGImage] = []
     // Matrix
     private var matrixRoot: CALayer?
     private var matrixColumns: [CALayer] = []
@@ -728,6 +765,8 @@ final class KeyEffectOverlay: UIView {
     }
     func debugSetMatrixIdle(_ s: Double) { matrixClock.idleAfter = s }
     var debugEmojiCacheCount: Int { emojiImages.count }
+    /// Số ảnh đốm sáng dựng sẵn (Đèn lồng / Sương ma — mỗi màu một ảnh).
+    var debugGlowCount: Int { glows.count }
     #else
     static let drawsOffscreen = false
     #endif
@@ -1087,6 +1126,17 @@ final class KeyEffectOverlay: UIView {
             fade.values = [1, 1, 0]; fade.keyTimes = [0, 0.6, 1]
             l.add(Self.group([move, scale, fade], duration: 1.1, delay: 0), forKey: "fx")
             b.addSublayer(l)
+        case _ where effect.usesGlow:
+            let g = CGFloat(GlowSprite.size)
+            for i in 0..<effect.particlesPerTap {
+                let l = CALayer()
+                l.bounds = CGRect(x: 0, y: 0, width: g, height: g)
+                l.contents = glows.isEmpty ? nil : glows[i % glows.count]
+                l.position = .zero
+                l.opacity = 0
+                l.add(Self.makeAnimation(effect.trajectory(effect.variant(particle: i, seed: index + 1))), forKey: "fx")
+                b.addSublayer(l)
+            }
         default:
             for i in 0..<effect.particlesPerTap {
                 let l = CAShapeLayer()
@@ -1152,6 +1202,8 @@ final class KeyEffectOverlay: UIView {
         boltCache.removeAll()
         keyShapeCache.removeAll()
         blob = effect == .ink ? Self.renderBlob(color: color, scale: UIScreen.main.scale) : nil
+        glows = effect.usesGlow
+            ? effect.fixedColors.compactMap { Self.renderGlow(effect, rgb: $0, scale: UIScreen.main.scale) } : []
         if effect != .matrix { matrixStrips = [] }
         if effect != .emojiword { emojiImages = [:] }
         prewarm()
@@ -1215,6 +1267,26 @@ final class KeyEffectOverlay: UIView {
             let cs = CGColorSpaceCreateDeviceRGB()
             let cols = [color.cgColor, color.withAlphaComponent(0.6).cgColor, color.withAlphaComponent(0).cgColor] as CFArray
             guard let g = CGGradient(colorsSpace: cs, colors: cols, locations: [0, 0.45, 1]) else { return }
+            let c = CGPoint(x: size / 2, y: size / 2)
+            ctx.cgContext.drawRadialGradient(g, startCenter: c, startRadius: 0, endCenter: c, endRadius: size / 2, options: [])
+        }.cgImage
+    }
+
+    /// Đốm sáng mềm (Đèn lồng: lõi ấm + quầng màu; Sương ma: mờ tan mép) — một lần mỗi màu.
+    static func renderGlow(_ e: KeyEffect, rgb: UInt32, scale: CGFloat) -> CGImage? {
+        let size = CGFloat(GlowSprite.size)
+        let f = UIGraphicsImageRendererFormat()
+        f.scale = scale
+        f.opaque = false
+        let base = UIColor(rgb: rgb)
+        let stops = GlowSprite.stops(e)
+        return UIGraphicsImageRenderer(size: CGSize(width: size, height: size), format: f).image { ctx in
+            let cols = stops.enumerated().map { i, s -> CGColor in
+                let c = (e == .lantern && i == 0) ? UIColor(rgb: GlowSprite.core) : base
+                return c.withAlphaComponent(CGFloat(s.alpha)).cgColor
+            } as CFArray
+            let locs = stops.map { CGFloat($0.pos) }
+            guard let g = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: cols, locations: locs) else { return }
             let c = CGPoint(x: size / 2, y: size / 2)
             ctx.cgContext.drawRadialGradient(g, startCenter: c, startRadius: 0, endCenter: c, endRadius: size / 2, options: [])
         }.cgImage
@@ -1303,6 +1375,10 @@ enum KeyEffectShapes {
         case .blossom: return i % 2 == 0 ? flower(7) : petal(6)
         case .combo: return flame(9)
         case .snow: return snowflake(6)
+        // Đèn lồng / Sương ma vẽ bằng ảnh đốm sáng (GlowSprite); path = khung tròn của đốm (đo / dự phòng).
+        case .lantern, .smoke:
+            let r = CGFloat(GlowSprite.size / 2)
+            return CGPath(ellipseIn: CGRect(x: -r, y: -r, width: 2 * r, height: 2 * r), transform: nil)
         case .wave: return CGPath(ellipseIn: CGRect(x: -WaveRings.radius, y: -WaveRings.radius,
                                                     width: 2 * WaveRings.radius, height: 2 * WaveRings.radius), transform: nil)
         default: return nil

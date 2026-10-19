@@ -528,7 +528,7 @@ internal fun KeyboardPreview(p: ThemePalette, wallpaper: ImageBitmap?, dim: Int,
                 val kh = (size.height - bottomPadDp.dp.toPx() - pad * 2 - gap * 3) / 4
                 val gaps = (1..3).map { i -> com.viettelex.keyboard.ThemeDecoration.Gap(((pad + i * kh + (i - 0.5f) * gap) / unit).toDouble(), 11.0) }
                 val path = android.graphics.Path()
-                com.viettelex.android.ime.decorPath(path, d.motif, com.viettelex.keyboard.ThemeDecoration.placements(390.0, gaps, d.density), unit)
+                com.viettelex.android.ime.decorPath(path, d.motif, com.viettelex.keyboard.ThemeDecoration.placements(390.0, gaps, d.density), unit, alt = d.alt)
                 drawPath(path.asComposePath(), Color(d.color))
             }
         }

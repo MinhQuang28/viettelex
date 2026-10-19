@@ -16,6 +16,7 @@ import android.view.View
 import com.viettelex.keyboard.ComboMeter
 import com.viettelex.keyboard.EmojiWords
 import com.viettelex.keyboard.FlashPulse
+import com.viettelex.keyboard.GlowSprite
 import com.viettelex.keyboard.InkBloom
 import com.viettelex.keyboard.KeyEffect
 import com.viettelex.keyboard.KeyEffectParticles
@@ -92,6 +93,8 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
     private var pendingEmoji: String? = null
     @Volatile private var emojiBitmaps: Map<String, Bitmap> = emptyMap()
     private var blob: Bitmap? = null
+    /** Đèn lồng / Sương ma: một bitmap đốm sáng mỗi màu cố định (dựng lúc đổi kiểu). */
+    private var glows: Array<Bitmap> = emptyArray()
     // Matrix
     internal val matrixClock = MatrixClock()
     @Volatile private var strips: Array<Bitmap>? = null
@@ -130,6 +133,7 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
             else -> { useFill = true; useStroke = false; fillAlpha = 255 }
         }
         blob = if (e == KeyEffect.INK) renderBlob(opaque) else null
+        glows = if (e.usesGlow) Array(e.fixedColors.size) { renderGlow(e, e.fixedColors[it]) } else emptyArray()
         if (changed) { shardCache.clear(); combo.reset(); prewarm(e) }
         pendN = 0
         invalidate()
@@ -253,6 +257,7 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
     internal val pendingCount: Int get() = pendN
     internal val isPosted: Boolean get() = posted
     internal fun aliveCount(): Int = sim.aliveCount()
+    internal val glowCount: Int get() = glows.size
 
     override fun onDraw(canvas: Canvas) {
         if (drawEffects(canvas)) postInvalidateOnAnimation()
@@ -279,8 +284,18 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
         for (s in 0 until sim.capacity) {
             if (!sim.sample(s, now, density)) continue
             any = true
-            val k = sim.sScale * density
             val i = sim.sIndex
+            if (glows.isNotEmpty()) {
+                // Đốm sáng: bitmap dựng sẵn (đã theo mật độ điểm ảnh) — chỉ dời / co giãn / mờ.
+                val b = glows[i % glows.size]
+                bmpPaint.alpha = (255 * sim.sAlpha).toInt().coerceIn(0, 255)
+                mtx.setTranslate(-b.width / 2f, -b.height / 2f)
+                mtx.postScale(sim.sScale, sim.sScale)
+                mtx.postTranslate(sim.sx, sim.sy)
+                canvas.drawBitmap(b, mtx, bmpPaint)
+                continue
+            }
+            val k = sim.sScale * density
             val save = canvas.save()
             canvas.translate(sim.sx, sim.sy)
             if (sim.sRot != 0f) canvas.rotate(sim.sRot)
@@ -491,6 +506,23 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
         val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
             shader = RadialGradient(r, r, r, intArrayOf(c, (c and 0xFFFFFF) or (0x99 shl 24), c and 0xFFFFFF),
                 floatArrayOf(0f, 0.45f, 1f), Shader.TileMode.CLAMP)
+        }
+        Canvas(b).drawCircle(r, r, r, p)
+        return b
+    }
+
+    /** Đốm sáng mềm (Đèn lồng: lõi ấm + quầng màu; Sương ma: mờ tan mép) — một lần mỗi màu. = iOS renderGlow. */
+    private fun renderGlow(e: KeyEffect, rgb: Int): Bitmap {
+        val size = Math.ceil(GlowSprite.SIZE * density).toInt()
+        val b = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)
+        val r = size / 2f
+        val pos = GlowSprite.positions(e); val al = GlowSprite.alphas(e)
+        val cols = IntArray(pos.size) { i ->
+            val c = if (e == KeyEffect.LANTERN && i == 0) GlowSprite.CORE else rgb
+            (c and 0xFFFFFF) or ((al[i] * 255).toInt() shl 24)
+        }
+        val p = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            shader = RadialGradient(r, r, r, cols, FloatArray(pos.size) { pos[it].toFloat() }, Shader.TileMode.CLAMP)
         }
         Canvas(b).drawCircle(r, r, r, p)
         return b

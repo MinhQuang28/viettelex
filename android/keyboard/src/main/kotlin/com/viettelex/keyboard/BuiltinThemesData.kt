@@ -101,6 +101,27 @@ internal object BuiltinThemesData {
       "light": {"bg": "#000000", "key": "#FAFAF7", "special": "#85827B", "ink": "#111111", "accent": "#A4161A",
                 "fn": "#111111", "fnInk": "#FFFFFF", "border": "#33FFFFFF", "deco": {"motif": "notes", "color": "#66D4AF37"}},
       "dark": "same"
+    },
+    {
+      "v": 1, "id": "trungthu", "name": {"vi": "Trung Thu", "en": "Mid-Autumn"}, "sound": "trong", "effect": "lantern",
+      "light": {"bg": "#0B1636", "key": "#1A2A57", "special": "#13214A", "ink": "#FFF1D0", "accent": "#F59E2B",
+                "accentInk": "#2B1300", "fn": "#142352", "fnInk": "#FFC857",
+                "deco": {"motif": "lantern", "alt": "moon", "color": "#73FFB347"}},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "valentine", "name": {"vi": "Valentine", "en": "Valentine"}, "sound": "pop", "effect": "heart",
+      "light": {"bg": "#FFE3E8", "key": "#FFFFFF", "special": "#FFC2CF", "ink": "#9B1035", "accent": "#D81B4A",
+                "fn": "#FFD3DC", "fnInk": "#B0123D", "deco": {"motif": "hearts", "color": "#4DE8436A"}},
+      "dark": {"bg": "#2A0610", "key": "#4E0D20", "special": "#6B1430", "ink": "#FFE9EE", "accent": "#D81B4A",
+               "fn": "#3D0918", "fnInk": "#FF9AB5", "deco": {"motif": "hearts", "color": "#73FF3D6E"}}
+    },
+    {
+      "v": 1, "id": "halloween", "name": {"vi": "Halloween", "en": "Halloween"}, "sound": "boo", "effect": "smoke",
+      "light": {"bg": "#120A1C", "key": "#2A1840", "special": "#1E1030", "ink": "#FFE8CC", "accent": "#FF7A1A",
+                "accentInk": "#1A0A00", "fn": "#24123A", "fnInk": "#FF9A3C",
+                "deco": {"motif": "pumpkin", "alt": "bat", "color": "#80FF7A1A"}},
+      "dark": "same"
     }
   ]
 }

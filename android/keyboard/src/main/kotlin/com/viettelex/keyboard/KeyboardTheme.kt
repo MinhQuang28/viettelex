@@ -237,7 +237,11 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     TET_MAI("tetMai", "Tết mai vàng", true), // l10n-key
     XMAS("xmas", "Giáng sinh", true), // l10n-key
     XMAS_SNOW("xmasSnow", "Giáng sinh tuyết", true), // l10n-key
-    PIANO("piano", "Piano", true); // l10n-key
+    PIANO("piano", "Piano", true), // l10n-key
+    // Bộ đủ món 10/2026 (màu + hoạ tiết + hiệu ứng + âm) — id trùng iOS.
+    TRUNG_THU("trungthu", "Trung Thu", true), // l10n-key
+    VALENTINE("valentine", "Valentine", true), // l10n-key
+    HALLOWEEN("halloween", "Halloween", true); // l10n-key
 
     /** Bo góc mặc định (% như [KeyStyle.corner]) khi người dùng chưa chỉnh — null = bo stock. iOS cùng giá trị. */
     val defaultCorner: Int? get() = spec?.corner
@@ -286,9 +290,14 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
  * (KeyboardDecoration trong iOS/Keyboard/KeyboardTheme.swift), đơn vị dp.
  */
 /** [density] % ("Giao diện JSON" deco.density, 50…200): bước ngang = STEP_X × 100 / density. */
-data class ThemeDecoration(val motif: String, val color: Int, val density: Int = 100) {
+data class ThemeDecoration(val motif: String, val color: Int, val density: Int = 100,
+                           /** Motif thứ hai xen kẽ (deco.alt; motif lẻ dùng alt) — iOS KeyboardDecoration.alt. */
+                           val alt: String? = null) {
     data class Gap(val center: Double, val height: Double)
     data class Placement(val x: Double, val y: Double, val size: Double)
+
+    /** Motif của vị trí thứ [k] (theo thứ tự [placements]). */
+    fun motifAt(k: Int): String = if (k % 2 == 1) alt ?: motif else motif
 
     companion object {
         const val HEARTS = "hearts"
@@ -298,8 +307,13 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
         const val SNOWFLAKE = "snowflake"
         const val STAR = "star"
         const val NOTES = "notes"
+        // Trung Thu / Halloween (10/2026, vector tự vẽ).
+        const val LANTERN = "lantern"
+        const val MOON = "moon"
+        const val PUMPKIN = "pumpkin"
+        const val BAT = "bat"
         /** Danh sách trắng motif (theme JSON chỉ nhận các id này) — iOS KeyboardDecoration.Motif y hệt. */
-        val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES)
+        val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES, LANTERN, MOON, PUMPKIN, BAT)
         const val STEP_X = 64.0
         const val MOTIF_SIZE = 8.0
         const val INSET = 14.0
@@ -377,6 +391,16 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
                     doubleArrayOf(bx + dx * len + nx * w, by + dy * len + ny * w),
                     doubleArrayOf(bx + nx * w, by + ny * w)))
             }
+            fun ell(cx: Double, cy: Double, rx: Double, ry: Double): MotifSub {
+                val k = 0.5523
+                return MotifSub(cx + rx, cy, listOf(
+                    doubleArrayOf(cx + rx, cy + k * ry, cx + k * rx, cy + ry, cx, cy + ry),
+                    doubleArrayOf(cx - k * rx, cy + ry, cx - rx, cy + k * ry, cx - rx, cy),
+                    doubleArrayOf(cx - rx, cy - k * ry, cx - k * rx, cy - ry, cx, cy - ry),
+                    doubleArrayOf(cx + k * rx, cy - ry, cx + rx, cy - k * ry, cx + rx, cy)))
+            }
+            fun poly(vararg q: DoubleArray) = MotifSub(q[0][0], q[0][1], q.drop(1))
+            fun d(vararg v: Double) = v
             return when (motif) {
                 MAI -> (0 until 5).map { i ->
                     val a = i * 2 * Math.PI / 5 - Math.PI / 2
@@ -409,6 +433,37 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
                         MotifSub(0.07, -0.48, listOf(doubleArrayOf(0.1, -0.3, 0.38, -0.3, 0.3, -0.02),
                             doubleArrayOf(0.3, -0.2, 0.18, -0.26, 0.07, -0.28))))
                 }
+                LANTERN -> listOf(
+                    poly(d(-0.015, -0.5), d(0.015, -0.5), d(0.015, -0.36), d(-0.015, -0.36)),
+                    poly(d(-0.13, -0.38), d(0.13, -0.38), d(0.13, -0.27), d(-0.13, -0.27)),
+                    ell(0.0, 0.0, 0.37, 0.3),
+                    poly(d(-0.13, 0.26), d(0.13, 0.26), d(0.13, 0.36), d(-0.13, 0.36)),
+                    poly(d(-0.03, 0.35), d(0.03, 0.35), d(0.07, 0.5), d(-0.07, 0.5)))
+                MOON -> {
+                    val rr = 0.44; val r = 0.37; val cx = 0.17; val cy = -0.12
+                    val dd = Math.sqrt(cx * cx + cy * cy); val dir = Math.atan2(cy, cx)
+                    val a = (rr * rr - r * r + dd * dd) / (2 * dd)
+                    val al = Math.acos(a / rr); val ga = Math.acos((dd - a) / r)
+                    val q = ArrayList<DoubleArray>()
+                    for (i in 0..24) q.add(pol(rr, dir + al + i / 24.0 * (2 * Math.PI - 2 * al)))
+                    for (i in 1 until 16) {
+                        val t = dir + Math.PI + ga - i / 16.0 * 2 * ga
+                        q.add(doubleArrayOf(cx + r * Math.cos(t), cy + r * Math.sin(t)))
+                    }
+                    listOf(MotifSub(q[0][0], q[0][1], q.drop(1)))
+                }
+                PUMPKIN -> listOf(
+                    ell(-0.2, 0.07, 0.22, 0.29), ell(0.2, 0.07, 0.22, 0.29), ell(0.0, 0.05, 0.23, 0.33),
+                    poly(d(-0.01, -0.45), d(0.07, -0.42), d(0.04, -0.24), d(-0.04, -0.24)),
+                    MotifSub(0.03, -0.31, listOf(d(0.1, -0.45, 0.24, -0.44, 0.29, -0.36), d(0.21, -0.35, 0.11, -0.31, 0.03, -0.31))))
+                BAT -> listOf(
+                    ell(0.0, 0.04, 0.11, 0.17), ell(0.0, -0.14, 0.1, 0.1),
+                    poly(d(-0.09, -0.18), d(-0.08, -0.3), d(-0.02, -0.22)),
+                    poly(d(0.02, -0.22), d(0.08, -0.3), d(0.09, -0.18)),
+                    MotifSub(0.06, -0.08, listOf(d(0.18, -0.22, 0.36, -0.24, 0.48, -0.12), d(0.44, -0.04, 0.4, -0.04, 0.36, 0.02),
+                        d(0.32, -0.04, 0.26, -0.02, 0.22, 0.06), d(0.18, 0.0, 0.12, 0.02, 0.08, 0.1))),
+                    MotifSub(-0.08, 0.1, listOf(d(-0.12, 0.02, -0.18, 0.0, -0.22, 0.06), d(-0.26, -0.02, -0.32, -0.04, -0.36, 0.02),
+                        d(-0.4, -0.04, -0.44, -0.04, -0.48, -0.12), d(-0.36, -0.24, -0.18, -0.22, -0.06, -0.08))))
                 else -> emptyList()
             }
         }

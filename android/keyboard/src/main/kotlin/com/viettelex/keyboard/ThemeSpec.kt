@@ -369,7 +369,9 @@ object ThemeColorCode {
 // ---- Mô hình
 
 /** motif null = "none" (bỏ hoạ tiết). density % (bước ngang = STEP_X × 100 / density), kẹp 50…200. */
-data class ThemeDeco(val motif: String?, val color: Int = 0, val density: Int = 100) {
+data class ThemeDeco(val motif: String?, val color: Int = 0, val density: Int = 100,
+                     /** Motif thứ hai xen kẽ ("alt", tuỳ chọn) — chỉ có khi [motif] khác null. iOS ThemeDeco.alt. */
+                     val alt: String? = null) {
     companion object { val DENSITY_RANGE = 50..200; val MOTIFS = ThemeDecoration.MOTIFS.toSet() }
 }
 
@@ -561,6 +563,7 @@ data class ThemeSpec(
                 val dm = ArrayList<Pair<String, SJ>>()
                 dm.add("motif" to SJ.Str(d.motif ?: "none"))
                 if (d.motif != null) {
+                    d.alt?.let { dm.add("alt" to SJ.Str(it)) }
                     dm.add("color" to SJ.Str(ThemeColorCode.format(d.color)))
                     if (d.density != 100) dm.add("density" to SJ.Num(d.density))
                 }
@@ -610,7 +613,7 @@ data class ThemeSpec(
                 ink = ink, trail = s.trail ?: c.withAlpha(accent, 0.6f), balloon = balloon, popup = balloon, action = accent,
                 actionInk = s.accentInk ?: autoAccentInk(accent), chip = special, keyBorder = s.border,
                 isDark = c.luminance(ink) > 0.5, functionFill = s.fn, functionInk = s.fnInk,
-                decoration = s.deco?.let { d -> d.motif?.let { ThemeDecoration(it, d.color, d.density) } })
+                decoration = s.deco?.let { d -> d.motif?.let { ThemeDecoration(it, d.color, d.density, d.alt) } })
         }
 
         /** Palette (đã giải) → màu một chế độ; bỏ trường bằng mặc định tự tính. */
@@ -620,7 +623,7 @@ data class ThemeSpec(
                 accentInk = p.actionInk.takeIf { it != autoAccentInk(p.action) }, border = p.keyBorder,
                 fn = p.functionFill, fnInk = p.functionInk, balloon = p.balloon.takeIf { it != p.keyFill },
                 trail = p.trail.takeIf { it != c.withAlpha(p.action, 0.6f) },
-                deco = p.decoration?.let { ThemeDeco(it.motif, it.color, it.density) })
+                deco = p.decoration?.let { ThemeDeco(it.motif, it.color, it.density, it.alt) })
         }
 
         /** Theme đầy đủ từ palette sáng/tối đã giải + kiểu chữ ("Chép JSON"). */
@@ -731,7 +734,7 @@ object ThemeSpecParser {
 
     private fun deco(v: SJ, p: String, c: Ctx): ThemeDeco? {
         if (v !is SJ.Obj) { c.err(ThemeIssue.Code.wrongType, p); return null }
-        for ((k, _) in v.m) if (k !in setOf("motif", "color", "density")) c.err(ThemeIssue.Code.unknownKey, "$p.$k")
+        for ((k, _) in v.m) if (k !in setOf("motif", "alt", "color", "density")) c.err(ThemeIssue.Code.unknownKey, "$p.$k")
         var motif: String? = null
         when (val m = v["motif"]) {
             null -> { c.err(ThemeIssue.Code.missingKey, "$p.motif"); return null }
@@ -751,6 +754,14 @@ object ThemeSpecParser {
                 else -> { c.err(ThemeIssue.Code.wrongType, "$p.color"); return null }
             }
         } else if (cv != null && (cv !is SJ.Str || ThemeColorCode.parse(cv.s) == null)) c.err(ThemeIssue.Code.badColor, "$p.color")
+        // "alt": motif thứ hai xen kẽ (không "none"; bỏ qua khi motif = "none") — như iOS.
+        var alt: String? = null
+        when (val av = v["alt"]) {
+            null -> {}
+            is SJ.Str -> if (av.s in ThemeDeco.MOTIFS) { if (motif != null) alt = av.s }
+                else { c.err(ThemeIssue.Code.badValue, "$p.alt"); return null }
+            else -> { c.err(ThemeIssue.Code.wrongType, "$p.alt"); return null }
+        }
         var density = 100
         when (val dv = v["density"]) {
             null -> {}
@@ -760,7 +771,7 @@ object ThemeSpecParser {
             }
             else -> c.err(ThemeIssue.Code.wrongType, "$p.density")
         }
-        return ThemeDeco(motif, color, density)
+        return ThemeDeco(motif, color, density, alt)
     }
 
     private fun typography(d: SJ.Obj, base: KeyStyle, c: Ctx): KeyStyle {

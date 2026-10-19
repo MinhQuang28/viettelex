@@ -27,6 +27,30 @@ class KeyEffectFxTests {
         for (e in KeyEffect.entries) if (e != KeyEffect.NONE) assertTrue(e.id, e.isPlus)
     }
 
+    /** Đèn lồng / Sương ma (bộ theme đủ món) — mốc chung iOS testLanternSmokeModel. */
+    @Test fun lanternSmokeModel() {
+        for (e in listOf(KeyEffect.LANTERN, KeyEffect.SMOKE)) {
+            assertTrue("$e", e.isParticle && e.usesGlow && e.isPlus)
+            assertEquals(KeyEffectBand.ABOVE_KEYS, e.band)
+            assertTrue(e.fixedColors.isNotEmpty())
+            for (v in 0 until e.variantCount) { assertTrue("$e bay LÊN", e.trajectory(v).dy < 0); assertTrue(e.trajectory(v).sway > 0) }
+        }
+        assertFalse(KeyEffect.HEART.usesGlow)
+        assertTrue(KeyEffect.LANTERN.trajectory(0).dy < -50)
+        assertTrue(KeyEffect.LANTERN.trajectory(0).scaleTo < KeyEffect.LANTERN.trajectory(0).scaleFrom)
+        assertTrue(KeyEffect.SMOKE.trajectory(0).scaleTo > KeyEffect.SMOKE.trajectory(0).scaleFrom)
+        assertEquals(10.0, KeyEffect.LANTERN.trajectory(3).dx, 1e-9)
+        assertEquals(-66.0, KeyEffect.LANTERN.trajectory(3).dy, 1e-9)
+        assertEquals(1.1, KeyEffect.SMOKE.trajectory(5).duration, 1e-9)
+        assertEquals(4, GlowSprite.positions(KeyEffect.LANTERN).size)
+        assertEquals(GlowSprite.positions(KeyEffect.SMOKE).size, GlowSprite.alphas(KeyEffect.SMOKE).size)
+        assertEquals("Lantern glow", L10nTable.EN["Đèn lồng"]); assertEquals("Spooky mist", L10nTable.EN["Sương ma"])
+        // Pool: gõ 200 phím vẫn ≤ trần hạt.
+        val sim = KeyEffectParticles(); sim.configure(KeyEffect.SMOKE)
+        for (i in 0 until 200) sim.spawn(i.toFloat(), 0f, i * 10L)
+        assertTrue(sim.aliveCount() <= KeyEffectPool.CAP)
+    }
+
     @Test fun fixedColorsAndSnow() {
         assertArrayEquals(intArrayOf(0xFF8FB1, 0xFFC93C), KeyEffect.BLOSSOM.fixedColors)
         assertArrayEquals(intArrayOf(0xFFFFFF), KeyEffect.SNOW.fixedColors)

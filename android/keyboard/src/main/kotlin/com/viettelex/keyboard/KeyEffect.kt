@@ -26,7 +26,10 @@ enum class KeyEffect(val id: String, val viTitle: String) {
     COMBO("combo", "Lửa combo"), // l10n-key
     INK("ink", "Mực loang"), // l10n-key
     WAVE("wave", "Sóng nước"), // l10n-key
-    SNOW("snow", "Tuyết rơi"); // l10n-key
+    SNOW("snow", "Tuyết rơi"), // l10n-key
+    // Bộ theme đủ món 10/2026: đốm sáng mềm dựng sẵn ([GlowSprite]) — Trung Thu, Halloween.
+    LANTERN("lantern", "Đèn lồng"), // l10n-key
+    SMOKE("smoke", "Sương ma"); // l10n-key
 
     val title: String get() = tr(viTitle)
 
@@ -35,6 +38,9 @@ enum class KeyEffect(val id: String, val viTitle: String) {
 
     /** Kiểu "hạt bay ra từ phím" (quỹ đạo [trajectory]). */
     val isParticle: Boolean get() = this in PARTICLES
+
+    /** Hạt là ẢNH đốm sáng mềm dựng sẵn ([GlowSprite]), không path: Đèn lồng, Sương ma. = iOS usesGlow. */
+    val usesGlow: Boolean get() = this == LANTERN || this == SMOKE
 
     /** Dải z: Matrix / Mực loang / Sóng nước vẽ trên nền nhưng DƯỚI phím. */
     val band: KeyEffectBand get() = when (this) {
@@ -48,6 +54,8 @@ enum class KeyEffect(val id: String, val viTitle: String) {
         COMBO -> intArrayOf(0xFF7A1A, 0xFFC21A, 0xFF3B30)
         SNOW -> intArrayOf(0xFFFFFF)
         MATRIX -> intArrayOf(MatrixRain.GREEN)
+        LANTERN -> intArrayOf(0xFFA03C, 0xFFD27A)
+        SMOKE -> intArrayOf(0xA594C8, 0x8B7BAA, 0xC2B8D6)
         else -> IntArray(0)
     }
 
@@ -57,6 +65,8 @@ enum class KeyEffect(val id: String, val viTitle: String) {
         RIPPLE -> 1
         FIREWORK -> 6
         SNOW -> 4
+        LANTERN -> 2
+        SMOKE -> 3
         else -> 0
     }
 
@@ -82,6 +92,10 @@ enum class KeyEffect(val id: String, val viTitle: String) {
             BLOSSOM -> KeyEffectTrajectory(t * 30, -(40 + (v % 3) * 9.0), 0.6, 1.0, t * 1.6 + 0.4, 1.0, sway = 6.0)
             COMBO -> KeyEffectTrajectory(t * 8, -(26 + (v % 3) * 6.0), 1.0, 0.35, 0.0, 0.5)
             SNOW -> KeyEffectTrajectory(t * 14, 40 + (v % 3) * 8.0, 0.8, 1.0 + (v % 2) * 0.15, t * 1.2, 1.2, sway = 7.0)
+            LANTERN -> KeyEffectTrajectory(t * 10, -(56 + (v % 2) * 10.0), 1.0, 0.55 + (v % 2) * 0.1, 0.0,
+                1.2 - (1 - v % 2) * 0.1, sway = 4.0)
+            SMOKE -> KeyEffectTrajectory(t * 12, -(26 + (v % 3) * 6.0), 0.5, 1.7 + (v % 2) * 0.3, 0.0,
+                0.9 + (v % 3) * 0.1, sway = 5.0)
             else -> KeyEffectTrajectory(0.0, 0.0, 1.0, 1.0, 0.0, 0.0)
         }
     }
@@ -95,7 +109,7 @@ enum class KeyEffect(val id: String, val viTitle: String) {
     companion object {
         val DEFAULT = NONE
         val IDS: Set<String> = entries.map { it.id }.toSet()
-        val PARTICLES: Set<KeyEffect> = setOf(HEART, BUBBLE, RIPPLE, PETAL, FIREWORK, BLOSSOM, COMBO, SNOW)
+        val PARTICLES: Set<KeyEffect> = setOf(HEART, BUBBLE, RIPPLE, PETAL, FIREWORK, BLOSSOM, COMBO, SNOW, LANTERN, SMOKE)
         /** Giá trị lạ / thiếu ⇒ [DEFAULT]. */
         fun of(raw: Any?): KeyEffect = entries.firstOrNull { it.id == raw } ?: DEFAULT
     }
@@ -109,6 +123,21 @@ data class KeyEffectTrajectory(
     /** Lắc ngang (dp): x cộng sway·sin(2π·f) — tuyết / hoa trôi. */
     val sway: Double = 0.0,
 )
+
+/**
+ * Đốm sáng mềm (Đèn lồng / Sương ma): bitmap gradient tròn dựng MỘT lần mỗi màu lúc đổi kiểu — bấm phím chỉ
+ * dời / co giãn / mờ (RenderThread). Điểm dừng gradient = iOS GlowSprite.
+ */
+object GlowSprite {
+    /** Đường kính ảnh (dp). */
+    const val SIZE = 26.0
+    /** Lõi sáng ấm của đèn lồng. */
+    const val CORE = 0xFFF4D6
+    fun positions(e: KeyEffect): DoubleArray =
+        if (e == KeyEffect.LANTERN) doubleArrayOf(0.0, 0.28, 0.6, 1.0) else doubleArrayOf(0.0, 0.45, 1.0)
+    fun alphas(e: KeyEffect): DoubleArray =
+        if (e == KeyEffect.LANTERN) doubleArrayOf(1.0, 0.9, 0.35, 0.0) else doubleArrayOf(0.5, 0.32, 0.0)
+}
 
 enum class KeyEffectBand {
     ABOVE_KEYS, BELOW_KEYS;

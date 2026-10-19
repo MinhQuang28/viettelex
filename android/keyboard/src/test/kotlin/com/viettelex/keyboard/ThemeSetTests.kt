@@ -28,7 +28,8 @@ class ThemeSetTests {
 
     private val newThemes = listOf(KeyboardTheme.BLACK_HEART, KeyboardTheme.GREEN_FLORAL, KeyboardTheme.SAGE,
         KeyboardTheme.NEON, KeyboardTheme.PINK, KeyboardTheme.TET, KeyboardTheme.TET_MAI, KeyboardTheme.XMAS,
-        KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO)
+        KeyboardTheme.XMAS_SNOW, KeyboardTheme.PIANO, KeyboardTheme.TRUNG_THU, KeyboardTheme.VALENTINE,
+        KeyboardTheme.HALLOWEEN)
     private val pastels = listOf(KeyboardTheme.PEACH, KeyboardTheme.MINT, KeyboardTheme.SKY, KeyboardTheme.LAVENDER)
 
     private fun fixtureLines(): List<List<String>> {
@@ -44,11 +45,11 @@ class ThemeSetTests {
         assertEquals(lines.first { it[0] == "order" }[1].split(','), KeyboardTheme.entries.map { it.id })
         assertEquals(lines.first { it[0] == "plus" }[1].split(','), KeyboardTheme.entries.filter { it.isPlus }.map { it.id })
         val rows = lines.filter { it[0] != "order" && it[0] != "plus" }
-        assertEquals(32, rows.size)
+        assertEquals(38, rows.size)
         for (r in rows) {
             val t = KeyboardTheme.entries.first { it.id == r[0] }
             val p = t.palette(r[1] == "1")!!
-            val deco = p.decoration?.let { "${it.motif}:${hex(it.color)}" } ?: "-"
+            val deco = p.decoration?.let { "${it.motif}${it.alt?.let { a -> "+$a" } ?: ""}:${hex(it.color)}" } ?: "-"
             val got = listOf(hex(p.bg), hex(p.keyFill), hex(p.specialFill), hex(p.ink), hex(p.action), hex(p.actionInk),
                 hex(p.keyBorder), hex(p.functionFill), hex(p.functionInk), deco)
             assertEquals("${r[0]} dark=${r[1]}", r.drop(2), got)
@@ -57,7 +58,7 @@ class ThemeSetTests {
 
     @Test fun darkVariantsDifferAndFollowSystem() {
         val fixed = setOf(KeyboardTheme.OLED, KeyboardTheme.CONTRAST, KeyboardTheme.BLACK_HEART, KeyboardTheme.NEON,
-            KeyboardTheme.TET, KeyboardTheme.XMAS, KeyboardTheme.PIANO)
+            KeyboardTheme.TET, KeyboardTheme.XMAS, KeyboardTheme.PIANO, KeyboardTheme.TRUNG_THU, KeyboardTheme.HALLOWEEN)
         for (t in KeyboardTheme.entries) {
             val light = t.palette(false) ?: continue
             val dark = t.palette(true)!!
@@ -112,6 +113,67 @@ class ThemeSetTests {
     }
 
     // ---- âm / hiệu ứng đi kèm theme ("sound" / "effect") — iOS ThemeSetTests y hệt
+
+    /** Bộ đủ món 10/2026 — iOS testFullPackThemes y hệt. */
+    @Test fun fullPackThemes() {
+        val want = listOf(
+            listOf(KeyboardTheme.TRUNG_THU, "trong", "lantern", ThemeDecoration.LANTERN, ThemeDecoration.MOON, "Mid-Autumn"),
+            listOf(KeyboardTheme.VALENTINE, "pop", "heart", ThemeDecoration.HEARTS, null, "Valentine"),
+            listOf(KeyboardTheme.HALLOWEEN, "boo", "smoke", ThemeDecoration.PUMPKIN, ThemeDecoration.BAT, "Halloween"))
+        val yes: (String) -> Boolean = { true }
+        for (w in want) {
+            val t = w[0] as KeyboardTheme
+            val spec = t.spec!!
+            assertEquals(w[1], spec.sound); assertEquals(w[2], spec.effect)
+            assertTrue(spec.sound in KeySoundStyle.PRESET_IDS); assertTrue(KeyEffect.entries.any { it.id == spec.effect })
+            assertTrue("$t", t.isPlus)
+            assertEquals(w[5], L10nTable.EN[t.viTitle])
+            for (dk in listOf(false, true)) {
+                val d = t.palette(dk)!!.decoration!!
+                assertEquals(w[3], d.motif); assertEquals(w[4], d.alt)
+            }
+            assertEquals(ThemeExtras.Outcome(w[2] as String, w[1] as String, true),
+                ThemeExtras.plan(ThemeSettings(theme = t).effectiveKeyStyle, false, yes, yes))
+        }
+        assertTrue(KeyboardTheme.TRUNG_THU.palette(false)!!.isDark)
+        assertTrue(KeyboardTheme.HALLOWEEN.palette(false)!!.isDark)
+        assertFalse(KeyboardTheme.VALENTINE.palette(false)!!.isDark)
+        assertTrue(KeyboardTheme.VALENTINE.palette(true)!!.isDark)
+    }
+
+    /** Motif thứ hai xen kẽ ("alt") + khứ hồi JSON — iOS testDecorationAltAlternates. */
+    @Test fun decorationAltAlternates() {
+        val d = ThemeDecoration(ThemeDecoration.PUMPKIN, 0, alt = ThemeDecoration.BAT)
+        assertEquals(listOf("pumpkin", "bat", "pumpkin", "bat"), (0 until 4).map(d::motifAt))
+        assertEquals("hearts", ThemeDecoration(ThemeDecoration.HEARTS, 0).motifAt(1))
+        val base = ThemeJsonActions.Base { t, dk -> t.palette(dk)!! }
+        val text = ThemeJsonActions.copyText(ThemeEditTarget.Builtin(KeyboardTheme.HALLOWEEN), ThemeSettings(theme = KeyboardTheme.HALLOWEEN),
+            emptyMap(), base)!!
+        assertTrue(text, text.contains("\"alt\""))
+        val back = ThemeSpecParser.parse(text).spec!!
+        assertEquals("bat", back.light.deco?.alt)
+        assertEquals(KeyboardTheme.HALLOWEEN.palette(false)!!.decoration, back.palette(false).decoration)
+    }
+
+    /** Hình motif mới: cùng chiều quay, trong ô ±0.5, tổng toạ độ = mốc iOS (motifChecksums). */
+    @Test fun newMotifShapesParity() {
+        val want = mapOf("lantern" to 0.55, "moon" to 6.8533471195, "pumpkin" to -4.65, "bat" to -26.67)
+        for ((m, sumWant) in want) {
+            val subs = ThemeDecoration.shape(m)
+            assertTrue(m, subs.isNotEmpty())
+            var sum = 0.0
+            for (sub in subs) {
+                val pts = ArrayList<DoubleArray>()
+                pts.add(doubleArrayOf(sub.sx, sub.sy))
+                for (g in sub.segs) { var i = 0; while (i < g.size) { pts.add(doubleArrayOf(g[i], g[i + 1])); i += 2 } }
+                var a = 0.0
+                for (i in pts.indices) { val p = pts[i]; val q = pts[(i + 1) % pts.size]; a += p[0] * q[1] - q[0] * p[1] }
+                assertTrue("$m chiều quay", a > 0)
+                for (p in pts) { assertTrue(m, Math.abs(p[0]) <= 0.5 + 1e-9 && Math.abs(p[1]) <= 0.5 + 1e-9); sum += p[0] * 3 + p[1] * 7 }
+            }
+            assertEquals(m, sumWant, sum, 1e-6)
+        }
+    }
 
     @Test fun festiveThemesCarrySoundAndEffect() {
         assertEquals("phao", KeyboardTheme.TET.spec?.sound); assertEquals("blossom", KeyboardTheme.TET.spec?.effect)
@@ -230,7 +292,9 @@ class ThemeSetTests {
         assertEquals(KeyboardTheme.BLACK_HEART.palette(false)!!.decoration!!.motif, ThemeDecoration.HEARTS)
         assertEquals(KeyboardTheme.GREEN_FLORAL.palette(true)!!.decoration!!.motif, ThemeDecoration.FLOWERS)
         val festive = mapOf(KeyboardTheme.TET to ThemeDecoration.MAI, KeyboardTheme.TET_MAI to ThemeDecoration.MAI,
-            KeyboardTheme.XMAS to ThemeDecoration.SNOWFLAKE, KeyboardTheme.PIANO to ThemeDecoration.NOTES)
+            KeyboardTheme.XMAS to ThemeDecoration.SNOWFLAKE, KeyboardTheme.PIANO to ThemeDecoration.NOTES,
+            KeyboardTheme.TRUNG_THU to ThemeDecoration.LANTERN, KeyboardTheme.VALENTINE to ThemeDecoration.HEARTS,
+            KeyboardTheme.HALLOWEEN to ThemeDecoration.PUMPKIN)
         for ((t, m) in festive) for (dk in listOf(false, true)) assertEquals("$t", m, t.palette(dk)!!.decoration!!.motif)
         assertEquals(ThemeDecoration.SNOWFLAKE, KeyboardTheme.XMAS_SNOW.palette(false)!!.decoration!!.motif)
         assertEquals(ThemeDecoration.STAR, KeyboardTheme.XMAS_SNOW.palette(true)!!.decoration!!.motif)

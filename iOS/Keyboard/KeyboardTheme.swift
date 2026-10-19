@@ -248,6 +248,8 @@ enum KeyboardTheme: String, CaseIterable {
     case blackHeart, greenFloral, sage, neon, pink
     // Lễ / mùa (10/2026, hình vẽ vector tự thiết kế): Tết, Tết mai vàng, Giáng sinh, Giáng sinh tuyết, Piano.
     case tet, tetMai, xmas, xmasSnow, piano
+    // Bộ đủ món 10/2026 (màu + hoạ tiết + hiệu ứng + âm): Trung Thu, Valentine, Halloween.
+    case trungthu, valentine, halloween
     // "Trắng hồng" (pureWhite, 1.5.12) đã bỏ 10/2026: chỉ là Hệ thống + màu nhấn hồng ⇒ chuyển sang
     // Hệ thống + Màu nhấn D6336C (KeyStyleStore.migrate). Id lạ / đã bỏ luôn về Hệ thống.
 
@@ -271,6 +273,9 @@ enum KeyboardTheme: String, CaseIterable {
         case .xmas: return L("Giáng sinh")
         case .xmasSnow: return L("Giáng sinh tuyết")
         case .piano: return L("Piano")
+        case .trungthu: return L("Trung Thu")
+        case .valentine: return L("Valentine")
+        case .halloween: return L("Halloween")
         }
     }
 
@@ -295,7 +300,8 @@ enum KeyboardTheme: String, CaseIterable {
         case .system, .oled, .contrast: return false
         case .peach, .mint, .sky, .lavender, .glass,
              .blackHeart, .greenFloral, .sage, .neon, .pink,
-             .tet, .tetMai, .xmas, .xmasSnow, .piano: return true
+             .tet, .tetMai, .xmas, .xmasSnow, .piano,
+             .trungthu, .valentine, .halloween: return true
         }
     }
 
@@ -352,11 +358,25 @@ enum KeyboardTheme: String, CaseIterable {
 struct KeyboardDecoration: Equatable {
     /// Danh sách trắng (theme JSON chỉ nhận các id này — Android ThemeDeco.MOTIFS y hệt). Tim / hoa vẽ riêng;
     /// mai / đào / bông tuyết / sao / nốt nhạc là dữ liệu hình (`shape`) chung Android.
-    enum Motif: String, CaseIterable { case hearts, flowers, mai, dao, snowflake, star, notes }
+    enum Motif: String, CaseIterable {
+        case hearts, flowers, mai, dao, snowflake, star, notes
+        // Trung Thu / Halloween (10/2026, vector tự vẽ): đèn lồng, trăng khuyết, bí ngô, dơi.
+        case lantern, moon, pumpkin, bat
+    }
     var motif: Motif
     var color: RGBA
     /// Mật độ % ("Giao diện JSON" deco.density, 50…200): bước ngang = stepX × 100 / density.
     var density: Int = 100
+    /// Motif thứ hai (deco.alt) — xen kẽ với `motif` (motif lẻ dùng alt): Trung Thu đèn lồng + trăng,
+    /// Halloween bí ngô + dơi. nil = một motif như cũ. Android ThemeDecoration.alt y hệt.
+    var alt: Motif? = nil
+
+    init(motif: Motif, color: RGBA, density: Int = 100, alt: Motif? = nil) {
+        self.motif = motif; self.color = color; self.density = density; self.alt = alt
+    }
+
+    /// Motif của vị trí thứ `k` (theo thứ tự `placements`).
+    func motif(at k: Int) -> Motif { k % 2 == 1 ? (alt ?? motif) : motif }
 
     /// Bước ngang (pt / dp), cỡ motif tối đa, lề hai bên, cỡ nhỏ nhất còn vẽ.
     static let stepX = 64.0, motifSize = 8.0, inset = 14.0, minMotifSize = 5.0
@@ -405,11 +425,13 @@ struct KeyboardDecoration: Equatable {
     /// Path mọi motif (gốc trên-trái, y xuống).
     func path(_ placements: [Placement]) -> CGPath {
         let path = CGMutablePath()
-        for c in placements {
+        // Dữ liệu hình tính MỘT lần mỗi lần dựng path (không mỗi motif).
+        let shapes = [motif, alt ?? motif].map(Self.shape)
+        for (k, c) in placements.enumerated() {
             let s = CGFloat(c.size)
             let o = CGPoint(x: c.x, y: c.y)
             func p(_ x: CGFloat, _ y: CGFloat) -> CGPoint { CGPoint(x: o.x + x * s, y: o.y + y * s) }
-            switch motif {
+            switch motif(at: k) {
             case .hearts:
                 path.move(to: p(0, 0.45))
                 path.addCurve(to: p(-0.5, -0.18), control1: p(-0.35, 0.2), control2: p(-0.5, 0))
@@ -429,7 +451,7 @@ struct KeyboardDecoration: Equatable {
                 }
                 path.addEllipse(in: CGRect(origin: p(-0.12, -0.12), size: CGSize(width: 0.24 * s, height: 0.24 * s)))
             default:
-                for sub in Self.shape(motif) {
+                for sub in shapes[k % 2] {
                     path.move(to: p(CGFloat(sub.start.0), CGFloat(sub.start.1)))
                     for g in sub.segs {
                         if g.count == 2 { path.addLine(to: p(CGFloat(g[0]), CGFloat(g[1]))) }
@@ -459,6 +481,15 @@ struct KeyboardDecoration: Equatable {
                        segs: [[bx + dx * len - nx * w, by + dy * len - ny * w], [bx + dx * len + nx * w, by + dy * len + ny * w],
                               [bx + nx * w, by + ny * w]])
         }
+        func ell(_ cx: Double, _ cy: Double, _ rx: Double, _ ry: Double) -> Sub {
+            let k = 0.5523
+            return Sub(start: (cx + rx, cy), segs: [
+                [cx + rx, cy + k * ry, cx + k * rx, cy + ry, cx, cy + ry],
+                [cx - k * rx, cy + ry, cx - rx, cy + k * ry, cx - rx, cy],
+                [cx - rx, cy - k * ry, cx - k * rx, cy - ry, cx, cy - ry],
+                [cx + k * rx, cy - ry, cx + rx, cy - k * ry, cx + rx, cy]])
+        }
+        func poly(_ q: [[Double]]) -> Sub { Sub(start: (q[0][0], q[0][1]), segs: Array(q.dropFirst())) }
         switch m {
         case .hearts, .flowers: return []
         case .mai:
@@ -498,6 +529,44 @@ struct KeyboardDecoration: Equatable {
             let stem = Sub(start: (0.01, 0.3), segs: [[0.01, -0.48], [0.07, -0.48], [0.07, 0.3]])
             let flag = Sub(start: (0.07, -0.48), segs: [[0.1, -0.3, 0.38, -0.3, 0.3, -0.02], [0.3, -0.2, 0.18, -0.26, 0.07, -0.28]])
             return [head, stem, flag]
+        case .lantern:
+            // Đèn lồng giấy: dây treo + nắp + thân tròn dẹt + đáy + tua.
+            return [poly([[-0.015, -0.5], [0.015, -0.5], [0.015, -0.36], [-0.015, -0.36]]),
+                    poly([[-0.13, -0.38], [0.13, -0.38], [0.13, -0.27], [-0.13, -0.27]]),
+                    ell(0, 0, 0.37, 0.3),
+                    poly([[-0.13, 0.26], [0.13, 0.26], [0.13, 0.36], [-0.13, 0.36]]),
+                    poly([[-0.03, 0.35], [0.03, 0.35], [0.07, 0.5], [-0.07, 0.5]])]
+        case .moon:
+            // Trăng khuyết: cung ngoài (tròn R quanh tâm) đi vòng xa, cung trong (tròn r lệch lên-phải) quay về.
+            let rr = 0.44, r = 0.37, cx = 0.17, cy = -0.12
+            let d = (cx * cx + cy * cy).squareRoot(), dir = atan2(cy, cx)
+            let a = (rr * rr - r * r + d * d) / (2 * d)
+            let al = acos(a / rr), ga = acos((d - a) / r)
+            var q: [[Double]] = (0...24).map { pol(rr, dir + al + Double($0) / 24 * (2 * .pi - 2 * al)) }
+            for i in 1..<16 {
+                let t = dir + .pi + ga - Double(i) / 16 * 2 * ga
+                q.append([cx + r * cos(t), cy + r * sin(t)])
+            }
+            return [poly(q)]
+        case .pumpkin:
+            // Bí ngô hiền: 3 múi + cuống + lá (không mặt).
+            return [ell(-0.2, 0.07, 0.22, 0.29), ell(0.2, 0.07, 0.22, 0.29), ell(0, 0.05, 0.23, 0.33),
+                    poly([[-0.01, -0.45], [0.07, -0.42], [0.04, -0.24], [-0.04, -0.24]]),
+                    Sub(start: (0.03, -0.31), segs: [[0.1, -0.45, 0.24, -0.44, 0.29, -0.36],
+                                                     [0.21, -0.35, 0.11, -0.31, 0.03, -0.31]])]
+        case .bat:
+            // Dơi tròn trịa: thân + đầu + 2 tai + 2 cánh mép dưới lượn sóng.
+            return [ell(0, 0.04, 0.11, 0.17), ell(0, -0.14, 0.1, 0.1),
+                    poly([[-0.09, -0.18], [-0.08, -0.3], [-0.02, -0.22]]),
+                    poly([[0.02, -0.22], [0.08, -0.3], [0.09, -0.18]]),
+                    Sub(start: (0.06, -0.08), segs: [[0.18, -0.22, 0.36, -0.24, 0.48, -0.12],
+                                                     [0.44, -0.04, 0.4, -0.04, 0.36, 0.02],
+                                                     [0.32, -0.04, 0.26, -0.02, 0.22, 0.06],
+                                                     [0.18, 0, 0.12, 0.02, 0.08, 0.1]]),
+                    Sub(start: (-0.08, 0.1), segs: [[-0.12, 0.02, -0.18, 0, -0.22, 0.06],
+                                                    [-0.26, -0.02, -0.32, -0.04, -0.36, 0.02],
+                                                    [-0.4, -0.04, -0.44, -0.04, -0.48, -0.12],
+                                                    [-0.36, -0.24, -0.18, -0.22, -0.06, -0.08]])]
         }
     }
 }
@@ -988,7 +1057,7 @@ struct KeyStyle: Equatable {
         if let v = s.balloon { q.balloon = c(v) }
         if let v = s.trail { q.trail = c(v) }
         if let dc = s.deco {
-            q.decoration = dc.motif.map { KeyboardDecoration(motif: $0, color: c(dc.color), density: dc.density) }
+            q.decoration = dc.motif.map { KeyboardDecoration(motif: $0, color: c(dc.color), density: dc.density, alt: dc.alt) }
         }
         return q
     }
