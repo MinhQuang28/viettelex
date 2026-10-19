@@ -841,8 +841,11 @@ public struct TelexEngine {
         // Ưu tiên tiếng Việt khi trùng (collisionPrefersVietnamese): từ Việt hợp lệ
         // thắng bảng collision khi đứng một mình; trong mạch tiếng Anh xem nhánh
         // context bên dưới (bảng vẫn khôi phục ở đó).
+        // Đuôi -k (ák/ták/rík: rime Tây Nguyên Đắk/Lắk + teencode ik) KHÔNG phải từ Việt
+        // thường dùng ⇒ không được "thắng" bảng collision: "task"→ták, "ask"→ák, "risk"→rík
+        // (issue #127, 19/10/2026).
         if rawIsEnglishCollision(),
-           !(collisionPrefersVietnamese && composedIsValidSyllable()) { return true }
+           !(collisionPrefersVietnamese && composedIsValidSyllable() && !composedEndsWithK()) { return true }
         // `isTeencodeKeep()` runs AFTER the English table above on purpose: the dictionary
         // still wins ("google" restores), and only a word that no dictionary claims gets
         // kept as "valid syllable + repeated tail" ("hôngggg", "vângggg", "đẹpppp").
@@ -885,6 +888,12 @@ public struct TelexEngine {
 
     /// True if the current composition still carries any Vietnamese diacritic — a mark
     /// (â/ê/ô/ơ/ư/ă/đ) on any letter, or a pending tone. NON-mutating.
+    /// Âm tiết kết thúc bằng phụ âm k (Đắk, teencode thík) — không bao giờ là từ Việt
+    /// phổ thông nên không thắng bảng collision tiếng Anh.
+    private func composedEndsWithK() -> Bool {
+        pCount > 0 && letters[pCount - 1].base == UInt8(ascii: "k")
+    }
+
     private func composedHasDiacritic() -> Bool {
         if pTone != .none { return true }
         for k in 0..<pCount where letters[k].mark != .none { return true }
