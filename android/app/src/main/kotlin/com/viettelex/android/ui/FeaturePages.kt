@@ -122,6 +122,7 @@ internal data class FeatureSearchEntry(val viTitle: String, val keywords: String
             FeatureSearchEntry("Cỡ chữ trên phím", "cỡ chữ to lớn font size label large key", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Giữ phím hàng trên để ra số", "số giữ lâu number long press", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Giữ phím hàng 2, 3 để ra ký tự đặc biệt", "ký hiệu symbol @ # giữ lâu long press", FeaturePage.Phim), // l10n-key
+            FeatureSearchEntry("Giữ Shift để gõ số và ký hiệu", "shift giữ hold số number ký hiệu symbol 123", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Vuốt phím cách đổi Tiếng Việt / Tiếng Anh", "space ngôn ngữ english language", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Vuốt phím để sao chép/dán", "copy paste cut undo redo select sao chép dán cắt hoàn tác chọn hết clipboard vuốt lên swipe", FeaturePage.Phim), // l10n-key
             FeatureSearchEntry("Chế độ một tay", "one hand một tay", FeaturePage.Phim), // l10n-key
@@ -655,6 +656,9 @@ private fun PhimPage(onBack: () -> Unit) {
         }
         BoolToggle(Keys.LONG_PRESS_SYMBOLS, Prefs.D.longPressSymbols, tr("Giữ phím hàng 2, 3 để ra ký tự đặc biệt"),
             tr("Giữ a … l, z … m để gõ @ # \$ _ & - + ( ) … Giữ , để chọn dấu câu (. ? ! : ; …); giữ 😊 để đổi bàn phím, gõ giọng nói, một tay, thả nổi."))
+        RowDivider()
+        BoolToggle(Keys.HOLD_SHIFT_SYMBOLS, Prefs.D.holdShiftSymbols, tr("Giữ Shift để gõ số và ký hiệu"),
+            tr("Giữ ⇧ rồi chạm phím chữ để gõ ký tự nhỏ ở góc phím (q w e → 1 2 3) thay vì chữ hoa. Chạm ⇧ vẫn viết hoa một chữ, chạm đôi để khoá."))
         RowDivider()
         BoolToggle(Keys.AUTO_SPACE_AFTER_PUNCT, Prefs.D.autoSpaceAfterPunct, tr("Tự thêm dấu cách sau dấu câu"),
             tr("Gõ . , ? ! ; : tự có dấu cách phía sau. Không thêm trong số (3.5, 1,000), email, đường dẫn. Gõ dấu cách ngay sau không thành hai dấu cách; ⌫ ngay sau chỉ xoá dấu cách đó."))

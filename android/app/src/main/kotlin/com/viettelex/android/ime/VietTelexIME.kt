@@ -196,7 +196,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         else if (key == Keys.SWIPE_FUTO) { futoSetting = settings().swipeFuto; updateSwipeTyping() }
         else if (key == Keys.SMART_TOUCH) { smartTouchSetting = settings().smartTouch; warmSmartTouch() }
         else if (key == Keys.HARDWARE_TELEX) hwSetting = settings().hardwareTelex
-        else if (key == Keys.LONG_PRESS_NUMBERS || key == Keys.LONG_PRESS_SYMBOLS) updateAlternates()
+        else if (key == Keys.LONG_PRESS_NUMBERS || key == Keys.LONG_PRESS_SYMBOLS || key == Keys.HOLD_SHIFT_SYMBOLS) updateAlternates()
         // Bật/tắt kiểu gõ trong app khi bàn phím đang mở (ô Thử gõ) → áp ngay, không đợi mở lại.
         else if (key in Keys.ENGINE_KEYS) session.bridge.applySettings(settings())
         // Tắt lịch sử clipboard trong app: bỏ bản RAM (app đã xoá file). Đổi "Giữ lịch sử" ⇒
@@ -921,6 +921,8 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         val m = KeyAlternates.map(st.longPressNumbers, st.longPressSymbols, st.numberRow,
             accessibility = accessibility?.isTouchExplorationEnabled == true)
         keyboard?.setAlternates(m)
+        keyboard?.setShiftAlternates(KeyAlternates.shiftMap(st.holdShiftSymbols, st.longPressNumbers, st.longPressSymbols,
+            st.numberRow, accessibility = accessibility?.isTouchExplorationEnabled == true))
         keyboard?.popoversEnabled = accessibility?.isTouchExplorationEnabled != true
         session.setLetterAlternates(m.isNotEmpty())
         // "Vuốt phím để sao chép/dán": tắt khi TalkBack (vuốt là cử chỉ của trình đọc).

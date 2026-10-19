@@ -37,6 +37,7 @@
     "filterSensitive" : true,
     "freeMarking" : true,
     "hapticFeedback" : true,
+    "holdShiftSymbols" : true,
     "keyLabelTransparency" : 20,
     "keySound" : true,
     "keySoundStyle" : "wood",

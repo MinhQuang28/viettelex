@@ -56,6 +56,16 @@ enum KeyAlternates {
         return m
     }
 
+    /// Bảng cho "Giữ Shift để gõ số và ký hiệu" (`ShiftHold`): cùng ký tự với `map`, nhưng số
+    /// q…p vẫn có khi hàng số bật (nhất quán — giữ ⇧ + q luôn ra 1). Tắt / iPad / VoiceOver ⇒ rỗng
+    /// (iPad: ⇧ giữ nguyên như stock).
+    static func shiftMap(enabled: Bool, numbers: Bool, symbols sym: Bool, numberRow: Bool,
+                         isPad: Bool = false, accessibility: Bool = false) -> [Character: String] {
+        guard enabled else { return [:] }
+        return map(numbers: numbers || numberRow, symbols: sym, numberRow: false,
+                   isPad: isPad, accessibility: accessibility)
+    }
+
     /// Ký tự phụ của phím "," hàng đáy.
     static let commaAlt = "."
     /// Giữ "," ra "." khi bảng ký tự phụ đang dùng không rỗng (mọi gating của `map`).
@@ -101,4 +111,66 @@ enum KeyAlternates {
         /// Nhấc tay: ký tự phụ phải chèn (thay chữ đã chèn lúc chạm), nil = chạm thường.
         var commit: String? { fired ? alt : nil }
     }
+}
+
+
+/// Phím ⇧ bàn phím cảm ứng: chạm (viết hoa một lần), chạm đôi (Caps Lock), và GIỮ làm phím
+/// bổ trợ — "Giữ Shift để gõ số và ký hiệu" (mặc định BẬT): ngón đè ⇧ + chạm phím chữ ⇒ ký tự
+/// phụ của phím (số nhỏ q…p, ký hiệu a…m — cùng ký tự giữ lâu cho) thay vì chữ hoa.
+///
+/// - Chạm ⇧ nhanh: một-lần như cũ; chạm đôi < `doubleTap`: Caps Lock.
+/// - Đã giữ ⇧ gõ ký tự phụ: nhả KHÔNG để lại viết hoa một-lần (Caps Lock trước đó giữ nguyên),
+///   và lần chạm ⇧ kế tiếp không tính là chạm đôi. Chạm đôi rồi giữ: vẫn Caps Lock.
+/// - Gõ chồng ngón (phím chữ chạm < `rollover` sau ⇧, ⇧ chưa nhả) vẫn là chữ hoa.
+/// - Phím không có ký tự phụ / tắt cài đặt (bảng rỗng): `symbol` trả nil ⇒ chữ như cũ.
+///
+/// Đường phím chữ chỉ thêm một phép kiểm tra bool (`held`). Ký tự phụ vào controller là
+/// NGUYÊN VĂN (VNI không lấy số làm dấu — người dùng giữ ⇧ là muốn SỐ).
+/// THUẦN — pinned by ShiftHoldTests (trong KeyAlternatesTests.swift). Bản Kotlin song sinh:
+/// android/keyboard/src/main/kotlin/com/viettelex/keyboard/ShiftHold.kt.
+struct ShiftHold {
+    typealias Shift = SuggestionCase.Shift
+    static let doubleTap: TimeInterval = 0.3
+    static let rollover: TimeInterval = 0.15
+
+    /// Có ngón đang đè ⇧.
+    private(set) var held = false
+    private var before: Shift = .off
+    private var pressed: Shift = .off
+    private var lastTap: TimeInterval?
+    private var downAt: TimeInterval = 0
+    private var symbolsUsed = false
+
+    /// Ngón chạm ⇧ lúc `now` (giây) khi shift đang là `cur`: trả shift mới.
+    mutating func down(_ cur: Shift, now: TimeInterval) -> Shift {
+        before = cur
+        held = true; symbolsUsed = false
+        let next: Shift
+        if let t = lastTap, now - t < Self.doubleTap { next = .capsLock }
+        else { next = cur == .off ? .once : .off }
+        lastTap = now; downAt = now
+        pressed = next
+        return next
+    }
+
+    /// Phím chữ `label` (chữ thường) vừa chạm lúc `now`: ký tự phụ phải gõ thay chữ, hoặc nil.
+    /// `map` = `KeyAlternates.shiftMap` (rỗng khi tắt cài đặt).
+    mutating func symbol(_ label: Character, map: [Character: String], now: TimeInterval) -> String? {
+        guard held, now - downAt >= Self.rollover, let s = map[label] else { return nil }
+        symbolsUsed = true
+        return s
+    }
+
+    /// Nhấc ngón khỏi ⇧ khi shift đang là `cur`: trả shift mới.
+    mutating func up(_ cur: Shift) -> Shift {
+        guard held else { return cur }
+        held = false
+        guard symbolsUsed else { return cur }
+        symbolsUsed = false
+        lastTap = nil
+        return (before == .capsLock || pressed == .capsLock) ? .capsLock : .off
+    }
+
+    /// Huỷ mọi chạm: bỏ trạng thái giữ, shift để nguyên.
+    mutating func cancel() { held = false; symbolsUsed = false }
 }

@@ -9,7 +9,7 @@ sealed class Key {
      * Số / ký hiệu / dấu câu (boundary + ngắt câu). [replacesLetter]: ký tự phụ của cú giữ
      * phím chữ ([KeyAlternates]) — huỷ đúng phím chữ vừa chèn lúc chạm trước khi chèn.
      * [numpad]: số từ bàn phím số (numpad) của phím cứng — KHÔNG BAO GIỜ mang dấu VNI, luôn
-     * là ranh giới như UniKey (#124).
+     * là ranh giới như UniKey (#124). Cũng dùng cho ký tự phụ khi giữ ⇧ + phím chữ ([ShiftHold.key]).
      */
     data class Text(val text: String, val replacesLetter: Boolean = false, val numpad: Boolean = false) : Key()
     object Space : Key()

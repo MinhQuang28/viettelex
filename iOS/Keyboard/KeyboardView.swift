@@ -179,7 +179,6 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
     private var returnTitle = "return"
     private var dark = false
-    private var lastShiftTap: TimeInterval = 0
 
     private var rowsContainer = UIStackView()
     private var rowsHeightConstraint: NSLayoutConstraint?
@@ -732,10 +731,65 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         return KeyAlternates.map(numbers: altNumbersSetting, symbols: altSymbolsSetting,
                           numberRow: numberRowEnabled, isPad: Self.isPad, accessibility: altAccessibility)
     }
-    func configureKeyAlternates(numbers: Bool, symbols: Bool) {
+    func configureKeyAlternates(numbers: Bool, symbols: Bool, holdShift: Bool = true) {
+        holdShiftSetting = holdShift
+        shiftAlts = currentShiftAlts()
         guard numbers != altNumbersSetting || symbols != altSymbolsSetting else { return }
         altNumbersSetting = numbers; altSymbolsSetting = symbols
         rebuild()
+    }
+
+    // MARK: giữ ⇧ + phím chữ ra ký tự phụ (ShiftHold) — "Giữ Shift để gõ số và ký hiệu"
+    private var holdShiftSetting = true
+    /// Bảng giữ ⇧ (rỗng ⇒ tắt / iPad / VoiceOver: hành vi cũ). Đặt lại mỗi rebuild.
+    private var shiftAlts: [Character: String] = [:]
+    private var shiftHold = ShiftHold()
+    /// true trong lúc gửi ký tự phụ của giữ ⇧ ⇒ controller chèn NGUYÊN VĂN (VNI không bỏ dấu).
+    private(set) var literalTextInFlight = false
+    private func currentShiftAlts() -> [Character: String] {
+        KeyAlternates.shiftMap(enabled: holdShiftSetting, numbers: altNumbersSetting,
+                               symbols: altSymbolsSetting, numberRow: numberRowEnabled,
+                               isPad: Self.isPad, accessibility: altAccessibility)
+    }
+    private func shiftDown(now: TimeInterval) {
+        shift = Self.fromCase(shiftHold.down(Self.toCase(shift), now: now))
+        applyShiftAppearance()
+    }
+    private func shiftUp() {
+        let s = Self.fromCase(shiftHold.up(Self.toCase(shift)))
+        if s != shift { shift = s; applyShiftAppearance() }
+    }
+    private static func toCase(_ s: ShiftState) -> SuggestionCase.Shift {
+        switch s { case .off: return .off; case .on: return .once; case .caps: return .capsLock }
+    }
+    private static func fromCase(_ s: SuggestionCase.Shift) -> ShiftState {
+        switch s { case .off: return .off; case .once: return .on; case .capsLock: return .caps }
+    }
+    /// Phím chữ `b` chạm lúc `time` khi đang giữ ⇧: ký tự phụ phải gõ thay chữ (nil ⇒ chữ như cũ).
+    private func shiftSymbol(for b: UIButton, time: TimeInterval) -> String? {
+        // Nút ⇧ bị gỡ (rebuild) giữa lúc giữ thì không có touchUp: ⇧ phải thật sự đang bị đè.
+        guard shiftKeyTracking else { shiftHold.cancel(); return nil }
+        guard let base = letterKeys.first(where: { $0.button === b })?.base.first else { return nil }
+        return shiftHold.symbol(base, map: shiftAlts, now: time)
+    }
+    private var shiftKeyTracking: Bool {
+        #if DEBUG
+        if let t = debugShiftTrackingOverride { return t }
+        #endif
+        return shiftKeys.contains { $0.isTracking }
+    }
+    #if DEBUG
+    /// Test: giả lập ngón đang đè ⇧ (UIControl.isTracking không bật khi gọi sendActions).
+    var debugShiftTrackingOverride: Bool?
+    #endif
+    /// Gõ ký tự phụ của giữ ⇧ trên phím `b` (thay cho action chữ của nút).
+    private func typeShiftSymbol(_ sym: String, on b: UIButton) {
+        Self.clickLetter()
+        showBalloon(over: b, text: sym)
+        fxMark(b)
+        literalTextInFlight = true
+        tapped(.text(sym))
+        literalTextInFlight = false
     }
     /// Có phím nào ra ký tự phụ không — controller bật checkpoint huỷ phím chữ theo cờ này.
     var altHoldActive: Bool { !currentAlts().isEmpty }
@@ -2247,6 +2301,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // (khe không đổi thì không dựng lại path).
         if palette.decoration != nil { setNeedsLayout() }
         activeAlts = currentAlts()
+        shiftAlts = currentShiftAlts()
         updateSuggestionChrome()
         applyOneHand()                           // plane mới có thể thu hẹp / đầy bề ngang
         // Tách đôi: công tắc TẮT ⇒ false ngay (không đọc gì thêm).
@@ -4454,12 +4509,12 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         b.addAction(UIAction { [weak self] _ in
             guard let self else { return }
             Self.clickModifier()
-            let now = CACurrentMediaTime()
-            if now - self.lastShiftTap < 0.3 { self.shift = .caps }
-            else { self.shift = (self.shift == .off) ? .on : .off }
-            self.lastShiftTap = now
-            self.applyShiftAppearance()
+            // Chạm / chạm đôi (Caps) / giữ làm phím bổ trợ — ShiftHold (THUẦN).
+            self.shiftDown(now: CACurrentMediaTime())
         }, for: .touchDown)
+        b.addAction(UIAction { [weak self] _ in
+            self?.shiftUp()   // đã giữ ⇧ gõ ký tự phụ ⇒ không để lại viết hoa một lần
+        }, for: [.touchUpInside, .touchUpOutside, .touchCancel])
         b.widthAnchor.constraint(greaterThanOrEqualToConstant: 42).isActive = true
         return b
     }
@@ -5115,7 +5170,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private func routeDown(_ id: ObjectIdentifier, at raw: CGPoint, time: TimeInterval, batch: Int) {
         let p = TouchGeometry.keySelectionPoint(raw, top: rowsContainer.frame.minY)
         var b = swipeActive ? nil : nearestLetterButton(at: p)
-        if let hit = b, let lp = letterPrior { b = smartPick(hit, at: p, prior: lp) }
+        // Giữ ⇧ + phím có ký tự phụ ⇒ gõ ký tự phụ (không chọn phím theo ngữ cảnh chữ).
+        let shiftSym = shiftHold.held && !shiftAlts.isEmpty && plane == .letters
+            ? b.flatMap { shiftSymbol(for: $0, time: time) } : nil
+        if shiftSym == nil, let hit = b, let lp = letterPrior { b = smartPick(hit, at: p, prior: lp) }
         TouchLog.touchBegan(active: routedTouches.count, batch: batch,
                             touchTimestamp: time, hit: b != nil, y: Double(p.y),
                             key: b?.currentTitle)
@@ -5129,6 +5187,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if Self.isPad { routedStart[id] = raw }
         let since = lastLetterDownTime.map { time - $0 }
         lastLetterDownTime = time
+        if let sym = shiftSym {                  // không vuốt / lệnh / giữ ký tự phụ cho chạm này
+            typeShiftSymbol(sym, on: b)
+            return
+        }
         if let report = onLetterTouch, plane == .letters {          // tự sửa: lệch so với tâm phím
             let r = convert(b.bounds, from: b)
             if r.width > 0, r.height > 0 {
@@ -6272,6 +6334,18 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     }
     var debugShiftOn: Bool { shift != .off }
     var debugShiftCaps: Bool { shift == .caps }
+    /// Test: ngón chạm / nhấc phím ⇧ lúc `time` (đường ShiftHold thật, không cần nút).
+    func debugShiftDown(at time: TimeInterval) { debugShiftTrackingOverride = true; shiftDown(now: time) }
+    func debugShiftUp() { shiftUp(); debugShiftTrackingOverride = nil }
+    /// Test: chạm + nhấc phím chữ `s` qua router lúc `time`.
+    func debugTapLetter(_ s: String, at time: TimeInterval) {
+        guard let f = debugLetterFrame(s) else { return }
+        let token = NSObject(), id = ObjectIdentifier(token)
+        let c = CGPoint(x: f.midX, y: f.midY)
+        routeDown(id, at: c, time: time, batch: 1)
+        routeUp(id, at: c, time: time + 0.05, cancelled: false)
+        withExtendedLifetime(token) {}
+    }
     /// Test hook: hiện balloon trên phím chữ `s` (như chạm / giữ ra ký tự phụ `text`), trả
     /// frame balloon + khung chữ + cỡ chữ (toạ độ self).
     func debugBalloon(letter s: String, text: String) -> (frame: CGRect, label: CGRect, fontSize: CGFloat)? {
