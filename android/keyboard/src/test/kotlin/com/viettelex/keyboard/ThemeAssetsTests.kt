@@ -249,7 +249,7 @@ class ThemeAssetsTests {
     @Test fun fontCmapCoverage() {
         val dir = repoFile("android/app/src/main/assets/fontpreview")
         val files = dir.listFiles { f -> f.extension == "ttf" }!!.sortedBy { it.name }
-        assertEquals(12, files.size)
+        assertEquals(13, files.size)
         for (f in files) {
             val b = f.readBytes()
             assertNotNull(f.name, ThemeAssetSniff.ext(b, ThemeAssetClass.font))
@@ -401,7 +401,7 @@ class ThemeAssetsTests {
     @Test fun builtinFontsSourceMatchesEmbeddedAndParses() {
         val src = repoFile("themes/builtin-fonts.json").readText().trim()
         assertEquals("chạy python3 Scripts/gen-builtin-themes.py", src, BuiltinFontsData.JSON.trim())
-        assertEquals(12, BuiltinFonts.list.size)
+        assertEquals(13, BuiltinFonts.list.size)
         for (e in BuiltinFonts.list) {
             assertTrue(e.id, ThemeAssetURL.isValid(e.ref.url, font = true))
             assertNotNull(e.ref.sha256)

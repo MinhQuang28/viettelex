@@ -29,7 +29,9 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
     PHAO("phao", "Pháo"), // l10n-key
     JINGLE("jingle", "Chuông"), // l10n-key
     /** Mỗi phím một nốt ([PianoMap]/[PianoSynth]) — không dùng đường 3 tiếng. */
-    PIANO("piano", "Piano"); // l10n-key
+    PIANO("piano", "Piano"), // l10n-key
+    /** Bộ đủ món 10/2026 (theme Vũ trụ): "bíp" synth mềm, nhỏ — công thức đầu iOS/Shared/KeySoundSynth.swift. */
+    SCIFI("scifi", "Bíp sci-fi"); // l10n-key
 
     /** true ⇒ phát qua SoundPool riêng; [SYSTEM] ⇒ playSoundEffect, không dựng gì. */
     val usesPool: Boolean get() = this != SYSTEM
@@ -38,7 +40,7 @@ enum class KeySoundStyle(val id: String, val viTitle: String) {
         /** Bật "Âm thanh phím" lần đầu ⇒ "Nhẹ nhàng" (bật công tắc phải NGHE khác đi; "Hệ thống" = như lúc tắt). */
         val DEFAULT = SUBTLE
         /** Kiểu tổng hợp 3 tiếng (chữ / xoá / chức năng) — có công thức [KeySoundSynth.baseRecipe]. */
-        val PRESETS = listOf(SUBTLE, WOOD, MECHANICAL, TYPEWRITER, BUBBLE, ROCK, POP, WATER, VINTAGE, PHAO, JINGLE)
+        val PRESETS = listOf(SUBTLE, WOOD, MECHANICAL, TYPEWRITER, BUBBLE, ROCK, POP, WATER, VINTAGE, PHAO, JINGLE, SCIFI)
         /** Mọi kiểu dựng sẵn (3 tiếng + Piano mỗi phím một nốt). */
         val ALL_PRESETS = PRESETS + PIANO
         /**
@@ -126,7 +128,26 @@ object KeySoundSynth {
         KeySoundStyle.JINGLE -> Recipe(
             listOf(t(1.0, 880.0, 880.0, tau = 0.012), t(0.55, 886.0, 886.0, tau = 0.014), t(0.22, 880 * 2.76, 880 * 2.76, tau = 0.005)),
             emptyList(), 0.0008, 0.054, 3600.0, 0.62)
+        KeySoundStyle.SCIFI -> Recipe(
+            listOf(t(1.0, 1100.0, 1400.0, glide = 0.005, tau = 0.008), t(0.16, 2200.0, 2800.0, glide = 0.005, tau = 0.005),
+                t(0.45, 1650.0, 1650.0, tau = 0.005, delay = 0.011)),
+            emptyList(), 0.002, 0.036, 2800.0, 0.50)
     }
+
+    /**
+     * Tiếng Enter RIÊNG của kiểu (null = như phím chức năng). Máy chữ: tiếng phím chức năng + "ding" chuông về dòng
+     * (1568 Hz τ80 ms + bồi 2.76× τ20 ms, trễ 12 ms; 280 ms; đỉnh 0.60). Thuộc KIỂU âm (ai chọn Máy chữ cũng nghe),
+     * seed cố định (typewriter, modifier). iOS returnRecipe y hệt.
+     */
+    fun returnRecipe(s: KeySoundStyle): Recipe? {
+        if (s != KeySoundStyle.TYPEWRITER) return null
+        val r = recipe(KeySoundStyle.TYPEWRITER, Kind.MODIFIER)
+        return r.copy(tones = r.tones + listOf(t(0.9, 1568.0, 1568.0, tau = 0.08, delay = 0.012),
+            t(0.25, 1568 * 2.76, 1568 * 2.76, tau = 0.02, delay = 0.012)), duration = 0.28, peak = 0.60)
+    }
+
+    /** Mẫu Enter riêng của kiểu (null = dùng tiếng phím chức năng). */
+    fun returnSamples(s: KeySoundStyle): FloatArray? = returnRecipe(s)?.let { render(it, seed(s, Kind.MODIFIER)) }
 
     /** Xoá trầm hơn chút; phím chức năng trầm + dài hơn (như iOS). */
     fun recipe(s: KeySoundStyle, k: Kind): Recipe {

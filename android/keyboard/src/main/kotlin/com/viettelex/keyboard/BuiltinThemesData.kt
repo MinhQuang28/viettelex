@@ -101,6 +101,30 @@ internal object BuiltinThemesData {
       "light": {"bg": "#000000", "key": "#FAFAF7", "special": "#85827B", "ink": "#111111", "accent": "#A4161A",
                 "fn": "#111111", "fnInk": "#FFFFFF", "border": "#33FFFFFF", "deco": {"motif": "notes", "color": "#66D4AF37"}},
       "dark": "same"
+    },
+    {
+      "v": 1, "id": "typewriter", "name": {"vi": "Máy chữ cổ", "en": "Vintage Typewriter"}, "corner": 80,
+      "font": {"name": "Xanh Mono", "url": "https://viettelex.com/fonts/XanhMono-Regular.ttf",
+               "sha256": "f53d8d88b3f35f150c3b4797ab8998afc211d1892b9f8290661cb5fef0bc377e"},
+      "sound": "typewriter", "effect": "ink",
+      "light": {"bg": "#EFE6D2", "key": "#FBF6E9", "special": "#E3D7BD", "ink": "#3A2A1C", "accent": "#8B3A1E",
+                "fn": "#E6DAC1", "fnInk": "#3A2A1C", "border": "#668A7356"},
+      "dark": {"bg": "#231B13", "key": "#3A2E22", "special": "#4B3C2C", "ink": "#F3E8D2", "accent": "#8B3A1E",
+               "fn": "#2E241A", "fnInk": "#F3E8D2", "border": "#66C9A97C"}
+    },
+    {
+      "v": 1, "id": "rgb", "name": {"vi": "Gaming RGB", "en": "Gaming RGB"}, "corner": 30,
+      "sound": "mechanical", "effect": "combo",
+      "light": {"bg": "#0A0A0F", "key": "#15151C", "special": "#1F1F28", "ink": "#F2F2F7", "accent": "#7C4DFF",
+                "fn": "#101016", "fnInk": "#E0E0EA", "borderFx": "rainbow"},
+      "dark": "same"
+    },
+    {
+      "v": 1, "id": "space", "name": {"vi": "Vũ trụ", "en": "Outer Space"}, "sound": "scifi", "effect": "meteor",
+      "light": {"bg": "#070B1E", "key": "#141A33", "special": "#1C2445", "ink": "#E8ECFF", "accent": "#3D5AFE",
+                "fn": "#10162C", "fnInk": "#B8C4FF",
+                "deco": {"motif": "starfield", "color": "#5CFFFFFF", "density": 140}},
+      "dark": "same"
     }
   ]
 }

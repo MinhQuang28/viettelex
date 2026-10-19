@@ -93,6 +93,11 @@ data class ThemePalette(
     val barInk: Int? = null,
     /** Tông vùng không phải phím (thanh điều hướng, …) khi khác [isDark]; null = [isDark]. iOS `surfaceDark`. */
     val surfaceDark: Boolean? = null,
+    /**
+     * Viền phím cầu vồng (Gaming RGB, slot "borderFx":"rainbow"): MỘT lớp gradient che bằng viền mọi phím
+     * (ime/RainbowBorderView) — chỉ trượt màu khi đang gõ, nghỉ thì đứng yên. iOS `rainbowBorder` cùng ý nghĩa.
+     */
+    val rainbowBorder: Boolean = false,
 ) {
     val keyInk: Int get() = keyLabel ?: ink
     /** Nền phím chức năng (⇧ ⌫ 123 🌐 😊…). */
@@ -237,7 +242,11 @@ enum class KeyboardTheme(val id: String, val viTitle: String, val isPlus: Boolea
     TET_MAI("tetMai", "Tết mai vàng", true), // l10n-key
     XMAS("xmas", "Giáng sinh", true), // l10n-key
     XMAS_SNOW("xmasSnow", "Giáng sinh tuyết", true), // l10n-key
-    PIANO("piano", "Piano", true); // l10n-key
+    PIANO("piano", "Piano", true), // l10n-key
+    // Bộ đủ món 10/2026 (màu + trang trí + hiệu ứng + âm) — id trùng iOS.
+    TYPEWRITER("typewriter", "Máy chữ cổ", true), // l10n-key
+    RGB("rgb", "Gaming RGB", true), // l10n-key
+    SPACE("space", "Vũ trụ", true); // l10n-key
 
     /** Bo góc mặc định (% như [KeyStyle.corner]) khi người dùng chưa chỉnh — null = bo stock. iOS cùng giá trị. */
     val defaultCorner: Int? get() = spec?.corner
@@ -298,8 +307,13 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
         const val SNOWFLAKE = "snowflake"
         const val STAR = "star"
         const val NOTES = "notes"
+        const val STARFIELD = "starfield"
         /** Danh sách trắng motif (theme JSON chỉ nhận các id này) — iOS KeyboardDecoration.Motif y hệt. */
-        val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES)
+        val MOTIFS = listOf(HEARTS, FLOWERS, MAI, DAO, SNOWFLAKE, STAR, NOTES, STARFIELD)
+
+        /** Chấm sao nhỏ của motif "starfield": (x, y, bán kính) theo đơn vị motif — iOS starDots y hệt. */
+        val STAR_DOTS = arrayOf(doubleArrayOf(-2.6, -0.3, 0.1), doubleArrayOf(-1.4, 0.34, 0.07), doubleArrayOf(1.5, -0.24, 0.08),
+            doubleArrayOf(2.7, 0.3, 0.11), doubleArrayOf(0.8, 0.4, 0.05))
         const val STEP_X = 64.0
         const val MOTIF_SIZE = 8.0
         const val INSET = 14.0
@@ -396,6 +410,14 @@ data class ThemeDecoration(val motif: String, val color: Int, val density: Int =
                 STAR -> {
                     val pts = (0 until 10).map { k -> pol(if (k % 2 == 0) 0.5 else 0.21, k * Math.PI / 5 - Math.PI / 2) }
                     listOf(MotifSub(pts[0][0], pts[0][1], pts.drop(1)))
+                }
+                STARFIELD -> {
+                    // Vũ trụ: sao lấp lánh 4 cánh + vài chấm sao nhỏ trải ngang trong khe (dọc ±0.45 — không chạm phím).
+                    val pts = (0 until 8).map { k -> pol(if (k % 2 == 0) 0.5 else 0.13, k * Math.PI / 4 - Math.PI / 2) }
+                    listOf(MotifSub(pts[0][0], pts[0][1], pts.drop(1))) + STAR_DOTS.map { d ->
+                        MotifSub(d[0] + d[2], d[1], listOf(doubleArrayOf(d[0], d[1] + d[2]), doubleArrayOf(d[0] - d[2], d[1]),
+                            doubleArrayOf(d[0], d[1] - d[2])))
+                    }
                 }
                 NOTES -> {
                     val k = 0.5523; val cx = -0.14; val cy = 0.3; val rx = 0.19; val ry = 0.14

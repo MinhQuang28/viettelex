@@ -84,7 +84,7 @@ final class KeySoundTests: XCTestCase {
         // Chỉ số case = seed nhiễu: các kiểu cũ giữ nguyên vị trí (mẫu + checksum không đổi).
         XCTAssertEqual(KeySoundStyle.allCases.map(\.rawValue),
                        ["subtle", "wood", "mechanical", "typewriter", "bubble", "custom", "system", "rock", "pop", "water", "vintage",
-                        "phao", "jingle", "piano"])
+                        "phao", "jingle", "piano", "scifi"])
         XCTAssertEqual(L10n.en["iOS"], "System click")
         for st in KeySoundStyle.allCases { XCTAssertNotNil(L10n.en[st.viTitle], "\(st) thiếu bản EN") }
         XCTAssertNotNil(L10n.en["Âm thanh gõ"])
@@ -169,13 +169,14 @@ final class KeySoundTests: XCTestCase {
     }
     static let goldenAbsSum: [(KeySoundStyle, Double)] = [(.subtle, 169.1699), (.wood, 192.4240), (.mechanical, 239.0849), (.typewriter, 139.7659), (.bubble, 233.6785),
                                                           (.rock, 128.7247), (.pop, 154.4214), (.water, 246.5762), (.vintage, 139.9505),
-                                                          (.phao, 61.5246), (.jingle, 206.7064)]
+                                                          (.phao, 61.5246), (.jingle, 206.7064), (.scifi, 128.7368)]
 
     /// 4 kiểu thêm 19/10/2026: chốt cả mẫu xoá + phím chức năng (Android: crossPlatformChecksumsNewKinds).
     func testCrossPlatformChecksumsNewKinds() {
         let golden: [(KeySoundStyle, Double, Double)] = [(.rock, 125.7988, 176.4305), (.pop, 153.6654, 183.0577),
                                                          (.water, 236.6294, 280.8465), (.vintage, 167.8816, 218.2744),
-                                                         (.phao, 69.1895, 93.5815), (.jingle, 212.6919, 254.5561)]
+                                                         (.phao, 69.1895, 93.5815), (.jingle, 212.6919, 254.5561),
+                                                         (.scifi, 130.3325, 155.3449)]
         for (st, del, mod) in golden {
             XCTAssertEqual(KeySoundSynth.samples(st, .delete).reduce(0.0) { $0 + Double(abs($1)) }, del, accuracy: 0.01, "\(st)")
             XCTAssertEqual(KeySoundSynth.samples(st, .modifier).reduce(0.0) { $0 + Double(abs($1)) }, mod, accuracy: 0.01, "\(st)")
@@ -195,10 +196,31 @@ final class KeySoundTests: XCTestCase {
         XCTAssertNotEqual(KeySoundSynth.samples(.phao, .letter), KeySoundSynth.samples(.phao, .delete))
     }
 
+    /// Bộ đủ món (theme Vũ trụ / Máy chữ cổ): "Bíp sci-fi" NHỎ (đỉnh + RMS < Gõ gỗ cả 3 loại phím); Enter của Máy
+    /// chữ = tiếng phím + "ding" (RMS + đỉnh ≤ Gõ gỗ, không chói); kiểu khác không có Enter riêng. Checksum chung
+    /// Android (KeySoundTests.kt scifiQuietAndTypewriterDing).
+    func testScifiQuietAndTypewriterDing() {
+        for k in KeySoundKind.allCases {
+            let wood = KeySoundSynth.samples(.wood, k), sci = KeySoundSynth.samples(.scifi, k)
+            XCTAssertLessThan(KeySoundSynth.rms(sci), KeySoundSynth.rms(wood), "\(k)")
+            XCTAssertLessThan(sci.map(abs).max() ?? 1, wood.map(abs).max() ?? 0, "\(k)")
+        }
+        let ding = try! XCTUnwrap(KeySoundSynth.returnSamples(.typewriter))
+        let wood = KeySoundSynth.samples(.wood, .modifier)
+        XCTAssertLessThanOrEqual(KeySoundSynth.rms(ding), KeySoundSynth.rms(wood))
+        XCTAssertLessThanOrEqual(ding.map(abs).max() ?? 1, wood.map(abs).max() ?? 0)
+        XCTAssertEqual(ding.count, Int((0.28 * KeySoundSynth.sampleRate).rounded()))
+        XCTAssertEqual(ding.first ?? 1, 0, accuracy: 1e-6); XCTAssertEqual(ding.last ?? 1, 0, accuracy: 1e-6)
+        XCTAssertLessThan(KeySoundSynth.spectralCentroid(Array(ding.prefix(4096))), 2500, "ding không chói")
+        XCTAssertEqual(ding.reduce(0.0) { $0 + Double(abs($1)) }, 1168.1703, accuracy: 0.01)
+        XCTAssertEqual(KeySoundSynth.returnSamples(.typewriter), ding, "tất định")
+        for st in KeySoundStyle.allCases where st != .typewriter { XCTAssertNil(KeySoundSynth.returnSamples(st), "\(st)") }
+    }
+
     /// Danh sách id DUY NHẤT cho trường "sound" của theme JSON; "theme" (đã bỏ) ⇒ mặc định.
     func testPresetIDsForThemeJSON() {
         XCTAssertEqual(KeySoundStyle.presetIDs, ["subtle", "wood", "mechanical", "typewriter", "bubble", "rock", "pop",
-                                                 "water", "vintage", "phao", "jingle", "piano"])
+                                                 "water", "vintage", "phao", "jingle", "scifi", "piano"])
         for bad in ["system", "custom", "theme"] { XCTAssertFalse(KeySoundStyle.presetIDs.contains(bad), bad) }
         XCTAssertEqual(KeySoundStyle.resolve("theme", customAvailable: true), .subtle)
         let d = UserDefaults(suiteName: "vt-keysound-theme")!
@@ -317,7 +339,7 @@ final class KeySoundTests: XCTestCase {
         KeyboardView.clickSpace()
         XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:modifier")
         KeyboardView.clickReturn()
-        XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:modifier")
+        XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:return", "Enter qua KeySound.playReturn (Máy chữ: ding)")
         KeyboardView.clickShift(.on)
         XCTAssertEqual(KeyboardView.debugLastClickRoute, "custom:modifier")
         XCTAssertEqual(KeyboardView.pianoPedal.state, .off, "kiểu khác không đụng pedal")

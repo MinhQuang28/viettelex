@@ -44,7 +44,7 @@ class BuiltinFontNamesTest {
         // docs/fonts/manifest.json: mỗi mục có "id" … "renamed": true|false (không cần thư viện JSON).
         val renamed = Regex(""""id":\s*"([^"]+)"[^}]*?"renamed":\s*(true|false)""")
             .findAll(repoFile("docs/fonts/manifest.json").readText()).associate { it.groupValues[1] to (it.groupValues[2] == "true") }
-        assertEquals(12, BuiltinFonts.list.size)
+        assertEquals(13, BuiltinFonts.list.size)
         assertEquals(4, renamed.values.count { it })
         for (e in BuiltinFonts.list) {
             assertEquals(e.id, renamed[e.id], e.name.startsWith("VT "))

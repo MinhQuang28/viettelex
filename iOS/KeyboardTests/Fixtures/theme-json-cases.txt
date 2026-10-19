@@ -134,6 +134,12 @@ CASE	sound-null	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF
 CASE	effect-unknown	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"effect":"confetti"}
 CASE	effect-array	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"effect":["snow"]}
 CASE	effect-upper	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"effect":"Snow"}
+CASE	borderfx-rainbow	ok	{"dark":"same","light":{"accent":"#000000","borderFx":"rainbow","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","borderFx":"rainbow"}}
+CASE	borderfx-none	ok	{"dark":"same","light":{"accent":"#000000","borderFx":"none","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","borderFx":"none"}}
+CASE	borderfx-unknown	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","borderFx":"disco"}}
+CASE	borderfx-number	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","borderFx":1}}
+CASE	motif-starfield	ok	{"dark":"same","light":{"accent":"#000000","deco":{"color":"#5CFFFFFF","density":140,"motif":"starfield"},"ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","deco":{"motif":"starfield","color":"#5CFFFFFF","density":140}}}
+CASE	sound-scifi-effect-meteor	ok	{"dark":"same","effect":"meteor","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"sound":"scifi","v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"sound":"scifi","effect":"meteor"}
 PAL	b	0	FFFCDDE8 FFFFF5F9 FFF6B8CE FF5A1F38 FFD94680 FFFFFFFF 99D94680 FFFFF5F9 - hearts:8CFF6FA3@200
 PAL	b	1	FF2B1520 FF472335 FF5E2F46 FFFCDDE8 FFD94680 FFFFFFFF 99D94680 FF472335 80FFFFFF -
 PAL	a	1	FFEEEEEE FFFFFFFF FFDDDDDD FF000000 FF0A84FF FFFFFFFF 990A84FF FFFFFFFF - -

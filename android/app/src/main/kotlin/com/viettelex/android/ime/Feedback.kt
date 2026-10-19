@@ -68,6 +68,9 @@ class Feedback(private val ctx: Context) {
     /** Hệ số âm lượng từng loại (âm tự chọn: một file, xoá/chức năng nhỏ hơn chút). */
     private val kindGain = FloatArray(ids.size) { 1f }
     @Volatile private var loaded = BooleanArray(ids.size)
+    /** Tiếng Enter riêng của kiểu (Máy chữ: "ding" về dòng) — 0 = không có ⇒ Enter dùng tiếng phím chức năng. */
+    private var returnId = 0
+    @Volatile private var returnLoaded = false
     private var ringerNormal = true
     private var ringerCheckedAt = 0L
     /** Test hook: đường âm lần bấm gần nhất. */
@@ -122,11 +125,14 @@ class Feedback(private val ctx: Context) {
         p.setOnLoadCompleteListener { sp, sampleId, status ->
             if (sp !== pool || status != 0) return@setOnLoadCompleteListener
             for (i in ids.indices) if (ids[i] == sampleId) fresh[i] = true
+            if (sampleId == returnId) returnLoaded = true
         }
         worker(Runnable {
             val files = soundFiles(dir, style, customFile)
+            val ret = returnFile(dir, style)
             android.os.Handler(android.os.Looper.getMainLooper()).post {
                 if (pool !== p) return@post
+                if (ret != null) returnId = p.load(ret.path, 1)
                 val custom = files.distinct().size == 1 && files[0] == customFile
                 var sharedId = 0
                 files.forEachIndexed { i, f ->
@@ -182,6 +188,7 @@ class Feedback(private val ctx: Context) {
         poolKey = null
         ids.fill(0)
         loaded = BooleanArray(ids.size)
+        returnId = 0; returnLoaded = false
         pianoMode = false
         pianoIds.fill(0); sustainIds.fill(0); pianoExtra.fill(0)
         pianoStreams.fill(0); sustainStreams.fill(0)
@@ -271,7 +278,9 @@ class Feedback(private val ctx: Context) {
                 RETURN -> AudioManager.FX_KEYPRESS_RETURN
                 else -> AudioManager.FX_KEYPRESS_STANDARD
             })
-            KeySoundSynth.Route.CUSTOM -> if (pianoMode) playPiano(pianoEvent(kind), false) else {
+            KeySoundSynth.Route.CUSTOM -> if (pianoMode) playPiano(pianoEvent(kind), false)
+            else if (kind == RETURN && returnLoaded) pool?.play(returnId, gain, gain, 1, 0, 1f)   // Máy chữ: "ding"
+            else {
                 val i = soundKind(kind).ordinal
                 val g = gain * kindGain[i]
                 if (loaded[i]) pool?.play(ids[i], g, g, 1, 0, 1f)
@@ -378,6 +387,21 @@ class Feedback(private val ctx: Context) {
             val st = KeySoundStyle.resolve(style, ok)
             return if (st == KeySoundStyle.CUSTOM) KeySoundSynth.Kind.entries.map { custom }
             else KeySoundSynth.Kind.entries.map { wavFile(dir, st, it) }
+        }
+
+        /** WAV tiếng Enter riêng của kiểu đã lưu (Máy chữ: "ding"); null = kiểu không có / custom / ghi lỗi. Chạy trên worker. */
+        fun returnFile(dir: File, style: String): File? {
+            val st = KeySoundStyle.resolve(style, false)
+            if (KeySoundSynth.returnRecipe(st) == null) return null
+            return runCatching {
+                val f = File(dir, "keysound-v${KeySoundSynth.VERSION}-${st.id}-return.wav")
+                if (!f.exists() || f.length() == 0L) {
+                    val tmp = File(dir, f.name + ".tmp")
+                    tmp.writeBytes(KeySoundSynth.wav(KeySoundSynth.returnSamples(st)!!))
+                    tmp.renameTo(f)
+                }
+                f
+            }.getOrNull()
         }
 
         /** WAV tất định ghi 1 lần vào cache (tên kèm VERSION + kiểu). null nếu ghi lỗi. */

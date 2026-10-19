@@ -8,7 +8,8 @@ import Foundation
 //   {"v":1, "id":"peach", "name":{"vi":"Hồng đào","en":"Peach"},
 //    "light":{"bg":"#FBE3E1","key":"#FFF8F7","special":"#F1C4BF","ink":"#4A2226","accent":"#C2505A",
 //             "accentInk":"#FFFFFF","border":"#4CAF6E","fn":"#A9BFA3","fnInk":"#C2255C",
-//             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100}},
+//             "balloon":"#…","trail":"#99FFFFFF","deco":{"motif":"hearts","color":"#8CFF6FA3","density":100},
+//             "borderFx":"rainbow"},
 //    "dark":{…} | "same", "corner":70, "fontScale":110, "font":"serif", "weight":"bold",
 //    "sound":"phao", "effect":"blossom"}
 //
@@ -417,8 +418,13 @@ struct ThemeSlots: Equatable {
     var bg: UInt32?, key: UInt32?, special: UInt32?, ink: UInt32?, accent: UInt32?
     var accentInk: UInt32?, border: UInt32?, fn: UInt32?, fnInk: UInt32?, balloon: UInt32?, trail: UInt32?
     var deco: ThemeDeco?
+    /// Hiệu ứng viền phím: "rainbow" (Gaming RGB — viền cầu vồng, chỉ xoay màu khi đang gõ) | "none" (bản vá: bỏ).
+    var borderFx: String?
 
     var isEmpty: Bool { self == ThemeSlots() }
+    static let rainbow = "rainbow"
+    /// Giá trị hợp lệ của "borderFx" (Android ThemeSlots.BORDER_FX y hệt).
+    static let borderFxValues: Set<String> = [rainbow, "none"]
     static let colorKeys = ["accent", "accentInk", "balloon", "bg", "border", "fn", "fnInk", "ink", "key", "special", "trail"]
     static let requiredKeys = ["key", "special", "ink", "accent"]
 
@@ -462,6 +468,7 @@ struct ThemeSlots: Equatable {
         var o = self
         for k in Self.colorKeys where patch[color: k] != nil { o[color: k] = patch[color: k] }
         if let d = patch.deco { o.deco = d }
+        if let fx = patch.borderFx { o.borderFx = fx }
         return o
     }
 
@@ -484,6 +491,7 @@ struct ThemeSlots: Equatable {
             }
         }
         if deco != base.deco { p.deco = deco ?? ThemeDeco(motif: nil) }
+        if borderFx != base.borderFx { p.borderFx = borderFx ?? "none" }
         return (p, lostBg)
     }
 }
@@ -642,7 +650,7 @@ enum ThemeSpecParser {
     static let rootKeys: Set<String> = Set(["v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
                                             "sound", "effect"])
         .union(assetKeys)
-    static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco"])
+    static let slotKeys: Set<String> = Set(ThemeSlots.colorKeys + ["deco", "borderFx"])
 
     /// Đọc theme ĐẦY ĐỦ từ văn bản (dán / trình sửa). Cảnh báo tương phản kèm theo.
     static func parse(_ text: String) -> Outcome {
@@ -734,6 +742,12 @@ enum ThemeSpecParser {
         for (k, val) in m {
             let path = p + "." + k
             if k == "deco" { s.deco = deco(val, path, &c); continue }
+            if k == "borderFx" {
+                guard case .string(let fx) = val else { c.err(.wrongType, path); continue }
+                guard ThemeSlots.borderFxValues.contains(fx) else { c.err(.badValue, path); continue }
+                s.borderFx = fx
+                continue
+            }
             guard slotKeys.contains(k) else { c.err(.unknownKey, path); continue }
             guard case .string(let str) = val else { c.err(.wrongType, path); continue }
             guard let col = ThemeColorCode.parse(str) else { c.err(.badColor, path); continue }
@@ -1008,6 +1022,7 @@ extension ThemeSpec {
             }
             m.append(("deco", .object(dm)))
         }
+        if let fx = s.borderFx { m.append(("borderFx", .string(fx))) }
         return .object(m)
     }
 }
@@ -1047,6 +1062,7 @@ extension ThemeSpec {
         if let dc = s.deco, let m = dc.motif {
             p.decoration = KeyboardDecoration(motif: m, color: c(dc.color), density: dc.density)
         }
+        p.rainbowBorder = s.borderFx == ThemeSlots.rainbow
         return p
     }
 
@@ -1063,6 +1079,7 @@ extension ThemeSpec {
         if a(p.balloon) != a(p.keyFill) { s.balloon = a(p.balloon) }
         if a(p.trail) != a(p.accent.alpha(0.6)) { s.trail = a(p.trail) }
         if let d = p.decoration { s.deco = ThemeDeco(motif: d.motif, color: a(d.color), density: d.density) }
+        if p.rainbowBorder { s.borderFx = ThemeSlots.rainbow }
         return s
     }
 

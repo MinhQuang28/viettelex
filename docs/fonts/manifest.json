@@ -145,6 +145,18 @@
       "license": "OFL-1.1",
       "licenseFile": "OFL-Montserrat-Regular.txt",
       "renamed": false
+    },
+    {
+      "id": "xanh-mono",
+      "name": "Xanh Mono",
+      "file": "XanhMono-Regular.ttf",
+      "url": "https://viettelex.com/fonts/XanhMono-Regular.ttf",
+      "sha256": "f53d8d88b3f35f150c3b4797ab8998afc211d1892b9f8290661cb5fef0bc377e",
+      "bytes": 27700,
+      "weight": 400,
+      "license": "OFL-1.1",
+      "licenseFile": "OFL-XanhMono-Regular.txt",
+      "renamed": false
     }
   ]
 }

@@ -90,6 +90,13 @@ internal object BuiltinFontsData {
       "url": "https://viettelex.com/fonts/Montserrat-Regular.ttf",
       "sha256": "7cb2e85a96751030a31f19f31b56303a3dd80cd67ac79b7fae9e78532134d336",
       "bytes": 48832
+    },
+    {
+      "id": "xanh-mono",
+      "name": "Xanh Mono",
+      "url": "https://viettelex.com/fonts/XanhMono-Regular.ttf",
+      "sha256": "f53d8d88b3f35f150c3b4797ab8998afc211d1892b9f8290661cb5fef0bc377e",
+      "bytes": 27700
     }
   ]
 }

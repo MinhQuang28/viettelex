@@ -131,6 +131,7 @@ data class KeyStyle(
         s.balloon?.let { q = q.copy(balloon = it, popup = it) }
         s.trail?.let { q = q.copy(trail = it) }
         s.deco?.let { d -> q = q.copy(decoration = d.motif?.let { ThemeDecoration(it, d.color, d.density) }) }
+        s.borderFx?.let { q = q.copy(rainbowBorder = it == ThemeSlots.RAINBOW) }
         return q
     }
 

@@ -217,4 +217,33 @@ class KeyEffectFxTests {
         assertTrue("không cấp phát mỗi phím / khung hình: $bytes B", bytes < 4096)
         assertTrue(boltNs < 50_000 && comboNs < 50_000 && matrixNs < 100_000 && emojiNs < 100_000)
     }
+
+    /**
+     * "Sao băng" (theme Vũ trụ): MỘT hạt / lần bấm, bay CHÉO lên-phải đúng góc của hình (không xoay), tắt trong 0,5 s;
+     * hình giọt một đa giác — số tham chiếu GIỐNG HỆT iOS KeyEffectTests.testMeteorModelAndShapeParity.
+     */
+    @Test fun meteorParity() {
+        val m = KeyEffect.METEOR
+        assertTrue(m.isParticle); assertTrue(m.isPlus); assertEquals(KeyEffectBand.ABOVE_KEYS, m.band)
+        assertEquals(1, m.particlesPerTap)
+        assertArrayEquals(intArrayOf(0xFFE7A0), m.fixedColors)
+        val ref = arrayOf(doubleArrayOf(45.900289, -32.080578), doubleArrayOf(52.457473, -36.663517))
+        for (v in 0 until m.variantCount) {
+            val t = m.trajectory(v)
+            assertEquals(ref[v][0], t.dx, 1e-5); assertEquals(ref[v][1], t.dy, 1e-5)
+            assertEquals("vệt không xoay", 0.0, t.rotation, 0.0)
+            assertEquals("bay đúng hướng vệt", MeteorStreak.ANGLE, Math.atan2(t.dy, t.dx), 1e-9)
+            assertEquals(0.5, t.duration, 1e-9)
+        }
+        val want = doubleArrayOf(1.374882, 1.967155, 2.174260, 1.016165, 2.391047, -0.207105, 1.967155, -1.374882,
+            1.016165, -2.174260, -0.207105, -2.391047, -1.374882, -1.967155, -21.310848, 14.894554)
+        assertArrayEquals(want, MeteorStreak.polygon(), 1e-5)
+        // Sim hạt: một lần bấm = một hạt, hết 0,5 s thì tắt.
+        val sim = KeyEffectParticles(); sim.configure(m)
+        sim.spawn(100f, 100f, 0L)
+        assertEquals(1, sim.aliveCount())
+        assertTrue(sim.sample((0 until sim.capacity).first { sim.sample(it, 250L, 1f) }, 250L, 1f))
+        for (s in 0 until sim.capacity) sim.sample(s, 600L, 1f)
+        assertEquals(0, sim.aliveCount())
+    }
 }

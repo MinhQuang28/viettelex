@@ -552,6 +552,7 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         strip?.onHidden()
         root?.balloon?.hide()
         root?.effects?.halt()                  // Matrix…: ẩn bàn phím ⇒ dừng hẳn, không còn khung hình
+        root?.rainbow?.halt()                  // Gaming RGB: đứng yên ở cầu vồng tĩnh
         session.finishInput()
     }
 

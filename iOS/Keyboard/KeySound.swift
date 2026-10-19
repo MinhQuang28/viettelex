@@ -46,6 +46,8 @@ final class KeySound {
     private var engine: AVAudioEngine?
     private var nodes: [AVAudioPlayerNode] = []
     private var buffers: [AVAudioPCMBuffer] = []
+    /// Tiếng Enter riêng của kiểu (Máy chữ: "ding" về dòng) — nil = Enter dùng tiếng phím chức năng.
+    private var returnBuffer: AVAudioPCMBuffer?
     private var running = false
     private var wanted = false
     private var restarting = false
@@ -132,6 +134,25 @@ final class KeySound {
         nodes[kind.rawValue].scheduleBuffer(buffers[kind.rawValue], at: nil, options: .interrupts, completionHandler: nil)
         return true
     }
+
+    /// Enter: kiểu có tiếng Enter riêng (Máy chữ: "ding") ⇒ phát nó trên node phím chức năng; còn lại = `play(.modifier)`.
+    @discardableResult
+    func playReturn() -> Bool {
+        guard lock.try() else { return false }
+        let ret = returnBuffer
+        let ready = ret != nil && wanted && running && !pianoMode && engine?.isRunning == true
+        if ready, let ret {
+            defer { lock.unlock() }
+            lastPlay = CACurrentMediaTime()
+            nodes[KeySoundKind.modifier.rawValue].scheduleBuffer(ret, at: nil, options: .interrupts, completionHandler: nil)
+            return true
+        }
+        lock.unlock()
+        return play(.modifier)
+    }
+
+    /// Kiểu đang dựng có tiếng Enter riêng (test).
+    var hasReturnSound: Bool { lock.lock(); defer { lock.unlock() }; return returnBuffer != nil }
 
     /// Loại phím không mang nhãn (emoji, mẫu câu, 123, 🌐…) ⇒ sự kiện piano.
     static func pianoEvent(for kind: KeySoundKind) -> PianoEvent {
@@ -331,7 +352,7 @@ final class KeySound {
             }
             if builtKey != key && styleRaw == KeySoundStyle.piano.rawValue {
                 guard buildPianoLocked(e) else { return false }
-                buffers = []; builtKey = key; activeStyle = .piano; pianoMode = true
+                buffers = []; returnBuffer = nil; builtKey = key; activeStyle = .piano; pianoMode = true
             } else if builtKey != key {
                 if pianoMode { releasePianoLocked() }
                 let custom = styleRaw == KeySoundStyle.custom.rawValue ? KeySoundCustom.load(customURL) : nil
@@ -345,6 +366,7 @@ final class KeySound {
                     bs.append(b)
                 }
                 buffers = bs; builtKey = key; activeStyle = bank.style
+                returnBuffer = KeySoundSynth.returnSamples(bank.style).flatMap { Self.pcm($0, fmt) }
                 if bank.style.rawValue != styleRaw { TouchLog.write("keysound: \(styleRaw) thiếu file → \(bank.style.rawValue)") }
             }
             e.mainMixerNode.outputVolume = gain
@@ -403,7 +425,7 @@ final class KeySound {
         if let o = configObserver { NotificationCenter.default.removeObserver(o); configObserver = nil }
         for n in nodes + pianoNodes + sustainNodes { n.stop() }
         engine?.stop()
-        engine = nil; nodes = []; buffers = []; builtKey = nil
+        engine = nil; nodes = []; buffers = []; returnBuffer = nil; builtKey = nil
         pianoNodes = []; sustainNodes = []; pianoExtra = []; pianoMode = false; sustainReady = false
         pianoBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)
         sustainBuf = [AVAudioPCMBuffer?](repeating: nil, count: 128)

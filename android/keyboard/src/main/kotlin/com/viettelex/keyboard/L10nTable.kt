@@ -153,6 +153,7 @@ object L10nTable {
         put("Pháo", "Firecracker")
         put("Chuông", "Jingle bell")
         put("Piano", "Piano")
+        put("Bíp sci-fi", "Sci-fi beep")
         put("Chạm một kiểu để chọn và nghe thử.", "Tap a style to choose and preview it.")
         put("Hệ thống: âm thanh khi chạm của Android — theo Cài đặt → Âm thanh → Âm thanh khi chạm, âm lượng theo hệ thống. Các kiểu khác là tiếng riêng của VietTelex.",
             "System: Android's touch sounds — follows Settings → Sound → Touch sounds, at the system volume. The other styles are VietTelex's own sounds.")
@@ -172,6 +173,7 @@ object L10nTable {
         put("Mực loang", "Ink bloom")
         put("Sóng nước", "Water ripples")
         put("Tuyết rơi", "Snowfall")
+        put("Sao băng", "Shooting star")
         put("Matrix, Mực loang, Sóng nước chạy dưới phím; Matrix chỉ chạy khi đang gõ. Nháy sáng được giới hạn nhịp và độ sáng cho dịu mắt. Emoji theo chữ hiện khi vừa gõ xong từ như \"haha\", \"cảm ơn\", \"chúc mừng\".",
             "Matrix, Ink bloom and Water ripples play beneath the keys; Matrix only runs while you type. Flash is rate- and brightness-limited to stay easy on the eyes. Emoji words appear right after words like \"haha\", \"thanks\", \"congrats\".")
         put("Chạm một ô để chọn và xem thử.", "Tap a tile to choose and preview it.")
@@ -495,6 +497,9 @@ object L10nTable {
         put("Tết mai vàng", "Golden Apricot Tết")
         put("Giáng sinh", "Christmas")
         put("Giáng sinh tuyết", "Snowy Christmas")
+        put("Máy chữ cổ", "Vintage Typewriter")
+        put("Gaming RGB", "Gaming RGB")
+        put("Vũ trụ", "Outer Space")
         put("Giao diện này có âm thanh riêng — bật Âm thanh phím để nghe.", "This theme has its own key sound — turn on Key Sound to hear it.")
         put("Theme cao cấp & ảnh nền", "Premium themes & wallpaper")
         put("Thêm bộ màu bàn phím và đặt ảnh riêng làm nền.", "More keyboard color themes and your own photo as the background.")

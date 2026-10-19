@@ -23,6 +23,7 @@ import com.viettelex.keyboard.LightningBolt
 import com.viettelex.keyboard.LightningShards
 import com.viettelex.keyboard.MatrixClock
 import com.viettelex.keyboard.MatrixRain
+import com.viettelex.keyboard.MeteorStreak
 import com.viettelex.keyboard.WaveRings
 
 /**
@@ -122,6 +123,10 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
         when (e) {
             KeyEffect.BUBBLE -> { useFill = true; useStroke = true; fillAlpha = 46; strokeAlpha = 255; stroke.strokeWidth = 1.5f }
             KeyEffect.RIPPLE -> { useFill = false; useStroke = true; strokeAlpha = 204; stroke.strokeWidth = 2f }
+            KeyEffect.METEOR -> {
+                useFill = true; useStroke = !dark; fillAlpha = 255; strokeAlpha = 255; stroke.strokeWidth = 0.6f
+                stroke.color = MeteorStreak.EDGE or (0xFF shl 24)
+            }
             KeyEffect.SNOW -> {
                 useFill = true; useStroke = !dark; fillAlpha = 255; strokeAlpha = 255; stroke.strokeWidth = 0.6f
                 fillColors = intArrayOf(if (dark) 0xFFFFFFFF.toInt() else 0xFFDCEBFF.toInt())
@@ -533,6 +538,12 @@ open class KeyEffectView(context: Context, private val density: Float) : View(co
                 path.moveTo(0f, -s)
                 path.cubicTo(s * 0.9f, -s * 0.1f, s * 0.75f, s * 0.7f, 0f, s * 0.7f)
                 path.cubicTo(-s * 0.75f, s * 0.7f, -s * 0.9f, -s * 0.1f, 0f, -s)
+                path.close()
+            }
+            KeyEffect.METEOR -> {
+                val pts = MeteorStreak.polygon()
+                path.moveTo(pts[0].toFloat(), pts[1].toFloat())
+                for (k in 1 until pts.size / 2) path.lineTo(pts[2 * k].toFloat(), pts[2 * k + 1].toFloat())
                 path.close()
             }
             KeyEffect.SNOW -> {

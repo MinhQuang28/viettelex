@@ -378,6 +378,8 @@ data class ThemeSlots(
     val bg: Int? = null, val key: Int? = null, val special: Int? = null, val ink: Int? = null, val accent: Int? = null,
     val accentInk: Int? = null, val border: Int? = null, val fn: Int? = null, val fnInk: Int? = null,
     val balloon: Int? = null, val trail: Int? = null, val deco: ThemeDeco? = null,
+    /** Hiệu ứng viền phím: "rainbow" (Gaming RGB — chỉ xoay màu khi đang gõ) | "none" (bản vá: bỏ). iOS y hệt. */
+    val borderFx: String? = null,
 ) {
     val isEmpty: Boolean get() = this == ThemeSlots()
 
@@ -407,12 +409,16 @@ data class ThemeSlots(
             }
         }
         if (deco != base.deco) p = p.copy(deco = deco ?: ThemeDeco(null))
+        if (borderFx != base.borderFx) p = p.copy(borderFx = borderFx ?: "none")
         return p to lostBg
     }
 
     companion object {
         val COLOR_KEYS = listOf("accent", "accentInk", "balloon", "bg", "border", "fn", "fnInk", "ink", "key", "special", "trail")
         val REQUIRED = listOf("key", "special", "ink", "accent")
+        const val RAINBOW = "rainbow"
+        /** Giá trị hợp lệ của "borderFx" (iOS ThemeSlots.borderFxValues y hệt). */
+        val BORDER_FX = setOf(RAINBOW, "none")
     }
 }
 
@@ -566,6 +572,7 @@ data class ThemeSpec(
                 }
                 m.add("deco" to SJ.Obj(dm))
             }
+            s.borderFx?.let { m.add("borderFx" to SJ.Str(it)) }
             return SJ.Obj(m)
         }
 
@@ -610,7 +617,8 @@ data class ThemeSpec(
                 ink = ink, trail = s.trail ?: c.withAlpha(accent, 0.6f), balloon = balloon, popup = balloon, action = accent,
                 actionInk = s.accentInk ?: autoAccentInk(accent), chip = special, keyBorder = s.border,
                 isDark = c.luminance(ink) > 0.5, functionFill = s.fn, functionInk = s.fnInk,
-                decoration = s.deco?.let { d -> d.motif?.let { ThemeDecoration(it, d.color, d.density) } })
+                decoration = s.deco?.let { d -> d.motif?.let { ThemeDecoration(it, d.color, d.density) } },
+                rainbowBorder = s.borderFx == ThemeSlots.RAINBOW)
         }
 
         /** Palette (đã giải) → màu một chế độ; bỏ trường bằng mặc định tự tính. */
@@ -620,7 +628,8 @@ data class ThemeSpec(
                 accentInk = p.actionInk.takeIf { it != autoAccentInk(p.action) }, border = p.keyBorder,
                 fn = p.functionFill, fnInk = p.functionInk, balloon = p.balloon.takeIf { it != p.keyFill },
                 trail = p.trail.takeIf { it != c.withAlpha(p.action, 0.6f) },
-                deco = p.decoration?.let { ThemeDeco(it.motif, it.color, it.density) })
+                deco = p.decoration?.let { ThemeDeco(it.motif, it.color, it.density) },
+                borderFx = if (p.rainbowBorder) ThemeSlots.RAINBOW else null)
         }
 
         /** Theme đầy đủ từ palette sáng/tối đã giải + kiểu chữ ("Chép JSON"). */
@@ -649,7 +658,7 @@ object ThemeSpecParser {
     private val ASSET_KEYS = setOf("background", "foreground", "keys")
     private val ROOT_KEYS = setOf("v", "id", "name", "light", "dark", "corner", "fontScale", "font", "weight",
         "sound", "effect") + ASSET_KEYS
-    private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco").toSet()
+    private val SLOT_KEYS = (ThemeSlots.COLOR_KEYS + "deco" + "borderFx").toSet()
 
     fun parse(text: String): Outcome = when (val r = StrictJson.parse(text)) {
         is StrictJson.Result.Err -> Outcome(null, listOf(r.issue))
@@ -719,6 +728,14 @@ object ThemeSpecParser {
         for ((k, value) in v.m) {
             val path = "$p.$k"
             if (k == "deco") { s = s.copy(deco = deco(value, path, c)); continue }
+            if (k == "borderFx") {
+                when {
+                    value !is SJ.Str -> c.err(ThemeIssue.Code.wrongType, path)
+                    value.s !in ThemeSlots.BORDER_FX -> c.err(ThemeIssue.Code.badValue, path)
+                    else -> s = s.copy(borderFx = value.s)
+                }
+                continue
+            }
             if (k !in SLOT_KEYS) { c.err(ThemeIssue.Code.unknownKey, path); continue }
             if (value !is SJ.Str) { c.err(ThemeIssue.Code.wrongType, path); continue }
             val col = ThemeColorCode.parse(value.s)

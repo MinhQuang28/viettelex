@@ -170,7 +170,7 @@ final class KeyboardThemeTests: XCTestCase {
     // MARK: token
 
     func testThemeSetIsCompactAndSystemIsDefault() {
-        XCTAssertTrue((6...20).contains(KeyboardTheme.allCases.count))
+        XCTAssertTrue((6...40).contains(KeyboardTheme.allCases.count))
         XCTAssertEqual(ThemeSettings().theme, .system)
         XCTAssertEqual(ThemeSettings.load(nil).theme, .system)
     }
@@ -193,7 +193,7 @@ final class KeyboardThemeTests: XCTestCase {
     /// Theme tối cố định (OLED, Tương phản cao, Tim đen, Neon) không đổi theo hệ thống; mọi theme
     /// nền đục khác có bản tối riêng (bug 10/2026: "giao diện plus ở chế độ tối không chuyển tối").
     func testFixedThemesIgnoreSystemAppearance() {
-        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon, .tet, .xmas, .piano]
+        let fixed: Set<KeyboardTheme> = [.oled, .contrast, .blackHeart, .neon, .tet, .xmas, .piano, .rgb, .space]
         for t in KeyboardTheme.allCases where t != .system && t != .glass {
             XCTAssertNotNil(t.palette(systemDark: false).background, "\(t) cần nền đục")
             if fixed.contains(t) {
@@ -863,7 +863,8 @@ final class ThemeSetTests: XCTestCase {
     }
 
     static let newThemes: [KeyboardTheme] = [.blackHeart, .greenFloral, .sage, .neon, .pink,
-                                             .tet, .tetMai, .xmas, .xmasSnow, .piano]
+                                             .tet, .tetMai, .xmas, .xmasSnow, .piano,
+                                             .typewriter, .rgb, .space]
     static let pastels: [KeyboardTheme] = [.peach, .mint, .sky, .lavender]
 
     // MARK: bảng màu chung iOS ↔ Android
@@ -898,7 +899,7 @@ final class ThemeSetTests: XCTestCase {
         let f = try fixture()
         XCTAssertEqual(KeyboardTheme.allCases.map(\.rawValue), f.order, "id + thứ tự phải trùng Android")
         XCTAssertEqual(KeyboardTheme.allCases.filter(\.isPlus).map(\.rawValue), f.plus)
-        XCTAssertEqual(f.rows.count, 32)
+        XCTAssertEqual(f.rows.count, 38)
         for r in f.rows {
             let t = try XCTUnwrap(KeyboardTheme(rawValue: r.theme), r.theme)
             let p = t.palette(systemDark: r.dark)
@@ -1003,9 +1004,81 @@ final class ThemeSetTests: XCTestCase {
         XCTAssertEqual(KeyboardTheme.piano.spec?.sound, "piano"); XCTAssertNil(KeyboardTheme.piano.spec?.effect)
         XCTAssertNil(KeyboardTheme.peach.spec?.sound); XCTAssertNil(KeyboardTheme.peach.spec?.effect)
         XCTAssertEqual(ThemeSettings(theme: .tet).effectiveKeyStyle.sound, "phao")
-        for t in [KeyboardTheme.tet, .tetMai, .xmas, .xmasSnow, .piano] {
+        for t in [KeyboardTheme.tet, .tetMai, .xmas, .xmasSnow, .piano, .typewriter, .rgb, .space] {
             XCTAssertEqual(L10n.en[t.title] != nil || L10n.en[t.spec!.nameVi] != nil, true, t.rawValue)
         }
+    }
+
+    // MARK: bộ đủ món — Máy chữ cổ / Gaming RGB / Vũ trụ
+
+    /// Màu + phông + âm + hiệu ứng đúng thiết kế; âm / hiệu ứng có trên máy (id trong danh sách trắng).
+    func testFullPackThemes() throws {
+        let tw = try XCTUnwrap(KeyboardTheme.typewriter.spec)
+        XCTAssertEqual(tw.nameEn, "Vintage Typewriter")
+        XCTAssertEqual(tw.sound, "typewriter"); XCTAssertEqual(tw.effect, "ink")
+        let font = try XCTUnwrap(tw.assets.font, "phông máy chữ tải về")
+        let entry = try XCTUnwrap(BuiltinFonts.list.first { $0.id == "xanh-mono" })
+        XCTAssertEqual(font.ref, entry.ref, "theme trỏ đúng phông có sẵn (url + sha256)")
+        XCTAssertEqual(tw.palette(dark: false).background, RGBA(hex: 0xEFE6D2))
+        XCTAssertEqual(tw.corner, 80, "phím tròn tròn")
+        let rgb = try XCTUnwrap(KeyboardTheme.rgb.spec)
+        XCTAssertEqual(rgb.nameEn, "Gaming RGB")
+        XCTAssertEqual(rgb.sound, "mechanical"); XCTAssertEqual(rgb.effect, "combo")
+        for dark in [false, true] {
+            XCTAssertTrue(KeyboardTheme.rgb.palette(systemDark: dark).rainbowBorder)
+            XCTAssertNil(KeyboardTheme.rgb.palette(systemDark: dark).keyBorder, "viền thường nhường chỗ cầu vồng")
+        }
+        let sp = try XCTUnwrap(KeyboardTheme.space.spec)
+        XCTAssertEqual(sp.nameEn, "Outer Space")
+        XCTAssertEqual(sp.sound, "scifi"); XCTAssertEqual(sp.effect, "meteor")
+        for t in [KeyboardTheme.typewriter, .rgb, .space] {
+            let st = try XCTUnwrap(t.spec)
+            XCTAssertTrue(ThemeExtras.soundAllowed(st.sound ?? ""), t.rawValue)
+            XCTAssertNotNil(KeyEffect(rawValue: st.effect ?? ""), t.rawValue)
+            XCTAssertTrue(t.isPlus)
+        }
+        for t in KeyboardTheme.allCases where t != .rgb {
+            XCTAssertFalse(t.palette(systemDark: false).rainbowBorder, t.rawValue)
+        }
+    }
+
+    /// Phông tải về chưa có (máy offline / chưa tải) ⇒ vẫn vẽ được bằng phông mặc định: theme vẫn chọn được, bảng
+    /// màu đủ, kế hoạch tệp chỉ là phông (thiếu file ⇒ bàn phím dùng phông hệ thống).
+    func testTypewriterRendersWithoutDownloadedFont() {
+        let s = ThemeSettings(theme: .typewriter)
+        XCTAssertNotNil(s.effectiveKeyStyle.assets.font)
+        XCTAssertEqual(s.palette(systemDark: false, wallpaperActive: false).keyFill, RGBA(hex: 0xFBF6E9))
+        let plan = ThemeAssetPlan.make(s.effectiveKeyStyle.assets)
+        XCTAssertNotNil(plan.font); XCTAssertTrue(plan.skins.isEmpty)
+        XCTAssertNil(plan.background); XCTAssertNil(plan.foreground)
+        let empty = FileManager.default.temporaryDirectory.appendingPathComponent("vt-tw-\(UUID().uuidString)")
+        XCTAssertNil(ThemeAssetLoader.load(plan, dir: empty)?.font, "chưa tải ⇒ không có phông riêng ⇒ phông mặc định")
+        ThemeAssetLoader.dropCache()
+    }
+
+    /// "borderFx": đọc / chuẩn hoá / lỗi; bản vá bỏ cầu vồng ("none") và thêm cầu vồng cho theme khác.
+    func testBorderFxParseAndPatch() throws {
+        let base = ##"{"v":1,"name":{"vi":"x"},"light":{"key":"#000000","special":"#111111","ink":"#FFFFFF","accent":"#7C4DFF","borderFx":"rainbow"}}"##
+        let s = try XCTUnwrap(ThemeSpecParser.parse(base).spec)
+        XCTAssertEqual(s.light.borderFx, "rainbow")
+        XCTAssertTrue(s.palette(dark: false).rainbowBorder)
+        XCTAssertTrue(s.canonical.contains(#""borderFx":"rainbow""#))
+        XCTAssertEqual(ThemeSpecParser.parse(s.canonical).spec?.canonical, s.canonical)
+        for bad in [#""borderFx":"disco""#, #""borderFx":1"#, #""borderFx":true"#] {
+            let j = base.replacingOccurrences(of: #""borderFx":"rainbow""#, with: bad)
+            XCTAssertNil(ThemeSpecParser.parse(j).spec, bad)
+        }
+        // Bản vá: bỏ cầu vồng của Gaming RGB / thêm cho Neon.
+        let rgbSlots = try XCTUnwrap(KeyboardTheme.rgb.spec).light
+        var off = rgbSlots; off.borderFx = nil
+        XCTAssertEqual(off.patch(from: rgbSlots).patch.borderFx, "none")
+        var st = KeyStyle(); st.light = off.patch(from: rgbSlots).patch; st.dark = st.light
+        var settings = ThemeSettings(theme: .rgb); settings.setStyle(st, for: .rgb)
+        XCTAssertFalse(settings.palette(systemDark: false, wallpaperActive: false).rainbowBorder)
+        var on = ThemeSlots(); on.borderFx = "rainbow"
+        var neon = ThemeSettings(theme: .neon); var ns = KeyStyle(); ns.light = on; ns.dark = on
+        neon.setStyle(ns, for: .neon)
+        XCTAssertTrue(neon.palette(systemDark: true, wallpaperActive: false).rainbowBorder)
     }
 
     /// Chép JSON → sửa → dán: "sound" / "effect" đi trọn vòng (theme có sẵn, bản vá, theme tự tạo).
@@ -1132,6 +1205,7 @@ final class ThemeSetTests: XCTestCase {
                 case .xmas: XCTAssertEqual(m, .snowflake)
                 case .xmasSnow: XCTAssertEqual(m, dark ? .star : .snowflake)
                 case .piano: XCTAssertEqual(m, .notes)
+                case .space: XCTAssertEqual(m, .starfield)
                 default: XCTAssertNil(m, t.rawValue)
                 }
             }
@@ -1176,7 +1250,7 @@ final class ThemeSetTests: XCTestCase {
         let d = UserDefaultsProvider.shared
         let saved = d?.object(forKey: ThemeSettings.themeKey)
         defer { d?.set(saved, forKey: ThemeSettings.themeKey) }
-        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano] {
+        for t in [KeyboardTheme.blackHeart, .greenFloral, .tet, .xmasSnow, .piano, .space] {
             for dark in [false, true] {
                 d?.set(t.rawValue, forKey: ThemeSettings.themeKey)
                 let kb = KeyboardView(needsGlobe: false, inputController: nil) { _ in }

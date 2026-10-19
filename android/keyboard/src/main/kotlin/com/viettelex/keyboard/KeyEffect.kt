@@ -26,7 +26,9 @@ enum class KeyEffect(val id: String, val viTitle: String) {
     COMBO("combo", "Lửa combo"), // l10n-key
     INK("ink", "Mực loang"), // l10n-key
     WAVE("wave", "Sóng nước"), // l10n-key
-    SNOW("snow", "Tuyết rơi"); // l10n-key
+    SNOW("snow", "Tuyết rơi"), // l10n-key
+    // Bộ đủ món (theme Vũ trụ, 10/2026). Chỉ thêm CUỐI (id sao lưu / theme JSON).
+    METEOR("meteor", "Sao băng"); // l10n-key
 
     val title: String get() = tr(viTitle)
 
@@ -47,6 +49,7 @@ enum class KeyEffect(val id: String, val viTitle: String) {
         BLOSSOM -> intArrayOf(0xFF8FB1, 0xFFC93C)
         COMBO -> intArrayOf(0xFF7A1A, 0xFFC21A, 0xFF3B30)
         SNOW -> intArrayOf(0xFFFFFF)
+        METEOR -> intArrayOf(MeteorStreak.COLOR)
         MATRIX -> intArrayOf(MatrixRain.GREEN)
         else -> IntArray(0)
     }
@@ -54,7 +57,7 @@ enum class KeyEffect(val id: String, val viTitle: String) {
     /** Số hạt mỗi lần bấm (Lửa combo: tối đa — mức combo quyết định số hạt thật). */
     val particlesPerTap: Int get() = when (this) {
         HEART, BUBBLE, PETAL, BLOSSOM, COMBO -> 3
-        RIPPLE -> 1
+        RIPPLE, METEOR -> 1
         FIREWORK -> 6
         SNOW -> 4
         else -> 0
@@ -82,6 +85,10 @@ enum class KeyEffect(val id: String, val viTitle: String) {
             BLOSSOM -> KeyEffectTrajectory(t * 30, -(40 + (v % 3) * 9.0), 0.6, 1.0, t * 1.6 + 0.4, 1.0, sway = 6.0)
             COMBO -> KeyEffectTrajectory(t * 8, -(26 + (v % 3) * 6.0), 1.0, 0.35, 0.0, 0.5)
             SNOW -> KeyEffectTrajectory(t * 14, 40 + (v % 3) * 8.0, 0.8, 1.0 + (v % 2) * 0.15, t * 1.2, 1.2, sway = 7.0)
+            METEOR -> {   // vệt lao CHÉO lên-phải đúng góc của hình (không xoay), dài ra rồi tắt
+                val d = MeteorStreak.DISTANCE + (v % 2) * 8
+                KeyEffectTrajectory(cos(MeteorStreak.ANGLE) * d, sin(MeteorStreak.ANGLE) * d, 0.55, 1.0, 0.0, MeteorStreak.DURATION)
+            }
             else -> KeyEffectTrajectory(0.0, 0.0, 1.0, 1.0, 0.0, 0.0)
         }
     }
@@ -95,9 +102,37 @@ enum class KeyEffect(val id: String, val viTitle: String) {
     companion object {
         val DEFAULT = NONE
         val IDS: Set<String> = entries.map { it.id }.toSet()
-        val PARTICLES: Set<KeyEffect> = setOf(HEART, BUBBLE, RIPPLE, PETAL, FIREWORK, BLOSSOM, COMBO, SNOW)
+        val PARTICLES: Set<KeyEffect> = setOf(HEART, BUBBLE, RIPPLE, PETAL, FIREWORK, BLOSSOM, COMBO, SNOW, METEOR)
         /** Giá trị lạ / thiếu ⇒ [DEFAULT]. */
         fun of(raw: Any?): KeyEffect = entries.firstOrNull { it.id == raw } ?: DEFAULT
+    }
+}
+
+/**
+ * "Sao băng" (theme Vũ trụ): MỘT hạt vector — hình giọt (đầu tròn, đuôi dài phía sau) đặt sẵn theo góc bay, lao
+ * chéo từ tâm phím rồi tắt. Không xoay, không ảnh ⇒ dùng chung đường hạt. iOS MeteorStreak y hệt (test số chung).
+ */
+object MeteorStreak {
+    /** Hướng bay (rad, y xuống): lên-phải ≈ −35°. */
+    const val ANGLE = -0.61
+    const val DISTANCE = 56.0
+    const val DURATION = 0.5
+    const val LENGTH = 26.0
+    const val HEAD_RADIUS = 2.4
+    const val ARC_STEPS = 6
+    /** Vàng ấm; theme sáng có viền mảnh [EDGE] để thấy trên phím sáng. */
+    const val COLOR = 0xFFE7A0
+    const val EDGE = 0xB07A1A
+
+    /** Đa giác (dp, tâm đầu tại gốc): nửa vòng đầu phía trước ([ARC_STEPS] đoạn) rồi mũi đuôi — [x0, y0, x1, y1, …]. */
+    fun polygon(): DoubleArray {
+        val out = DoubleArray(2 * (ARC_STEPS + 2))
+        for (k in 0..ARC_STEPS) {
+            val phi = ANGLE + Math.PI / 2 - k * Math.PI / ARC_STEPS
+            out[2 * k] = HEAD_RADIUS * cos(phi); out[2 * k + 1] = HEAD_RADIUS * sin(phi)
+        }
+        out[2 * (ARC_STEPS + 1)] = -cos(ANGLE) * LENGTH; out[2 * (ARC_STEPS + 1) + 1] = -sin(ANGLE) * LENGTH
+        return out
     }
 }
 
