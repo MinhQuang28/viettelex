@@ -107,6 +107,7 @@ internal data class FeatureSearchEntry(val viTitle: String, val keywords: String
             FeatureSearchEntry("Từ điển cá nhân", "dictionary tên riêng thuật ngữ", FeaturePage.GoiY), // l10n-key
             FeatureSearchEntry("Xóa từ đã học", "xoá học reset", FeaturePage.GoiY), // l10n-key
             FeatureSearchEntry("Gõ vuốt", "swipe vuốt thử nghiệm experimental", FeaturePage.GoVuot), // l10n-key
+            FeatureSearchEntry("Hiệu ứng nét vuốt", "swipe trail nét vuốt vệt hiệu ứng lửa fire điện electric lightning bút lông brush mực ink cầu vồng rainbow neon bụi sao stardust sparkle pháo hoa firework theo giao diện theme plus", FeaturePage.GoVuot), // l10n-key
             FeatureSearchEntry("Vuốt từ tiếng Anh", "swipe english", FeaturePage.GoVuot), // l10n-key
             FeatureSearchEntry("Mô hình neural gõ vuốt", "futo neural swipe", FeaturePage.GoVuot), // l10n-key
             FeatureSearchEntry("Luyện vuốt", "practice swipe", FeaturePage.GoVuot), // l10n-key
@@ -274,7 +275,7 @@ fun TinhNangTab(openRequest: FeaturePage? = null, onOpened: () -> Unit = {}, onO
         when (page) {
             FeaturePage.ChinhTa -> ChinhTaPage(back)
             FeaturePage.GoiY -> GoiYPage(back)
-            FeaturePage.GoVuot -> GoVuotPage(back)
+            FeaturePage.GoVuot -> GoVuotPage(back, onOpenPlus)
             FeaturePage.GoTat -> GoTatPage(back)
             FeaturePage.Phim -> PhimPage(back)
             FeaturePage.GiaoDien -> ThemePage(back, onOpenPlus)
@@ -468,9 +469,13 @@ private fun GoiYPage(onBack: () -> Unit) {
 }
 
 @Composable
-private fun GoVuotPage(onBack: () -> Unit) {
+private fun GoVuotPage(onBack: () -> Unit, onOpenPlus: () -> Unit = {}) {
     val c = LocalVT.current
     val ctx = LocalContext.current
+    /** Trang con "Hiệu ứng nét vuốt" đang mở. */
+    var pickingTrail by remember { mutableStateOf(false) }
+    if (pickingTrail) { SwipeTrailPage(onOpenPlus = onOpenPlus, onBack = { pickingTrail = false }); return }
+    val trailRaw by rememberStringPref(Keys.SWIPE_TRAIL, com.viettelex.keyboard.SwipeTrailStyle.DEFAULT.id)
     SubPageHeader(FeaturePage.GoVuot.title, onBack)
     val swipeOn by rememberBoolPref(Keys.SWIPE_TYPING, Prefs.D.swipeTyping)
     VTSection(footer = tr("Tự tắt khi bật TalkBack và ở ô mật khẩu, email, địa chỉ web.")) {
@@ -489,6 +494,15 @@ private fun GoVuotPage(onBack: () -> Unit) {
             VTRow(onClick = { openUrl(ctx, "https://github.com/ptrinh/viettelex/blob/main/docs/DATA-SOURCES.md#futo-swipe") }) {
                 Text("powered by FUTO Swipe", style = VTType.caption2, color = c.tertiary)
             }
+        }
+    }
+    VTSection {
+        VTRow(onClick = { pickingTrail = true }) {
+            val plus = com.viettelex.keyboard.SwipeTrailGate.allows
+            Text(tr("Hiệu ứng nét vuốt") + if (plus) "" else " · Plus", style = VTType.body, color = c.label,
+                modifier = Modifier.weight(1f))
+            Text("${com.viettelex.keyboard.SwipeTrailStyle.displayed(trailRaw).title} ›", style = VTType.body,
+                color = c.secondary, maxLines = 1)
         }
     }
     if (swipeOn) {

@@ -517,6 +517,8 @@ class MotifSub(val sx: Double, val sy: Double, val segs: List<DoubleArray>)
 object ThemeExtraIds {
     val SOUNDS: Set<String> get() = KeySoundStyle.PRESET_IDS.toSet()
     val EFFECTS: Set<String> get() = KeyEffect.entries.map { it.id }.toSet()
+    /** "swipe": kiểu nét vuốt cụ thể (không có "theme" — theme không trỏ về chính nó). */
+    val SWIPES: Set<String> get() = SwipeTrailStyle.THEME_IDS.toSet()
 }
 
 /**
@@ -646,6 +648,7 @@ data class ThemeSettings(
             if (s.weight == KeyLabelWeight.REGULAR) s = s.copy(weight = typography.weight)
             if (s.sound == null) s = s.copy(sound = typography.sound)
             if (s.effect == null) s = s.copy(effect = typography.effect)
+            if (s.swipe == null) s = s.copy(swipe = typography.swipe)
             var a = s.assets.mergedOver(typography.assets)
             if (userSystemFont) a = a.copy(font = null)
             s = s.copy(assets = a)

@@ -1814,6 +1814,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // Hiệu ứng theo màu nhấn MỚI (đổi sáng/tối giữa chừng).
         keyEffects.map { $0.configure(effect: $0.effect, color: palette.accent.alpha(1).ui,
                                       keyFill: palette.keyFill.ui, dark: palette.isDark) }
+        configureTrailColors()
         applyBackdrop()
     }
 
@@ -2048,6 +2049,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         applyKeyStyle(themeSettings.effectiveKeyStyle)
         resolvePalette()
         configureKeyEffects()
+        configureSwipeTrail()
         configureRainbow()
         // Chiều cao hàng phím ±10pt (Settings → Giao diện) — đọc mỗi lần hiện. Bản cũ (có công
         // tắc "Kích thước như bàn phím iPhone") chưa được app chuyển đổi ⇒ tính trong bộ nhớ,
@@ -5782,7 +5784,28 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var swipeActive = false
     private var swipeCase: SwipeCase = .lower
     private var lastLetterDownTime: TimeInterval?
-    private var trail: SwipeTrail?              // chỉ tạo khi có cú vuốt đầu
+    private var trail: SwipeTrailRenderer?      // chỉ tạo khi có cú vuốt đầu; kiểu Tắt ⇒ nil
+    /// Kiểu nét vuốt thực vẽ (SwipeTrailPolicy, giải lúc hiện bàn phím — "Theo giao diện" ⇒ theme đang dùng).
+    private(set) var trailStyle: SwipeTrailStyle = .simple
+
+    /// Đọc cài đặt "Hiệu ứng nét vuốt" lúc hiện (applyAppearance). Tắt ⇒ gỡ renderer (0 chi phí).
+    private func configureSwipeTrail() {
+        trailStyle = SwipeTrailPolicy.current(UserDefaultsProvider.shared,
+                                              themeSwipe: themeSettings.effectiveKeyStyle.swipe)
+        if trailStyle == .none {
+            trail?.settleNow(); trail?.layer.removeFromSuperlayer(); trail = nil
+            return
+        }
+        configureTrailColors()
+    }
+
+    /// Màu / kiểu của renderer đang có (đổi sáng/tối giữa chừng). Không đổi gì ⇒ 0 việc.
+    private func configureTrailColors() {
+        trail?.configure(style: trailStyle, trail: palette.trail, accent: palette.accent.alpha(1), dark: palette.isDark)
+    }
+
+    /// Controller đã chốt từ vuốt ⇒ "Pháo hoa cuối nét" bắn ở chỗ nhấc tay (kiểu khác: 0 việc).
+    func swipeCommitted() { trail?.commitBurst() }
 
     /// Bước phím ngang (tâm q → tâm w), nil nếu chưa có layout chữ.
     private func letterKeyPitch() -> CGFloat? {
@@ -5852,9 +5875,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if shiftBeforeLastLetter == .on, shift == .off { shift = .on; applyShiftAppearance() }
         swipeCase = shift == .caps ? .upper : (shift == .on ? .capitalized : .lower)
         onSwipeBegan?()
-        let t = trail ?? SwipeTrail()
-        trail = t
-        t.begin(color: palette.trail.ui)
+        guard trailStyle != .none else { return }
+        let t = trail ?? SwipeTrailRenderer()
+        if trail == nil {
+            trail = t
+            t.configure(style: trailStyle, trail: palette.trail, accent: palette.accent.alpha(1), dark: palette.isDark)
+        }
+        t.begin(bounds: bounds)
         layer.addSublayer(t.layer)               // lên trên cùng
         if let path = swipePath {
             for i in 0..<path.count {
@@ -5892,72 +5919,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         trail?.fadeOut(reduceMotion: true)
     }
 
-    /// Vệt vuốt: MỘT CAShapeLayer phẳng (không bóng), đuôi ~300ms, không animation
-    /// ngầm khi vẽ; nhấc tay mờ dần ~200ms (Reduce Motion: tắt ngay).
-    private final class SwipeTrail {
-        let layer = CAShapeLayer()
-        static let tail: TimeInterval = 0.3
-        private static let cap = 128
-        private var xs = [CGFloat](repeating: 0, count: cap)
-        private var ys = [CGFloat](repeating: 0, count: cap)
-        private var ts = [TimeInterval](repeating: 0, count: cap)
-        private var head = 0, count = 0
-
-        init() {
-            layer.fillColor = nil
-            layer.lineWidth = 6
-            layer.lineCap = .round
-            layer.lineJoin = .round
-            layer.shadowOpacity = 0
-        }
-
-        func begin(color: UIColor) {
-            head = 0; count = 0
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            layer.removeAllAnimations()
-            layer.strokeColor = color.cgColor
-            layer.opacity = 1
-            layer.path = nil
-            CATransaction.commit()
-        }
-
-        func add(_ p: CGPoint, _ t: TimeInterval) {
-            if count == Self.cap { head = (head + 1) % Self.cap; count -= 1 }
-            let i = (head + count) % Self.cap
-            xs[i] = p.x; ys[i] = p.y; ts[i] = t
-            count += 1
-            while count > 2, ts[head] < t - Self.tail { head = (head + 1) % Self.cap; count -= 1 }
-        }
-
-        func redraw() {
-            let path = CGMutablePath()
-            for k in 0..<count {
-                let i = (head + k) % Self.cap
-                let p = CGPoint(x: xs[i], y: ys[i])
-                if k == 0 { path.move(to: p) } else { path.addLine(to: p) }
-            }
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            layer.path = path
-            CATransaction.commit()
-        }
-
-        func fadeOut(reduceMotion: Bool) {
-            CATransaction.begin()
-            CATransaction.setDisableActions(true)
-            if reduceMotion {
-                layer.path = nil
-            } else {
-                let a = CABasicAnimation(keyPath: "opacity")
-                a.fromValue = 1; a.toValue = 0; a.duration = 0.2
-                layer.add(a, forKey: "fade")
-                layer.opacity = 0
-            }
-            CATransaction.commit()
-        }
-    }
-
+    #if DEBUG
+    var debugTrail: SwipeTrailRenderer? { trail }
+    #endif
 
     private func tapped(_ key: Key) {
         // Hiệu ứng khi bấm phím: lấy điểm đã đánh dấu (fxMark), chữ chèn TRƯỚC rồi mới hẹn vẽ.

@@ -58,7 +58,7 @@ enum BuiltinThemesData {
                "fn": "#4A5E45"}
     },
     {
-      "v": 1, "id": "neon", "name": {"vi": "Neon", "en": "Neon"},
+      "v": 1, "id": "neon", "name": {"vi": "Neon", "en": "Neon"}, "swipe": "neon",
       "light": {"bg": "#05080A", "key": "#0E2A2E", "special": "#15393E", "ink": "#5FF5E8", "accent": "#00BFB2",
                 "border": "#B200E5D4"},
       "dark": "same"
@@ -69,26 +69,26 @@ enum BuiltinThemesData {
       "dark": {"bg": "#2B1520", "key": "#472335", "special": "#5E2F46", "ink": "#FCDDE8", "accent": "#D94680"}
     },
     {
-      "v": 1, "id": "tet", "name": {"vi": "Tết", "en": "Lunar New Year"}, "sound": "phao", "effect": "blossom",
+      "v": 1, "id": "tet", "name": {"vi": "Tết", "en": "Lunar New Year"}, "sound": "phao", "effect": "blossom", "swipe": "stardust",
       "light": {"bg": "#8E1010", "key": "#B71C1C", "special": "#7A0D0D", "ink": "#FFD54F", "accent": "#F9A825",
                 "accentInk": "#7F0000", "fn": "#9C1414", "fnInk": "#FFCA28", "deco": {"motif": "mai", "color": "#33FFD54F"}},
       "dark": "same"
     },
     {
-      "v": 1, "id": "tetMai", "name": {"vi": "Tết mai vàng", "en": "Golden Apricot Tết"}, "sound": "phao", "effect": "blossom",
+      "v": 1, "id": "tetMai", "name": {"vi": "Tết mai vàng", "en": "Golden Apricot Tết"}, "sound": "phao", "effect": "blossom", "swipe": "stardust",
       "light": {"bg": "#FFF3D6", "key": "#FFFDF6", "special": "#F3D9A4", "ink": "#7A1414", "accent": "#C62828",
                 "fn": "#F6E2B3", "fnInk": "#B71C1C", "deco": {"motif": "mai", "color": "#CCE5A000"}},
       "dark": {"bg": "#2B1608", "key": "#47260F", "special": "#5E3418", "ink": "#FFE6A6", "accent": "#C62828",
                "fn": "#3A1E0C", "fnInk": "#FFC94A", "deco": {"motif": "mai", "color": "#66FFC107"}}
     },
     {
-      "v": 1, "id": "xmas", "name": {"vi": "Giáng sinh", "en": "Christmas"}, "sound": "jingle", "effect": "snow",
+      "v": 1, "id": "xmas", "name": {"vi": "Giáng sinh", "en": "Christmas"}, "sound": "jingle", "effect": "snow", "swipe": "stardust",
       "light": {"bg": "#0B3320", "key": "#17573A", "special": "#0F4229", "ink": "#FFFFFF", "accent": "#D32F2F",
                 "fn": "#124A30", "fnInk": "#FFD54F", "deco": {"motif": "snowflake", "color": "#52FFFFFF"}},
       "dark": "same"
     },
     {
-      "v": 1, "id": "xmasSnow", "name": {"vi": "Giáng sinh tuyết", "en": "Snowy Christmas"}, "sound": "jingle", "effect": "snow",
+      "v": 1, "id": "xmasSnow", "name": {"vi": "Giáng sinh tuyết", "en": "Snowy Christmas"}, "sound": "jingle", "effect": "snow", "swipe": "stardust",
       "light": {"bg": "#E6F1FA", "key": "#FFFFFF", "special": "#C3DAEE", "ink": "#12324F", "accent": "#D32F2F",
                 "fn": "#D6E7F5", "fnInk": "#B71C1C", "deco": {"motif": "snowflake", "color": "#996FA8D6"}},
       "dark": {"bg": "#0C1A2C", "key": "#1B2F49", "special": "#28425F", "ink": "#E6F1FA", "accent": "#D32F2F",
@@ -108,7 +108,7 @@ enum BuiltinThemesData {
                "accentInk": "#33091C", "fn": "#15281B", "fnInk": "#F48FB1", "deco": {"motif": "lotus", "color": "#66F48FB1"}}
     },
     {
-      "v": 1, "id": "typewriter", "name": {"vi": "Máy chữ cổ", "en": "Vintage Typewriter"}, "corner": 80,
+      "v": 1, "id": "typewriter", "name": {"vi": "Máy chữ cổ", "en": "Vintage Typewriter"}, "corner": 80, "swipe": "brush",
       "font": {"name": "Xanh Mono", "url": "https://viettelex.com/fonts/XanhMono-Regular.ttf",
                "sha256": "f53d8d88b3f35f150c3b4797ab8998afc211d1892b9f8290661cb5fef0bc377e"},
       "sound": "typewriter", "effect": "ink",
@@ -118,14 +118,14 @@ enum BuiltinThemesData {
                "fn": "#2E241A", "fnInk": "#F3E8D2", "border": "#66C9A97C"}
     },
     {
-      "v": 1, "id": "rgb", "name": {"vi": "Gaming RGB", "en": "Gaming RGB"}, "corner": 30,
+      "v": 1, "id": "rgb", "name": {"vi": "Gaming RGB", "en": "Gaming RGB"}, "corner": 30, "swipe": "rainbow",
       "sound": "mechanical", "effect": "combo",
       "light": {"bg": "#0A0A0F", "key": "#15151C", "special": "#1F1F28", "ink": "#F2F2F7", "accent": "#7C4DFF",
                 "fn": "#101016", "fnInk": "#E0E0EA", "borderFx": "rainbow"},
       "dark": "same"
     },
     {
-      "v": 1, "id": "space", "name": {"vi": "Vũ trụ", "en": "Outer Space"}, "sound": "scifi", "effect": "meteor",
+      "v": 1, "id": "space", "name": {"vi": "Vũ trụ", "en": "Outer Space"}, "sound": "scifi", "effect": "meteor", "swipe": "stardust",
       "light": {"bg": "#070B1E", "key": "#141A33", "special": "#1C2445", "ink": "#E8ECFF", "accent": "#3D5AFE",
                 "fn": "#10162C", "fnInk": "#B8C4FF",
                 "deco": {"motif": "starfield", "color": "#5CFFFFFF", "density": 140}},
@@ -146,7 +146,7 @@ enum BuiltinThemesData {
                "fn": "#3D0918", "fnInk": "#FF9AB5", "deco": {"motif": "hearts", "color": "#73FF3D6E"}}
     },
     {
-      "v": 1, "id": "halloween", "name": {"vi": "Halloween", "en": "Halloween"}, "sound": "boo", "effect": "smoke",
+      "v": 1, "id": "halloween", "name": {"vi": "Halloween", "en": "Halloween"}, "sound": "boo", "effect": "smoke", "swipe": "electric",
       "light": {"bg": "#120A1C", "key": "#2A1840", "special": "#1E1030", "ink": "#FFE8CC", "accent": "#FF7A1A",
                 "accentInk": "#1A0A00", "fn": "#24123A", "fnInk": "#FF9A3C",
                 "deco": {"motif": "pumpkin", "alt": "bat", "color": "#80FF7A1A"}},

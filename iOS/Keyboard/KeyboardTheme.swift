@@ -839,6 +839,7 @@ struct ThemeSettings: Equatable {
             if s.weight == .regular { s.weight = t.weight }
             if s.sound == nil { s.sound = t.sound }
             if s.effect == nil { s.effect = t.effect }
+            if s.swipe == nil { s.swipe = t.swipe }
             s.assets = s.assets.merged(over: t.assets)
             if userSystemFont { s.assets.font = nil }
             if s.assets.font != nil { s.font = .standard }
@@ -988,6 +989,8 @@ struct KeyStyle: Equatable {
     /// Âm phím / hiệu ứng đi kèm theme ("sound" / "effect", ThemeExtraIds) — CHỈ áp lúc chọn theme (ThemeExtras).
     var sound: String? = nil
     var effect: String? = nil
+    /// Nét vuốt theme ("swipe", ThemeExtraIds.swipes) — chỉ dùng khi chọn "Theo giao diện" (SwipeTrailPolicy).
+    var swipe: String? = nil
 
     static let `default` = KeyStyle()
     var isDefault: Bool { self == .default }
@@ -1120,6 +1123,7 @@ struct KeyStyle: Equatable {
         st.assets = edited.assets
         st.sound = edited.sound
         st.effect = edited.effect
+        st.swipe = edited.swipe
         return (st, l.lostBg || d.lostBg)
     }
 }
@@ -1181,6 +1185,7 @@ enum KeyStyleStore {
         ThemeSpec.appendImages(st.assets, to: &f)
         if let v = st.sound { f.append(("sound", .string(v))) }
         if let v = st.effect { f.append(("effect", .string(v))) }
+        if let v = st.swipe { f.append(("swipe", .string(v))) }
         if !st.light.isEmpty { f.append(("light", ThemeSpec.json(st.light))) }
         if !st.dark.isEmpty { f.append(("dark", ThemeSpec.json(st.dark))) }
         return .object(f)

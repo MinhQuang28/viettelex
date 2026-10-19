@@ -111,6 +111,7 @@ struct FeatureSearchEntry: Identifiable {
             .init(viTitle: LK("Từ điển cá nhân"), keywords: "dictionary tên riêng thuật ngữ", page: .goiY),
             .init(viTitle: LK("Xoá từ đã học"), keywords: "xoá học reset", page: .goiY),
             .init(viTitle: LK("Gõ vuốt"), keywords: "swipe vuốt thử nghiệm", page: .goVuot),
+            .init(viTitle: LK("Hiệu ứng nét vuốt"), keywords: "swipe trail nét vuốt vệt hiệu ứng lửa fire điện electric lightning bút lông brush mực ink cầu vồng rainbow neon bụi sao stardust sparkle pháo hoa firework theo giao diện theme plus", page: .goVuot),
             .init(viTitle: LK("Vuốt từ tiếng Anh"), keywords: "swipe english", page: .goVuot),
             .init(viTitle: LK("Mô hình neural gõ vuốt"), keywords: "futo neural swipe", page: .goVuot),
             .init(viTitle: LK("Luyện vuốt"), keywords: "practice swipe", page: .goVuot),
@@ -539,6 +540,8 @@ struct GoVuotPage: View {
     @AppStorage("swipeEnglish", store: featureDefaults) private var swipeEnglish = true
     /// Decoder FUTO Swipe — mặc định TẮT, xem KeyboardSettings.swipeFuto.
     @AppStorage("swipeFuto", store: featureDefaults) private var swipeFuto = false
+    /// "Hiệu ứng nét vuốt" (SwipeTrailStyle) — trang con SwipeTrailPickerView.
+    @AppStorage(SwipeTrailStyle.key, store: featureDefaults) private var swipeTrailRaw = SwipeTrailStyle.defaultValue.rawValue
 
     var body: some View {
         FeaturePageList(page: .goVuot) {
@@ -557,6 +560,19 @@ struct GoVuotPage: View {
                 }
             } footer: {
                 Text(L("Tự tắt khi dùng VoiceOver và ở ô email/mật khẩu/URL."))
+            }
+            Section {
+                NavigationLink {
+                    SwipeTrailPickerView()
+                } label: {
+                    HStack(spacing: 6) {
+                        Text(L("Hiệu ứng nét vuốt"))
+                        if !SwipeTrailGate.allows { SwipeTrailPlusBadge() }
+                        Spacer()
+                        Text(SwipeTrailStyle.displayed(swipeTrailRaw).title)
+                            .foregroundStyle(.secondary).lineLimit(1)
+                    }
+                }
             }
             if swipeTyping {
                 Section {

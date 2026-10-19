@@ -58,8 +58,8 @@ class KeyboardView(
     private val theme: ImeTheme,
     private val balloon: BalloonView,
     private val feedback: Feedback,
-    /** Vệt gõ vuốt (overlay cùng toạ độ); null = không vẽ. */
-    private val trail: SwipeTrailView? = null,
+    /** Vệt gõ vuốt (overlay cùng toạ độ); null = không vẽ ("Hiệu ứng nét vuốt" = Tắt — IME đặt lúc hiện). */
+    var trail: SwipeTrailView? = null,
 ) : View(context) {
 
     interface Listener {
@@ -1755,6 +1755,9 @@ class KeyboardView(
         listener?.onSwipeTypingEnd(p, case)
         if (shift == Shift.ON) { shift = Shift.OFF; invalidate() }
     }
+
+    /** Controller đã chốt từ vuốt ⇒ "Pháo hoa cuối nét" ở chỗ nhấc tay (kiểu khác: 0 việc). */
+    fun swipeCommitted() { trail?.commitBurst() }
 
     /** Bỏ lượt vuốt đang dở (ẩn bàn phím / đổi layout / tắt tính năng). */
     private fun abortSwipe() {

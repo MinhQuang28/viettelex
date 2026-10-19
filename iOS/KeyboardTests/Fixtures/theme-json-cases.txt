@@ -155,6 +155,14 @@ CASE	deco-alt-none	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFF
 CASE	deco-alt-number	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","deco":{"motif":"pumpkin","alt":2,"color":"#59FF7A1A"}}}
 CASE	sound-trong-lantern	ok	{"dark":"same","effect":"lantern","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"sound":"trong","v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"sound":"trong","effect":"lantern"}
 CASE	sound-boo-smoke	ok	{"dark":"same","effect":"smoke","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"sound":"boo","v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"sound":"boo","effect":"smoke"}
+CASE	swipe-stardust	ok	{"dark":"same","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"swipe":"stardust","v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"swipe":"stardust"}
+CASE	swipe-none-with-extras	ok	{"dark":"same","effect":"smoke","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"sound":"boo","swipe":"none","v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"swipe":"none","sound":"boo","effect":"smoke"}
+CASE	swipe-electric	ok	{"dark":"same","light":{"accent":"#000000","ink":"#000000","key":"#FFFFFF","special":"#DDDDDD"},"name":{"vi":"x"},"swipe":"electric","v":1}	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"swipe":"electric"}
+CASE	swipe-theme	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"swipe":"theme"}
+CASE	swipe-unknown	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"swipe":"glitter"}
+CASE	swipe-upper	err:badValue	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"swipe":"Neon"}
+CASE	swipe-number	err:wrongType	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000"},"swipe":3}
+CASE	swipe-in-light	err:unknownKey	-	{"v":1,"name":{"vi":"x"},"light":{"key":"#FFFFFF","special":"#DDDDDD","ink":"#000000","accent":"#000000","swipe":"neon"}}
 PAL	b	0	FFFCDDE8 FFFFF5F9 FFF6B8CE FF5A1F38 FFD94680 FFFFFFFF 99D94680 FFFFF5F9 - hearts:8CFF6FA3@200
 PAL	b	1	FF2B1520 FF472335 FF5E2F46 FFFCDDE8 FFD94680 FFFFFFFF 99D94680 FF472335 80FFFFFF -
 PAL	a	1	FFEEEEEE FFFFFFFF FFDDDDDD FF000000 FF0A84FF FFFFFFFF 990A84FF FFFFFFFF - -

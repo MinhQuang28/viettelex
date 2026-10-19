@@ -161,6 +161,20 @@ object L10nTable {
         put("Hệ thống: âm thanh khi chạm của Android — theo Cài đặt → Âm thanh → Âm thanh khi chạm, âm lượng theo hệ thống. Các kiểu khác là tiếng riêng của VietTelex.",
             "System: Android's touch sounds — follows Settings → Sound → Touch sounds, at the system volume. The other styles are VietTelex's own sounds.")
         // Hiệu ứng khi bấm phím (KeyEffect)
+        // Hiệu ứng nét vuốt (SwipeTrailStyle)
+        put("Hiệu ứng nét vuốt", "Swipe trail")
+        put("Đơn giản", "Simple")
+        put("Lửa", "Fire")
+        put("Điện", "Electric")
+        put("Bút lông", "Ink brush")
+        put("Cầu vồng", "Rainbow")
+        put("Bụi sao", "Stardust")
+        put("Pháo hoa cuối nét", "Firework finish")
+        put("Theo giao diện", "Match theme")
+        put("Nét vẽ theo ngón tay khi gõ vuốt. Tắt: không vẽ gì. Lửa, Điện, Bút lông, Cầu vồng, Neon, Bụi sao, Pháo hoa cuối nét và Theo giao diện thuộc VietTelex Plus. Theo giao diện: dùng nét vuốt của giao diện đang chọn (Đơn giản nếu giao diện không có).",
+            "The line drawn under your finger while swipe typing. Off: nothing is drawn. Fire, Electric, Ink brush, Rainbow, Neon, Stardust, Firework finish and Match theme are part of VietTelex Plus. Match theme: uses the current theme's swipe trail (Simple if the theme has none).")
+        put("Vẽ trên lớp riêng, không làm chậm nhận diện nét vuốt; tự về Đơn giản khi bật Trình tiết kiệm pin.",
+            "Drawn on its own layer, so swipe recognition never slows down; falls back to Simple with Battery Saver on.")
         put("Hiệu ứng khi bấm phím", "Key press effect")
         put("Không", "None")
         put("Trái tim", "Hearts")

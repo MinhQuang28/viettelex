@@ -64,6 +64,8 @@ data class KeyStyle(
     /** Âm phím / hiệu ứng đi kèm theme ("sound" / "effect", [ThemeExtraIds]) — CHỈ áp lúc chọn theme ([ThemeExtras]). */
     val sound: String? = null,
     val effect: String? = null,
+    /** Nét vuốt theme ("swipe", [ThemeExtraIds.SWIPES]) — chỉ dùng khi chọn "Theo giao diện" ([SwipeTrailPolicy]). */
+    val swipe: String? = null,
 ) {
     val isDefault: Boolean get() = this == DEFAULT
     /** Có đổi chữ (phông / độ đậm / cỡ / phông tải về) ⇒ bật đo + kẹp chữ. */
@@ -160,7 +162,7 @@ data class KeyStyle(
             val (d, lostD) = edited.slots(true).patchFrom(baseDark)
             return KeyStyle(corner = edited.corner, fontScale = edited.fontScale, font = edited.font ?: KeyLabelFont.DEFAULT,
                 weight = edited.weight ?: KeyLabelWeight.REGULAR, light = l, dark = d, assets = edited.assets,
-                sound = edited.sound, effect = edited.effect) to (lostL || lostD)
+                sound = edited.sound, effect = edited.effect, swipe = edited.swipe) to (lostL || lostD)
         }
 
         fun parseColor(v: Any?): Int? = (v as? Number)?.toInt()?.takeIf { it in 0..0xFFFFFF }

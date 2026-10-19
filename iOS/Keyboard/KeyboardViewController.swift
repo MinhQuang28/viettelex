@@ -2551,6 +2551,7 @@ extension KeyboardViewController {
                                bridge: bridge, proxy: Proxy(p: textDocumentProxy))
         if let out {
             if let c = out.committed { commitAndLearn(c.word, accepted: c.accepted) }
+            keyboard.swipeCommitted()          // "Pháo hoa cuối nét" (kiểu khác: 0 việc)
             swipeReviseUndo = out.revised
             if !out.scored.isEmpty, bridge.isSwipeWordOpen {
                 swipeRevisable = SwipeTyping.Revisable(word: out.word, scored: out.scored, sc: sc)

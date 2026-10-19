@@ -92,6 +92,8 @@ enum BackupSettings {
         Spec(key: "keyLabelTransparency", kind: .int(0, 0...100)),
         // "Hiệu ứng khi bấm phím" (Plus, KeyEffect) — cùng khoá + id Android; lạ ⇒ bỏ qua (máy giữ Không).
         Spec(key: KeyEffect.key, kind: .string(KeyEffect.defaultValue.rawValue, KeyEffect.allCases.map(\.rawValue))),
+        // "Hiệu ứng nét vuốt" (SwipeTrailStyle) — cùng khoá + id Android; lạ ⇒ bỏ qua (máy giữ Đơn giản).
+        Spec(key: SwipeTrailStyle.key, kind: .string(SwipeTrailStyle.defaultValue.rawValue, SwipeTrailStyle.allCases.map(\.rawValue))),
         // "Tuỳ chỉnh nâng cao" (Plus) RIÊNG từng theme — MỘT chuỗi JSON chuẩn (KeyStyleStore), cùng
         // khoá + định dạng với Android. Khoá chung cũ (keyLabelColor…) không còn sao lưu: file cũ có
         // chúng ⇒ bỏ qua như key lạ. "rounded" (chỉ iOS) vẫn giữ khi qua Android.
