@@ -68,6 +68,10 @@ object StripGeometry {
     /** Chiều cao ô nhân vật (px) cho strip cao [strip] px: strip + phần tràn. */
     fun buddyHeight(strip: Int): Int = Math.round(strip * (1 + BUDDY_OVERLAP))
 
+    /** Bề ngang khung VẼ nhân vật (px): vuông theo [buddyHeight] (dáng ngủ nằm ngang không bị cắt), tối thiểu ô
+     *  chừa [zone]; canh giữa ô chừa, được đè lên ⌄ / 📋 / phím (lớp trên cùng). = iOS KeyboardView.buddyFrame. */
+    fun buddyDrawWidth(strip: Int, zone: Int): Int = maxOf(zone, buddyHeight(strip))
+
     /** Mép phải vùng slot (dp): trừ zone ⌄, ô 😊 ([emojiButton]) và ô 📋 (chỉ khi có nút và [toolsShown]). */
     fun barRight(width: Float, zoneW: Float, clipW: Float, clipButton: Boolean, toolsShown: Boolean,
                  emojiButton: Boolean = false, buddy: Float = 0f): Float =

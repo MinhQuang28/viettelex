@@ -490,11 +490,16 @@ final class KeyboardBuddyTests: XCTestCase {
                     XCTAssertFalse(b.isHidden, "\(w)")
                     let f = b.frame
                     XCTAssertGreaterThan(f.width, 0)
-                    XCTAssertFalse(f.intersects(s.bar), "\(w)×\(h): đè thanh gợi ý \(f) vs \(s.bar)")
-                    for c in s.cells { XCTAssertFalse(f.intersects(c), "\(w): đè ô gợi ý") }
-                    XCTAssertFalse(f.intersects(s.chevron), "\(w): đè ⌄")
-                    if let c = s.clip { XCTAssertFalse(f.intersects(c), "\(w): đè 📋") }
-                    if let e = kb.debugEmojiBarButton { XCTAssertFalse(f.intersects(e.frame), "\(w): đè 😊") }
+                    XCTAssertTrue(f.contains(KeyboardView.buddyZoneFrame(width: kb.bounds.width, strip: f.height / (1 + KeyboardView.buddyOverlapRatio)).insetBy(dx: 0.5, dy: 0.5)))
+                    XCTAssertGreaterThanOrEqual(b.layer.zPosition, 1000, "nhân vật trên cùng")
+                    // Ô chừa (không phải khung vẽ) không chồng chip gợi ý / ⌄ / 📋 / 😊.
+                    let zoneF = CGRect(x: f.midX - KeyboardView.buddyZoneWidth / 2, y: 0,
+                                       width: KeyboardView.buddyZoneWidth, height: s.bar.height)
+                    XCTAssertFalse(zoneF.intersects(s.bar), "\(w)×\(h): đè thanh gợi ý \(f) vs \(s.bar)")
+                    for c in s.cells { XCTAssertFalse(zoneF.intersects(c), "\(w): đè ô gợi ý") }
+                    XCTAssertFalse(zoneF.intersects(s.chevron), "\(w): đè ⌄")
+                    if let c = s.clip { XCTAssertFalse(zoneF.intersects(c), "\(w): đè 📋") }
+                    if let e = kb.debugEmojiBarButton { XCTAssertFalse(zoneF.intersects(e.frame), "\(w): đè 😊") }
                     // Được tràn xuống hàng phím đầu (không nhận chạm), nhưng không quá ~2/3 strip.
                     let strip = f.height / (1 + KeyboardView.buddyOverlapRatio)
                     XCTAssertLessThanOrEqual(f.maxY - kb.keyAreaFrame.minY, 0.7 * strip, "\(w)×\(h): tràn quá sâu")
@@ -510,7 +515,7 @@ final class KeyboardBuddyTests: XCTestCase {
         }
         // Hàm thuần.
         XCTAssertEqual(KeyboardView.buddyFrame(width: 390, strip: 40),
-                       CGRect(x: 390 - KeyboardView.stripZoneWidth - 34, y: 0, width: 34, height: 66))
+                       CGRect(x: 390 - KeyboardView.stripZoneWidth - 17 - 33, y: 0, width: 66, height: 66))
         // Nhân vật to hơn strip: tràn xuống hàng phím (Phil 20/10: "bé quá", cho đè lên phím dưới).
         let tall = BuddyView(character: .boy, bar: BuddyHalo.systemLight, lowPower: true)
         tall.frame = KeyboardView.buddyFrame(width: 390, strip: 40)

@@ -417,7 +417,10 @@ class ImeRootView(
             if (field === v) return
             field?.let { it.halt(); removeView(it) }
             field = v
-            if (v != null) addView(v, indexOfChild(balloon))   // trên phím (phần tràn), dưới balloon
+            if (v != null) {
+                addView(v)                          // trên cùng: không bị phím / balloon / hiệu ứng đè hay chèn
+                v.outlineProvider = null; v.translationZ = 1000f
+            }
             strip.onBuddySlot = if (v == null) null else ({ v.shownInSlot = strip.buddySlotShown() })
             requestLayout()
         }
@@ -428,8 +431,10 @@ class ImeRootView(
         val r = px + pw - Math.round(theme.dp(KeyLayout.STRIP_ZONE_W))
         val l = r - Math.round(theme.dp(StripGeometry.BUDDY_W))
         val h = StripGeometry.buddyHeight(s)
-        b.measure(MeasureSpec.makeMeasureSpec(r - l, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
-        b.layout(l, py, r, py + h)
+        val w = StripGeometry.buddyDrawWidth(s, r - l)
+        val bl = minOf((l + r - w) / 2, px + pw - w)
+        b.measure(MeasureSpec.makeMeasureSpec(w, MeasureSpec.EXACTLY), MeasureSpec.makeMeasureSpec(h, MeasureSpec.EXACTLY))
+        b.layout(bl, py, bl + w, py + h)
         b.shownInSlot = strip.buddySlotShown() && s > 0
     }
 

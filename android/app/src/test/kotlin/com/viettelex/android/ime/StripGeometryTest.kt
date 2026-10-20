@@ -154,5 +154,6 @@ class StripGeometryTest {
     @Test fun buddyOverflowsIntoFirstKeyRow() {
         org.junit.Assert.assertEquals(66, StripGeometry.buddyHeight(40))
         org.junit.Assert.assertTrue(StripGeometry.buddyHeight(40) - 40 <= 0.7 * 40)
+        org.junit.Assert.assertEquals(66, StripGeometry.buddyDrawWidth(40, 34))   // dáng ngủ nằm ngang không bị cắt
     }
 }

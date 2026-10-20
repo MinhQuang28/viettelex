@@ -6069,10 +6069,18 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// (BuddyView.isUserInteractionEnabled = false) nên phím bên dưới vẫn bấm bình thường.
     static let buddyOverlapRatio: CGFloat = 0.65
 
-    /// Khung ô nhân vật khi bar mở — THUẦN để test: sát trái ⌄, cao strip + phần tràn xuống phím.
+    /// Ô chừa cho nhân vật trong thanh gợi ý (chip gợi ý / 📋 / 😊 dời trái đúng bấy nhiêu) — sát trái ⌄.
+    static func buddyZoneFrame(width: CGFloat, strip: CGFloat) -> CGRect {
+        CGRect(x: width - stripZoneWidth - buddyZoneWidth, y: 0, width: buddyZoneWidth, height: strip)
+    }
+
+    /// Khung VẼ nhân vật — THUẦN để test: cao strip + phần tràn xuống phím, rộng vuông (dáng ngủ nằm ngang không
+    /// bị cắt), canh giữa ô chừa; được đè lên ⌄ / 📋 / phím (lớp trên cùng, không nhận chạm).
     static func buddyFrame(width: CGFloat, strip: CGFloat) -> CGRect {
-        CGRect(x: width - stripZoneWidth - buddyZoneWidth, y: 0, width: buddyZoneWidth,
-               height: (strip * (1 + buddyOverlapRatio)).rounded())
+        let zone = buddyZoneFrame(width: width, strip: strip)
+        let h = (strip * (1 + buddyOverlapRatio)).rounded()
+        let w = max(zone.width, h)
+        return CGRect(x: min(zone.midX - w / 2, width - w), y: 0, width: w, height: h)
     }
 
     /// Lúc hiện / đổi cài đặt: gắn hoặc gỡ nhân vật (cài đặt + Plus), nguồn điện thấp ⇒ chỉ dáng tĩnh.
@@ -6109,6 +6117,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
                         rowsContainer.frame.height > 0 ? rowsContainer.frame.minY : .greatestFiniteMagnitude)
         let f = Self.buddyFrame(width: bounds.width, strip: strip)
         if b.frame != f { b.frame = f }
+        b.layer.zPosition = 1000   // trên cùng: không bị phím / popup / hiệu ứng đè hay chèn
         bringSubviewToFront(b)
     }
 
