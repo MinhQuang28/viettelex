@@ -17,7 +17,7 @@ final class GonhanhHardeningTests: XCTestCase {
     func testVirtualMachinePassthroughRouting() {
         for id in ["org.virtualbox.app.VirtualBoxVM", "com.vmware.horizon", "tv.parsec.www",
                    "com.p5sys.jump.mac.viewer", "com.parallels.desktop.console", "com.vmware.fusion",
-                   "com.parallels.winapp.12345.notepad"] {
+                   "com.parallels.winapp.12345.notepad", "com.parallels.macvm"] {
             XCTAssertEqual(AppState.shared.autoResolvedMode(id), .passthrough, id)
         }
     }

@@ -206,6 +206,8 @@ com.microsoft.Excel: emptyReset
 com.microsoft.rdc.macos: passthrough
 com.microsoft.rdc.osx.beta: passthrough
 com.parallels.desktop.console: passthrough
+# Cửa sổ VM macOS của Parallels ("Parallels Mac VM.app") — #128, báo 20/10/2026.
+com.parallels.macvm: passthrough
 com.vmware.fusion: passthrough
 com.utmapp.UTM: passthrough
 com.apple.ScreenSharing: passthrough

@@ -22,6 +22,7 @@ public enum ClientPolicy {
         "com.microsoft.rdc.osx.beta",
         // Virtualization
         "com.parallels.desktop.console",
+        "com.parallels.macvm",          // cửa sổ VM macOS của Parallels (mỗi VM một tiến trình, chung id) — #128
         "com.vmware.fusion",
         "com.utmapp.UTM",
         // Screen sharing / remote control

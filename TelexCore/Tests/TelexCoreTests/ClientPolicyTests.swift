@@ -8,6 +8,7 @@ final class ClientPolicyTests: XCTestCase {
             "com.microsoft.rdc.macos",       // Microsoft Remote Desktop / Windows App
             "com.microsoft.rdc.osx.beta",
             "com.parallels.desktop.console",
+            "com.parallels.macvm",           // VM macOS của Parallels (#128)
             "com.vmware.fusion",
             "com.utmapp.UTM",
             "com.apple.ScreenSharing",
