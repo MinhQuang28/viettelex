@@ -29,10 +29,20 @@ enum SyntheticInputGuard {
         return guardBundlePrefixes.contains { id.hasPrefix($0) }
     }
 
-    /// Pure: is any on-screen, non-status-bar window owned by a guard process?
-    static func guardWindowUp(windows: [(ownerPID: pid_t, layer: Int)], guardPIDs: Set<pid_t>) -> Bool {
+    /// Lớp cửa sổ thường (app window). Cửa sổ thường của app chống-giả-lập (vd Little Snitch
+    /// Network Monitor để mở cả ngày) chỉ tính khi app đó đang ở trước — không thì nó chẳng nhận
+    /// phím của ai, mà chặn thì tap mất dấu ở MỌI app (Phil 21/10/2026: Ghostty mất tiếng Việt).
+    static let normalLayer = 0
+
+    /// Pure: có cửa sổ của app chống-giả-lập đang cần chặn không? Cảnh báo / panel nổi (lớp > 0,
+    /// trừ thanh menu) luôn tính; cửa sổ thường chỉ tính khi app đó đang ở trước.
+    static func guardWindowUp(windows: [(ownerPID: pid_t, layer: Int)], guardPIDs: Set<pid_t>,
+                              frontmostPID: pid_t? = nil) -> Bool {
         guard !guardPIDs.isEmpty else { return false }
-        return windows.contains { guardPIDs.contains($0.ownerPID) && $0.layer != statusLayer }
+        return windows.contains { w in
+            guard guardPIDs.contains(w.ownerPID), w.layer != statusLayer else { return false }
+            return w.layer != normalLayer || w.ownerPID == frontmostPID
+        }
     }
 
     /// Idle: forget the last verdict (no scan while nobody types).
@@ -52,7 +62,8 @@ enum SyntheticInputGuard {
                       let layer = w[kCGWindowLayer as String] as? Int else { return nil }
                 return (pid, layer)
             }
-            up = guardWindowUp(windows: windows, guardPIDs: pids)
+            up = guardWindowUp(windows: windows, guardPIDs: pids,
+                               frontmostPID: NSWorkspace.shared.frontmostApplication?.processIdentifier)
         }
         let changed: Bool = lock.withLock { defer { _active = up }; return _active != up }
         if changed { DebugLog.log("synthetic-input guard \(up ? "ON (Little Snitch window up)" : "OFF")") }

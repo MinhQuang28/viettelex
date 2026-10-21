@@ -15,9 +15,13 @@ final class SyntheticInputGuardTests: XCTestCase {
         let ls: Set<pid_t> = [42]
         // Status item in the menu bar only → typing unaffected.
         XCTAssertFalse(SyntheticInputGuard.guardWindowUp(windows: [(42, 25), (7, 0)], guardPIDs: ls))
-        // Alert panel / main window up → guard.
+        // Alert panel (floating layer) up → guard, whatever is in front.
         XCTAssertTrue(SyntheticInputGuard.guardWindowUp(windows: [(42, 8)], guardPIDs: ls))
-        XCTAssertTrue(SyntheticInputGuard.guardWindowUp(windows: [(42, 0)], guardPIDs: ls))
+        // Normal window (Network Monitor left open all day) only guards while LS is frontmost —
+        // 21/10/2026 it stayed open behind Ghostty and silenced the tap everywhere.
+        XCTAssertFalse(SyntheticInputGuard.guardWindowUp(windows: [(42, 0)], guardPIDs: ls, frontmostPID: 7))
+        XCTAssertFalse(SyntheticInputGuard.guardWindowUp(windows: [(42, 0)], guardPIDs: ls))
+        XCTAssertTrue(SyntheticInputGuard.guardWindowUp(windows: [(42, 0)], guardPIDs: ls, frontmostPID: 42))
         // Someone else's windows / guard app not running → no guard.
         XCTAssertFalse(SyntheticInputGuard.guardWindowUp(windows: [(7, 8)], guardPIDs: ls))
         XCTAssertFalse(SyntheticInputGuard.guardWindowUp(windows: [(42, 8)], guardPIDs: []))
