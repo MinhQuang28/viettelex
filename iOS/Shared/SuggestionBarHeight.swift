@@ -5,8 +5,8 @@
 //
 // Số danh nghĩa 30/36/44 = dải thanh gợi ý người dùng thấy (đỉnh bàn phím → mép hàng phím đầu,
 // tính cả khe) ở mức Thấp = bố cục cũ. Bàn phím chỉ CỘNG `delta` (0/6/14) vào strip mở:
-//  • tổng chiều cao bàn phím tăng ĐÚNG `delta`; hàng phím, thu gọn (14), tắt (0) giữ nguyên;
-//  • hàng nội dung bar (chữ gợi ý, chip, icon ☰/⌄/📋/😊) cao `rowHeight` = 20 + delta ⇒ vùng chạm
+//  • tổng chiều cao bàn phím tăng ĐÚNG `delta`; hàng phím, tắt (0) giữ nguyên;
+//  • hàng nội dung bar (chữ gợi ý, chip, icon ☰/📋/😊) cao `rowHeight` = 20 + delta ⇒ vùng chạm
 //    mỗi ô phủ trọn chiều cao bar (cộng phần hit nở xuống như cũ);
 //  • iPhone NGANG: delta kẹp ở mức Vừa (+6) — màn ngang thấp, Cao (+14) làm bàn phím chiếm quá nhiều;
 //  • cỡ chữ gợi ý nhích nhẹ theo mức (17/18/19, chip 14/15/15) — có trần.

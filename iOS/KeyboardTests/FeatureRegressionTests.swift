@@ -4,7 +4,7 @@
 // regression guard cho RAM của các cấu trúc dữ liệu.
 //
 // Những phần KHÔNG unit-test được ở đây (cần UIInputViewController + host):
-// strip 36/14/0 + chevron/burger hit-area, animation toggle, template plane,
+// strip 36/0 + burger hit-area, animation toggle, template plane,
 // backspace-undo sau auto-restore, double-space guard, email-gating XPC —
 // các mục đó verify tay trên máy (đã đi qua đủ vòng bug 24/07).
 import XCTest

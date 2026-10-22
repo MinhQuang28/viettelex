@@ -454,12 +454,16 @@ final class ClipboardBarRegressionTests: XCTestCase {
         return p
     }
 
-    /// Mở → gõ → đóng → gõ: bar/📋/⌄ và 3 ô giữ nguyên khung trước khi mở.
+    /// Mở → gõ → đóng → gõ: bar/📋 và 3 ô giữ nguyên khung trước khi mở.
     @MainActor func testBarGeometryUnchangedAfterPanelOpenClose() {
         let (kb, root, win, _) = makeHosted()
         kb.showSuggestions(.init(nextWords: ["Em", "Anh", "Tôi"]))
         let g0 = kb.debugStripLayout()
-        XCTAssertNotNil(g0.clip)
+        let clip0 = g0.clip
+        XCTAssertNotNil(clip0)
+        // Không còn ⌄: 📋 sát mép phải, bar sát trái 📋.
+        XCTAssertEqual(clip0?.maxX ?? 0, kb.bounds.width, accuracy: 0.5)
+        XCTAssertEqual(g0.bar.maxX, clip0?.minX ?? 0, accuracy: 0.5)
         XCTAssertEqual(g0.slots.count, 3)
         let p = openPanel(kb)
         root.layoutIfNeeded()
@@ -471,7 +475,7 @@ final class ClipboardBarRegressionTests: XCTestCase {
         kb.showSuggestions(.init(nextWords: ["Và", "Là", "Có"]))
         let g2 = kb.debugStripLayout()
         XCTAssertEqual(g2.bar, g0.bar); XCTAssertEqual(g2.clip, g0.clip)
-        XCTAssertEqual(g2.chevron, g0.chevron); XCTAssertEqual(g2.slots, g0.slots)
+        XCTAssertEqual(g2.slots, g0.slots)
         withExtendedLifetime(win) {}
     }
 

@@ -150,7 +150,8 @@ final class SuggestionCountTests: XCTestCase {
         kb.suggestionCountSetting = 5
         kb.showSuggestions(S(nextWords: ["a", "b", "c", "d", "e"]))
         XCTAssertEqual(kb.debugSlotPayloads().count, 5)
-        host.frame.size.width = 290; kb.frame = host.bounds
+        // 250 (không còn ⌄ ⇒ bar rộng thêm 52pt; 290 giờ vẫn vừa 5 ô).
+        host.frame.size.width = 250; kb.frame = host.bounds
         kb.layoutIfNeeded()
         let bar = kb.debugStripLayout().bar.width
         let fit = SuggestionCount.fit(5, barWidth: bar)

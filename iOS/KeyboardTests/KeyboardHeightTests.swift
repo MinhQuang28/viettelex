@@ -33,9 +33,8 @@ final class KeyboardHeightTests: XCTestCase {
     /// Bug: ô từ chối gợi ý (autocorrect .no — ô tìm Facebook, trait Notes chập chờn) làm
     /// strip 34 → 0 → 34 khi đang hiện; host không cấp lại ⇒ hàng phím bị ép.
     func testStripFollowsGlobalSettingNotField() {
-        XCTAssertEqual(KeyLayout.stripHeight(reserved: true, collapsed: false, open: 34), 34)
-        XCTAssertEqual(KeyLayout.stripHeight(reserved: true, collapsed: true, open: 34), 14)
-        XCTAssertEqual(KeyLayout.stripHeight(reserved: false, collapsed: false, open: 34), 0)
+        XCTAssertEqual(KeyLayout.stripHeight(reserved: true, open: 34), 34)
+        XCTAssertEqual(KeyLayout.stripHeight(reserved: false, open: 34), 0)
     }
 
     func testPhoneLandscapeByWidth() {

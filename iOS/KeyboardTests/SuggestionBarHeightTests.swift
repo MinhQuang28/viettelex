@@ -112,24 +112,20 @@ final class SuggestionBarHeightTests: XCTestCase {
         }
     }
 
-    /// Thu gọn (14) và tắt gợi ý: chiều cao KHÔNG phụ thuộc mức.
-    @MainActor func testCollapsedAndOffUnchanged() {
+    /// Tắt gợi ý: chiều cao KHÔNG phụ thuộc mức (trạng thái thu gọn ⌄ đã bỏ 10/2026).
+    @MainActor func testOffUnchanged() {
         let (kb, host) = makeKeyboard(width: isPad ? 834 : 390)
         _ = host
-        var collapsed: [CGFloat] = [], off: [CGFloat] = []
+        var off: [CGFloat] = []
         for h in H.allCases {
             kb.debugSetBarHeight(h)
-            kb.debugSetBarCollapsed(true); settle(kb)
-            collapsed.append(kb.debugRequestedHeight)
-            kb.debugSetBarCollapsed(false)
             kb.setSuggestionsEnabled(false, reserveStrip: false); settle(kb)
             off.append(kb.debugRequestedHeight)
             kb.setSuggestionsEnabled(true); settle(kb)
         }
-        XCTAssertEqual(Set(collapsed).count, 1, "thu gọn: \(collapsed)")
         XCTAssertEqual(Set(off).count, 1, "tắt: \(off)")
         kb.debugSetBarHeight(.low); settle(kb)
-        XCTAssertGreaterThan(kb.debugRequestedHeight, collapsed[0], "mở cao hơn thu gọn")
+        XCTAssertGreaterThan(kb.debugRequestedHeight, off[0], "mở cao hơn tắt")
     }
 
     /// Plane emoji giữ nguyên tổng cao (lưới ăn cả strip) ở mọi mức.

@@ -29,11 +29,11 @@ class StripGeometryTest {
             for (i in 0 until n) assertEquals(300f / n, r[i] - l[i], 0.001f)
             for (i in 1 until n) assertEquals(r[i - 1], l[i])
         }
-        // điện thoại 360 dp, bar có gợi ý (icon con trỏ/📋 ẩn), nút 😊 trên thanh: 5 ô không vừa 44 dp ⇒ 4
+        // máy hẹp 300 dp, bar có gợi ý (icon con trỏ/📋 ẩn), nút 😊 trên thanh: 5 ô không vừa 44 dp ⇒ 4
         val shown = StripGeometry.toolsShown(hasContent = true, editOpen = false, clipOpen = false)
         val barL = StripGeometry.barLeft(KeyLayout.STRIP_ZONE_W, StripGeometry.TOOL_W, shown)
-        val plain = StripGeometry.barRight(360f, KeyLayout.STRIP_ZONE_W, StripGeometry.CLIP_W, true, shown) - barL
-        val emoji = StripGeometry.barRight(360f, KeyLayout.STRIP_ZONE_W, StripGeometry.CLIP_W, true, shown, emojiButton = true) - barL
+        val plain = StripGeometry.barRight(300f, StripGeometry.CLIP_W, true, shown) - barL
+        val emoji = StripGeometry.barRight(300f, StripGeometry.CLIP_W, true, shown, emojiButton = true) - barL
         assertEquals(5, com.viettelex.keyboard.SuggestionCount.fit(5, plain))
         assertEquals(4, com.viettelex.keyboard.SuggestionCount.fit(5, emoji))
     }
@@ -51,7 +51,7 @@ class StripGeometryTest {
         }
         assertEquals(KeyLayout.BAR_CY, KeyLayout.barCy(KeyLayout.OPEN_STRIP), 0f)
         assertTrue(StripGeometry.WORD_SP >= 16f)
-        // Icon: thu gọn 14 dp, mở 22 dp (⌄ bớt 2), nội suy theo độ mở và kẹp 0…1.
+        // Icon: 22 dp (📋 bớt 1); hàm nội suy (di sản trạng thái thu gọn) kẹp 0…1.
         assertEquals(14f, StripGeometry.iconDp(0f), 0.001f)
         assertEquals(22f, StripGeometry.iconDp(1f), 0.001f)
         assertEquals(20f, StripGeometry.iconDp(1f, delta = 2f), 0.001f)
@@ -65,24 +65,25 @@ class StripGeometryTest {
         assertSame(BarLayout.PasteCard, SuggestionSlots.arrange(set, undoAsPill = true, bestInMiddle = true))
     }
 
-    // #113: đang gõ có gợi ý ⇒ ẩn icon con trỏ + 📋, 3 slot ăn phần trống; ☰/⌄ giữ nguyên.
+    // #113: đang gõ có gợi ý ⇒ ẩn icon con trỏ + 📋, 3 slot ăn phần trống; ☰ giữ nguyên.
     private fun slotWidth(width: Float, clipButton: Boolean, tools: Boolean): Float {
         val l = FloatArray(3); val r = FloatArray(3)
         val zone = KeyLayout.STRIP_ZONE_W
         StripGeometry.thirds(StripGeometry.barLeft(zone, StripGeometry.TOOL_W, tools),
-            StripGeometry.barRight(width, zone, StripGeometry.CLIP_W, clipButton, tools), l, r)
+            StripGeometry.barRight(width, StripGeometry.CLIP_W, clipButton, tools), l, r)
         for (i in 0..2) assertEquals(r[0] - l[0], r[i] - l[i], 0.001f)   // vẫn 3 ô bằng nhau
         return r[0] - l[0]
     }
 
     @Test fun suggestionsWidenSlotsByHidingTools() {
         val w = 411f
-        // Idle (không gợi ý): như cũ — ☰ zone + con trỏ 44 + … + 📋 40 + ⌄ zone.
-        assertEquals((w - 2 * 52f - 44f - 40f) / 3f, slotWidth(w, clipButton = true, tools = true), 0.001f)
-        assertEquals((w - 2 * 52f - 44f) / 3f, slotWidth(w, clipButton = false, tools = true), 0.001f)
-        // Có gợi ý: chỉ trừ 2 zone (☰, ⌄) — mỗi slot rộng thêm (44 + 40) / 3 dp.
+        // Idle (không gợi ý): ☰ zone + con trỏ 44 + … + 📋 40 sát mép phải (không còn zone ⌄).
+        assertEquals((w - 52f - 44f - 40f) / 3f, slotWidth(w, clipButton = true, tools = true), 0.001f)
+        assertEquals((w - 52f - 44f) / 3f, slotWidth(w, clipButton = false, tools = true), 0.001f)
+        // Có gợi ý: chỉ trừ zone ☰ — bar chạm mép phải; mỗi slot rộng thêm (44 + 40) / 3 dp.
         val wide = slotWidth(w, clipButton = true, tools = false)
-        assertEquals((w - 2 * 52f) / 3f, wide, 0.001f)
+        assertEquals((w - 52f) / 3f, wide, 0.001f)
+        assertEquals(w, StripGeometry.barRight(w, StripGeometry.CLIP_W, true, false), 0.001f)
         assertEquals(28f, wide - slotWidth(w, clipButton = true, tools = true), 0.001f)
         assertEquals(wide, slotWidth(w, clipButton = false, tools = false), 0.001f)
         assertEquals(52f, StripGeometry.barLeft(52f, 44f, toolsShown = false), 0.001f)
@@ -111,44 +112,49 @@ class StripGeometryTest {
         assertTrue(content(SuggestionSet(paste = true, clipChips = listOf(ClipChip(ClipChip.Kind.OTP, "482913", "OTP 482913")))))
         assertTrue(content(SuggestionSet(emojis = listOf("😀"))))
     }
-    /** "Nút emoji" = Thanh trên: ô 😊 40 dp cạnh ⌄ LUÔN trừ khỏi bar (cả khi có gợi ý), 📋 bên trái nó. */
+    /** "Nút emoji" = Thanh trên: ô 😊 40 dp sát mép phải LUÔN trừ khỏi bar (cả khi có gợi ý), 📋 bên trái nó. */
     @Test fun emojiButtonAlwaysReserved() {
         val w = 411f; val zone = KeyLayout.STRIP_ZONE_W
         for (tools in listOf(true, false)) for (clip in listOf(true, false)) {
-            val plain = StripGeometry.barRight(w, zone, StripGeometry.CLIP_W, clip, tools)
-            val emoji = StripGeometry.barRight(w, zone, StripGeometry.CLIP_W, clip, tools, emojiButton = true)
+            val plain = StripGeometry.barRight(w, StripGeometry.CLIP_W, clip, tools)
+            val emoji = StripGeometry.barRight(w, StripGeometry.CLIP_W, clip, tools, emojiButton = true)
             assertEquals(StripGeometry.EMOJI_W, plain - emoji, 0.001f)
-            assertEquals(w - zone - emoji, StripGeometry.rightExtraW(StripGeometry.CLIP_W, clip, tools, emojiButton = true), 0.001f)
+            assertEquals(w - emoji, StripGeometry.rightExtraW(StripGeometry.CLIP_W, clip, tools, emojiButton = true), 0.001f)
         }
         // Có gợi ý (tools ẩn): chỉ còn 😊 bên phải; 3 slot vẫn bằng nhau.
         val l = FloatArray(3); val r = FloatArray(3)
         StripGeometry.thirds(StripGeometry.barLeft(zone, StripGeometry.TOOL_W, false),
-            StripGeometry.barRight(w, zone, StripGeometry.CLIP_W, true, false, emojiButton = true), l, r)
-        assertEquals((w - 2 * zone - StripGeometry.EMOJI_W) / 3f, r[0] - l[0], 0.001f)
+            StripGeometry.barRight(w, StripGeometry.CLIP_W, true, false, emojiButton = true), l, r)
+        assertEquals((w - zone - StripGeometry.EMOJI_W) / 3f, r[0] - l[0], 0.001f)
+        assertEquals(w - StripGeometry.EMOJI_W, r[2], 0.001f)   // ô cuối sát 😊, 😊 sát mép phải
         assertEquals(0f, StripGeometry.rightExtraW(StripGeometry.CLIP_W, false, true), 0.001f)
     }
 
     /**
-     * "Bạn đồng hành": ô nhân vật sát trái ⌄, không bao giờ chồng ô gợi ý / 😊 / 📋 / ⌄, cao đúng strip (không lấn
+     * "Bạn đồng hành": ô nhân vật sát mép phải (không còn ⌄), không bao giờ chồng ô gợi ý / 😊 / 📋, cao đúng strip (không lấn
      * hàng phím) — điện thoại dọc, ngang, máy tính bảng; có / không 😊 📋.
      */
     @Test fun buddySlotNeverOverlapsChipsOrKeys() {
         val zone = KeyLayout.STRIP_ZONE_W
         for (w in listOf(320f, 360f, 393f, 412f, 480f, 640f, 800f, 915f, 1280f)) for (emoji in listOf(false, true)) for (clip in listOf(false, true)) {
-            val bl = StripGeometry.buddyLeft(w, zone)
+            val bl = StripGeometry.buddyLeft(w)
             val br = bl + StripGeometry.BUDDY_W
-            assertEquals(w - zone, br, 0.001f)                       // sát ⌄, không đè ⌄
-            val barR = StripGeometry.barRight(w, zone, StripGeometry.CLIP_W, clip, true, emoji, StripGeometry.BUDDY_W)
+            assertEquals(w, br, 0.001f)                              // sát mép phải, không vượt
+            val barR = StripGeometry.barRight(w, StripGeometry.CLIP_W, clip, true, emoji, StripGeometry.BUDDY_W)
+            assertEquals(bl, barR + (extras(clip, emoji) - StripGeometry.BUDDY_W), 0.001f)   // 😊/📋 nằm sát ô nhân vật
             val extras = StripGeometry.rightExtraW(StripGeometry.CLIP_W, clip, true, emoji, StripGeometry.BUDDY_W)
             assertTrue("$w: ô gợi ý kết thúc trước 😊/📋/nhân vật", barR <= bl - (extras - StripGeometry.BUDDY_W) + 0.001f)
             val l = FloatArray(5); val r = FloatArray(5)
             StripGeometry.cells(StripGeometry.barLeft(zone, StripGeometry.TOOL_W, true), barR, 3, l, r)
             for (i in 0 until 3) assertTrue("$w: ô $i chồng nhân vật", r[i] <= bl + 0.001f)
             // Không có nhân vật ⇒ y như cũ.
-            assertEquals(StripGeometry.barRight(w, zone, StripGeometry.CLIP_W, clip, true, emoji),
+            assertEquals(StripGeometry.barRight(w, StripGeometry.CLIP_W, clip, true, emoji),
                 barR + StripGeometry.BUDDY_W, 0.001f)
         }
     }
+
+    private fun extras(clip: Boolean, emoji: Boolean) =
+        StripGeometry.rightExtraW(StripGeometry.CLIP_W, clip, true, emoji, StripGeometry.BUDDY_W)
 
     /** Phil 20/10: nhân vật "bé quá" — ô cao hơn strip, tràn xuống hàng phím đầu (= iOS buddyFrame). */
     @Test fun buddyOverflowsIntoFirstKeyRow() {

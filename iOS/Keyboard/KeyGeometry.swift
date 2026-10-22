@@ -523,7 +523,7 @@ enum SpaceSideKey: String, CaseIterable {
 /// Android Keys.EMOJI_KEY_PLACEMENT):
 ///  • `.bottom` (mặc định): phím 😊 ở hàng đáy bàn chữ như cũ.
 ///  • `.top` ("Thanh trên"): bỏ 😊 khỏi hàng đáy bàn CHỮ iPhone (space ăn chỗ), nút 😊 lên thanh
-///    gợi ý (cạnh ⌄ khi mở, nút nổi khi thu gọn). Thanh gợi ý không hiện ở ô này (tắt gợi ý,
+///    gợi ý (sát mép phải, trái 📋). Thanh gợi ý không hiện ở ô này (tắt gợi ý,
 ///    ô mật khẩu…) ⇒ giữ 😊 ở hàng đáy để emoji không bao giờ mất lối vào ([emojiInBar]).
 /// iPad / bàn tách đôi / plane số, ký hiệu không đổi. Đọc lúc dựng hàng đáy — 0 chi phí mỗi phím.
 enum EmojiKeyPlacement: String, CaseIterable {

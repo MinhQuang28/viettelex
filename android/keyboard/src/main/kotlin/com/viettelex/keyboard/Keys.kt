@@ -194,7 +194,6 @@ object Keys {
     /** Chế độ ẩn danh thủ công: không học từ, không lưu clipboard. */
     const val INCOGNITO = "incognitoMode"
     // nội bộ IME
-    const val SUGGESTION_BAR_COLLAPSED = "suggestionBarCollapsed"
     /** String, emoji nối bằng '\n' (xem [EmojiRecents]). */
     const val EMOJI_RECENTS = "emojiRecents"
     /** Long ms — app ghi khi user bấm "Xóa từ đã học" (đã xoá [USERLM_FILE]). */

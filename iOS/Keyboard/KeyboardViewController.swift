@@ -144,7 +144,6 @@ final class KeyboardViewController: UIInputViewController {
         #if DEBUG
         Self.debugKeyboardInstalls += 1
         #endif
-        keyboard.onBarToggle = { [weak self] in self?.updateSuggestions() }
         keyboard.onTemplate = { [weak self] in self?.insertTemplate($0) }
         keyboard.onOpenTemplates = { [weak self] in self?.openTemplatesInApp() }
         keyboard.onTextTool = { [weak self] in self?.applyTextTool($0) }
@@ -638,7 +637,7 @@ final class KeyboardViewController: UIInputViewController {
             }
         }
         // Thanh gợi ý: gate qua toggle trong app. Ô từ chối gợi ý chữ (autocorrection = .no:
-        // thanh địa chỉ Safari…) mà không nhạy cảm ⇒ thanh CÔNG CỤ (☰/📋/⌄ + Dán + chip URL)
+        // thanh địa chỉ Safari…) mà không nhạy cảm ⇒ thanh CÔNG CỤ (☰/📋 + Dán + chip URL)
         // thay vì dải trống; mật khẩu/OTP/ẩn danh/bàn số giữ dải trống (StripMode).
         // #113 "Gợi ý cả khi ứng dụng tắt gợi ý" (mặc định bật): ô .no không nhạy cảm ⇒ gợi ý
         // đầy đủ, nhưng tự sửa vẫn tắt (allowsSuggestions false ở trên) và không học từ.
@@ -708,7 +707,7 @@ final class KeyboardViewController: UIInputViewController {
             guard let self, gen == self.suggestionGen else { return }
             self.updateAutoShift()
         }
-        guard suggestionsActive, keyboard?.isBarCollapsed != true else { return }
+        guard suggestionsActive else { return }
         suggestDebounceGen = gen
         suggestDebounce.schedule(after: 0.03)
     }
@@ -1077,8 +1076,8 @@ final class KeyboardViewController: UIInputViewController {
         // Gợi ý hoãn ~30ms (gen bỏ lượt cũ nếu phím mới tới trước). Thực tế phím
         // cách nhau 100–200ms nên hiếm khi gộp — phần nặng (VNSuggest + sửa chạm
         // trượt) giờ chạy nền trong updateSuggestions, main chỉ re-rank + vẽ bar.
-        // Bar tắt / thu gọn ⇒ không lên lịch gì (0 closure, 0 timer mỗi phím).
-        guard suggestionsActive, keyboard?.isBarCollapsed != true else { return }
+        // Bar tắt ⇒ không lên lịch gì (0 closure, 0 timer mỗi phím).
+        guard suggestionsActive else { return }
         suggestDebounceGen = gen
         suggestDebounce.schedule(after: 0.03)
     }
@@ -1292,7 +1291,7 @@ final class KeyboardViewController: UIInputViewController {
         // (thường không đổi) — tránh chạy trùng toàn bộ updateSuggestions.
         let pasteBefore = pasteCached
         pasteCheckedAt = .distantPast
-        if suggestionsActive, keyboard?.isBarCollapsed != true,
+        if suggestionsActive,
            bridge.composedWord.isEmpty, pasteOffer() != pasteBefore {
             updateSuggestions()
         }
@@ -1569,7 +1568,7 @@ final class KeyboardViewController: UIInputViewController {
         // re-rank, emoji, nextWords) — tiết kiệm CPU/RAM theo đúng nghĩa.
         suggestReq += 1                  // lượt mới → kết quả nền cũ (nếu có) bỏ
         barShift = suggestionShift
-        guard suggestionsActive, keyboard?.isBarCollapsed != true else { return }
+        guard suggestionsActive else { return }
         let composed = bridge.composedWord
         var set = KeyboardView.SuggestionSet()
         numberChip = nil; mathChip = nil; emailChips = []; urlChips = []
@@ -1664,7 +1663,7 @@ final class KeyboardViewController: UIInputViewController {
                 DispatchQueue.main.async {
                     guard let self, req == self.suggestReq, gen == self.suggestionGen,
                           self.bridge === b, b.composedWord == composed,
-                          self.suggestionsActive, self.keyboard?.isBarCollapsed != true
+                          self.suggestionsActive
                     else { return }
                     self.showComposingSuggestions(composed: composed, raw: raw, predicted: predicted,
                                                   pool: pool, pmi: pmi, fix: fix, slip: slip, english: en)
@@ -2086,7 +2085,7 @@ extension KeyboardViewController {
     }
 
     /// StripMode.tools: không gợi ý chữ — chỉ lời mời Dán (cùng luật mời một lần / Full
-    /// Access / chip tách số = Plus như dải đầy đủ) và chip URL ở ô địa chỉ. ☰/📋/⌄ do
+    /// Access / chip tách số = Plus như dải đầy đủ) và chip URL ở ô địa chỉ. ☰/📋 do
     /// KeyboardView vẽ sẵn khi dải bật.
     fileprivate func showToolsOnly(composing: Bool) {
         var set = KeyboardView.SuggestionSet()

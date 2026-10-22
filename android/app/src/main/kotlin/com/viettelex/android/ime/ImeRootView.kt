@@ -425,10 +425,10 @@ class ImeRootView(
             requestLayout()
         }
 
-    /** Khung ô nhân vật (px, gốc = khung bàn phím): sát trái zone ⌄, cao = strip + phần tràn xuống phím. */
+    /** Khung ô nhân vật (px, gốc = khung bàn phím): sát mép phải, cao = strip + phần tràn xuống phím. */
     private fun layoutBuddy(px: Int, py: Int, pw: Int, s: Int) {
         val b = buddy ?: return
-        val r = px + pw - Math.round(theme.dp(KeyLayout.STRIP_ZONE_W))
+        val r = px + pw
         val l = r - Math.round(theme.dp(StripGeometry.BUDDY_W))
         val h = StripGeometry.buddyHeight(s)
         val w = StripGeometry.buddyDrawWidth(s, r - l)

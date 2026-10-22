@@ -97,7 +97,7 @@ enum KeyLayout {
 
     /// Khoảng trống tối thiểu phía trên hàng phím đầu cho balloon/popup ký tự phụ.
     /// Extension KHÔNG vẽ được ra ngoài inputView ⇒ chỗ này phải nằm trong bàn phím.
-    /// Bug Phil 30/09/2026: tắt/thu gọn thanh gợi ý (strip 0/14) hoặc host cấp thiếu
+    /// Bug Phil 30/09/2026: tắt thanh gợi ý (strip 0) hoặc host cấp thiếu
     /// (strip nhường hết) ⇒ balloon "3" trên phím "e" bị cắt nửa ở mép trên. Stock cũng
     /// chừa đệm trên. 20pt + khe hàng 10 ⇒ bubble ≥ 24pt (chữ co cho vừa, không cắt).
     static let balloonHeadroom: CGFloat = 20
@@ -140,8 +140,8 @@ enum KeyLayout {
     /// gợi ý (mật khẩu, autocorrect = .no — ô tìm Facebook, trait Notes đọc chập chờn)
     /// làm bàn phím thấp 34pt rồi cao lại khi đang hiện; host không phải lúc nào cũng
     /// cấp lại chiều cao ⇒ strip (999) thắng, hàng phím (900) bị ép.
-    static func stripHeight(reserved: Bool, collapsed: Bool, open: CGFloat) -> CGFloat {
-        reserved ? (collapsed ? 14 : open) : 0
+    static func stripHeight(reserved: Bool, open: CGFloat) -> CGFloat {
+        reserved ? open : 0
     }
 
     /// iPhone ngang theo BỀ NGANG view (dọc ≤ 440pt, ngang ≥ 568pt) — không tin

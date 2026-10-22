@@ -53,7 +53,7 @@ final class UXSnapshotTests: XCTestCase {
                     kb.debugDomainHold(key, keepOpen: true)
                 }
             }
-            // Công tắc Mẫu câu tắt: thanh gợi ý không còn nút ☰ (⌄ thu gọn giữ nguyên).
+            // Công tắc Mẫu câu tắt: thanh gợi ý không còn nút ☰.
             let tdef = UserDefaultsProvider.shared
             let tSaved = tdef?.object(forKey: "templatesEnabled")
             tdef?.set(false, forKey: "templatesEnabled")
@@ -67,7 +67,7 @@ final class UXSnapshotTests: XCTestCase {
                 kb.setNeedsLayout(); kb.layoutIfNeeded()
                 _ = kb.debugBalloon(letter: "e", text: "3")
             }
-            // Thanh địa chỉ Safari (StripMode.tools): ☰/⌄ + chip URL thay dải trống — ô trống
+            // Thanh địa chỉ Safari (StripMode.tools): ☰ + chip URL thay dải trống — ô trống
             // (có https://), đang gõ tên miền, và lời mời Dán; so với dải trống ô mật khẩu.
             try shot("urlbar-empty-\(s)", dark: dark) { kb in
                 kb.configureInputKind(.search)

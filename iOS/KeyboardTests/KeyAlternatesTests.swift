@@ -558,15 +558,12 @@ final class KeyAlternatesTests: XCTestCase {
         XCTAssertFalse(EmojiKeyPlacement.emojiInBar(.top, barShown: false, pad: false), "thanh ẩn ⇒ 😊 ở hàng đáy")
         XCTAssertFalse(EmojiKeyPlacement.emojiInBar(.top, barShown: true, pad: true), "iPad giữ hàng đáy stock")
         XCTAssertFalse(EmojiKeyPlacement.emojiInBar(.bottom, barShown: true, pad: false))
-        // Khung nút: mở = ô cao trọn strip bên trái 📋 / ⌄; thu gọn = nút nổi bên trái ⌄ nổi.
-        let z = KeyboardView.stripZoneWidth, e = KeyboardView.emojiZoneWidth, c = KeyboardView.clipZoneWidth
-        XCTAssertEqual(KeyboardView.emojiBarFrame(width: 390, strip: 36, collapsed: false, clip: false),
-                       CGRect(x: 390 - z - e, y: 0, width: e, height: 36))
-        XCTAssertEqual(KeyboardView.emojiBarFrame(width: 390, strip: 36, collapsed: false, clip: true),
-                       CGRect(x: 390 - z - c - e, y: 0, width: e, height: 36))
-        let f = KeyboardView.emojiBarFrame(width: 390, strip: 14, collapsed: true, clip: true)
-        XCTAssertEqual(f.maxX, 390 - 48, "sát trái ⌄ nổi")
-        XCTAssertEqual(f.height, 18)
+        // Khung nút: ô cao trọn strip, sát mép phải (không còn ⌄) hoặc bên trái 📋.
+        let e = KeyboardView.emojiZoneWidth, c = KeyboardView.clipZoneWidth
+        XCTAssertEqual(KeyboardView.emojiBarFrame(width: 390, strip: 36, clip: false),
+                       CGRect(x: 390 - e, y: 0, width: e, height: 36))
+        XCTAssertEqual(KeyboardView.emojiBarFrame(width: 390, strip: 36, clip: true),
+                       CGRect(x: 390 - c - e, y: 0, width: e, height: 36))
         let spec = BackupSettings.all.first { $0.key == EmojiKeyPlacement.key }
         if case .string(let def, let allowed)? = spec?.kind {
             XCTAssertEqual(def, "bottom")
@@ -591,8 +588,7 @@ final class KeyAlternatesTests: XCTestCase {
         XCTAssertGreaterThan(space, space0 + emojiW)
         XCTAssertLessThan(space, space0 + emojiW + 12)
         let btn = try XCTUnwrap(kb.debugEmojiBarButton)
-        XCTAssertEqual(btn.frame, KeyboardView.emojiBarFrame(width: 390, strip: btn.frame.height,
-                                                            collapsed: kb.isBarCollapsed, clip: false))
+        XCTAssertEqual(btn.frame, KeyboardView.emojiBarFrame(width: 390, strip: btn.frame.height, clip: false))
         // Chạm nút ⇒ plane emoji (thanh ẩn trong plane emoji ⇒ nút ẩn).
         btn.sendActions(for: .touchUpInside)
         kb.layoutIfNeeded()

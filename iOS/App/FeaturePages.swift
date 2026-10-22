@@ -688,7 +688,7 @@ struct PhimPage: View {
                         }
                         .pickerStyle(.segmented)
                         .labelsHidden()
-                        Text(L("Thanh trên: nút 😊 lên thanh gợi ý (cạnh nút thu gọn), phím cách rộng hơn. Khi thanh gợi ý tắt hoặc không hiện ở ô đang gõ, nút 😊 vẫn ở hàng dưới."))
+                        Text(L("Thanh trên: nút 😊 lên thanh gợi ý (sát mép phải), phím cách rộng hơn. Khi thanh gợi ý tắt hoặc không hiện ở ô đang gõ, nút 😊 vẫn ở hàng dưới."))
                             .font(.footnote).foregroundStyle(.secondary)
                     }
                     if !numberRow {

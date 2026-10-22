@@ -638,7 +638,7 @@ private fun StepButton(symbol: String, description: String, enabled: Boolean, on
 /** "Nút emoji": Hàng dưới (mặc định) / Thanh trên — [EmojiKeyPlacement]. */
 @Composable
 private fun EmojiPlacementRow() = ChoiceRow(Keys.EMOJI_KEY_PLACEMENT, Prefs.D.emojiKeyPlacement.id, tr("Nút emoji"),
-    tr("Thanh trên: nút emoji lên thanh gợi ý (cạnh nút thu gọn), phím cách rộng hơn. Giữ nút để đổi bàn phím, gõ giọng nói, một tay… Khi thanh gợi ý không hiện, nút vẫn ở hàng dưới."),
+    tr("Thanh trên: nút emoji lên thanh gợi ý (sát mép phải), phím cách rộng hơn. Giữ nút để đổi bàn phím, gõ giọng nói, một tay… Khi thanh gợi ý không hiện, nút vẫn ở hàng dưới."),
     listOf(EmojiKeyPlacement.BOTTOM.id to tr("Hàng dưới"), EmojiKeyPlacement.TOP.id to tr("Thanh trên"))) { EmojiKeyPlacement.of(it).id }
 
 /** "Cỡ chữ trên phím": Vừa (mặc định) / Lớn — [KeyLabelSize]. */

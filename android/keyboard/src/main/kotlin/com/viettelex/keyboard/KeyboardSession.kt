@@ -320,7 +320,7 @@ class KeyboardSession(
      * context mỗi lượt gợi ý CHỈ ở ô email; ô khác không qua nhánh này (0 chi phí).
      */
     private var emailBar = false
-    /** Bar thu gọn — pipeline gợi ý ngừng. IME set theo chevron. */
+    /** Bar thu gọn — pipeline gợi ý ngừng. Nút ⌄ đã bỏ (10/2026): IME luôn đặt false. */
     var barCollapsed = false
     private var lastKeyWasEmailTrigger = false
     /** Số dấu cách kể từ chữ số/phép tính cuối (≤1 → đáng đọc context tìm chip số). */

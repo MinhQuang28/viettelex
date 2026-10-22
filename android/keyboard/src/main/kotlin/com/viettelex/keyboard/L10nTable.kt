@@ -100,7 +100,7 @@ object L10nTable {
         put("Nút emoji", "Emoji button")
         put("Hàng dưới", "Bottom row")
         put("Thanh trên", "Top bar")
-        put("Thanh trên: nút emoji lên thanh gợi ý (cạnh nút thu gọn), phím cách rộng hơn. Giữ nút để đổi bàn phím, gõ giọng nói, một tay… Khi thanh gợi ý không hiện, nút vẫn ở hàng dưới.", "Top bar: the emoji button moves to the suggestion bar (next to the collapse button) and the space bar gets wider. Hold it to switch keyboards, voice input, one-handed… When the suggestion bar is hidden it stays in the bottom row.")
+        put("Thanh trên: nút emoji lên thanh gợi ý (sát mép phải), phím cách rộng hơn. Giữ nút để đổi bàn phím, gõ giọng nói, một tay… Khi thanh gợi ý không hiện, nút vẫn ở hàng dưới.", "Top bar: the emoji button moves to the suggestion bar (at its right end) and the space bar gets wider. Hold it to switch keyboards, voice input, one-handed… When the suggestion bar is hidden it stays in the bottom row.")
         put("Cỡ chữ trên phím", "Key label size")
         put("Màn hình thấp hoặc xoay ngang: tự giới hạn để bàn phím không quá nửa màn hình.", "Short screens or landscape: capped so the keyboard stays within half the screen.")
         put("Vừa", "Medium")

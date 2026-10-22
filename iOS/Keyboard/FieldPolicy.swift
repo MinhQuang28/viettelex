@@ -259,7 +259,7 @@ enum StripMode: Equatable {
     /// Mật khẩu / OTP / ẩn danh / bàn số: dải trống giữ chiều cao.
     case blank
     /// Ô từ chối gợi ý chữ (autocorrection = .no: thanh địa chỉ Safari, ô URL…) nhưng không
-    /// nhạy cảm: ☰ / 📋 / ⌄ + lời mời Dán (mời một lần, chip = Plus) + chip URL — không chữ.
+    /// nhạy cảm: ☰ / 📋 + lời mời Dán (mời một lần, chip = Plus) + chip URL — không chữ.
     case tools
     /// Gợi ý đầy đủ.
     case full

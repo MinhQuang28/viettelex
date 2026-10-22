@@ -404,113 +404,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if emojiInBar != emojiBefore { rebuild(); setNeedsLayout() }
     }
 
-    /// Collapse/expand thanh gợi ý bằng chevron (user 2026-07-24): thu gọn còn
-    /// strip 14pt chỉ có nút mở lại — bàn phím THẤP XUỐNG 16pt, trả chỗ cho app.
-    // UserDefaults.standard (container RIÊNG của extension): không Full Access
-    // thì iOS cấm GHI vào App Group — group chỉ để đọc settings từ app.
-    private var barCollapsed =
-        UserDefaults.standard.bool(forKey: "suggestionBarCollapsed")
-    /// Controller đọc để NGỪNG cả pipeline gợi ý khi bar thu gọn (tiết kiệm
-    /// CPU/RAM — không chỉ ẩn UI).
-    var isBarCollapsed: Bool { barCollapsed }
-    var onBarToggle: (() -> Void)?
-    private func toggleBarCollapsed() {
-        Self.clickModifier()
-        barCollapsed.toggle()
-        UserDefaults.standard.set(barCollapsed, forKey: "suggestionBarCollapsed")
-        lastSuggestionSig = nil
-        // Animation 200ms (user 2026-07-24): chiều cao trượt + bar fade +
-        // chevron xoay 180° (một icon chevron.down + transform). Chỉ animate
-        // CONSTANTS trực tiếp — không gọi chrome trong block (chrome set
-        // isHidden sẽ giết fade); completion mới chốt trạng thái qua chrome.
-        let collapsing = barCollapsed
-        if !collapsing { suggestionBar.isHidden = false; suggestionBar.alpha = 0 }
-        UIView.animate(withDuration: 0.2, delay: 0, options: [.curveEaseInOut]) {
-            let strip: CGFloat = collapsing ? 14 : self.openStripNow
-            let c = KeyLayout.chrome(keyArea: self.keyAreaHeight(), strip: strip, mode: self.chromeMode,
-                                     headroom: self.headroomNow)
-            self.rowsTopConstraint?.constant = c.rowsTop
-            self.heightConstraint?.constant = c.total + self.bottomInset + self.hostFillExtra
-            self.suggestionBar.alpha = collapsing ? 0 : 1
-            let flip = CGAffineTransform(rotationAngle: collapsing ? .pi : 0)
-            self.chevronIcon?.transform = flip
-            self.chevronZone.imageView?.transform = flip
-            self.layoutIfNeeded()
-        } completion: { _ in
-            self.updateSuggestionChrome()   // chốt isHidden/alpha trạng thái cuối
-            self.onBarToggle?()             // controller refresh gợi ý sau khi mở lại
-        }
-    }
-    /// Nút nổi CHỈ dùng khi bar thu gọn (strip 14 không còn bar). Khi bar mở,
-    /// chevron là một SLOT trong bar (barChevronSlot) — cùng cơ chế touch với
-    /// slot gợi ý vốn bấm nhạy, hết cảnh "bấm mãi không ăn".
-    private lazy var collapseButton: UIButton = {
-        let b = UIButton(type: .custom)
-        b.addAction(UIAction { [weak self] _ in self?.toggleBarCollapsed() },
-                    for: .touchUpInside)
-        addSubview(b)
-        b.translatesAutoresizingMaskIntoConstraints = false
-        // Chiếm TRỌN chiều cao strip từ mép trên cửa sổ: ngón tay hay đè cao
-        // hơn tâm icon (phần đó rơi vào inset hệ thống NGOÀI cửa sổ) — mục
-        // tiêu phải phủ hết phần strip còn trong cửa sổ mới dễ trúng. Không
-        // tràn xuống vùng phím nên không cướp tap của phím góc phải.
-        // Icon là UIImageView định vị RIÊNG theo tâm hàng chữ (10pt) — nút
-        // full-height mà align icon theo nút thì icon trôi lên mép trên.
-        let height = b.heightAnchor.constraint(equalToConstant: 36)
-        NSLayoutConstraint.activate([
-            b.rightAnchor.constraint(equalTo: rightAnchor),
-            b.topAnchor.constraint(equalTo: topAnchor),
-            b.widthAnchor.constraint(equalToConstant: 48),   // hit target ≥44pt
-            height,
-        ])
-        chevronHeight = height
-        let icon = UIImageView()
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.isUserInteractionEnabled = false
-        b.addSubview(icon)
-        let iconY = icon.centerYAnchor.constraint(equalTo: b.topAnchor, constant: 10)
-        NSLayoutConstraint.activate([
-            icon.centerXAnchor.constraint(equalTo: b.centerXAnchor),
-            iconY,
-        ])
-        chevronIcon = icon
-        chevronIconY = iconY
-        return b
-    }()
-    private var chevronHeight: NSLayoutConstraint?
-    private var chevronIcon: UIImageView?
-    private var chevronIconY: NSLayoutConstraint?
-    /// Burger nổi khi thu gọn — đối xứng chevron nổi, để mẫu câu vẫn truy cập
-    /// được lúc bar đang ẩn (user 2026-07-24).
-    private lazy var floatingBurger: UIButton = {
-        let b = UIButton(type: .custom)
-        b.addAction(UIAction { [weak self] _ in self?.leftZoneTapped() },
-                    for: .touchUpInside)
-        let hold = UILongPressGestureRecognizer(target: self, action: #selector(burgerHold(_:)))
-        hold.minimumPressDuration = 0.45
-        b.addGestureRecognizer(hold)
-        addSubview(b)
-        b.translatesAutoresizingMaskIntoConstraints = false
-        NSLayoutConstraint.activate([
-            b.leftAnchor.constraint(equalTo: leftAnchor),
-            b.topAnchor.constraint(equalTo: topAnchor),
-            b.widthAnchor.constraint(equalToConstant: 64),
-            b.heightAnchor.constraint(equalToConstant: 18),
-        ])
-        let icon = UIImageView()
-        icon.translatesAutoresizingMaskIntoConstraints = false
-        icon.isUserInteractionEnabled = false
-        b.addSubview(icon)
-        NSLayoutConstraint.activate([
-            icon.centerXAnchor.constraint(equalTo: b.centerXAnchor),
-            icon.centerYAnchor.constraint(equalTo: b.topAnchor, constant: 7),
-        ])
-        floatingBurgerIcon = icon
-        return b
-    }()
-    private var floatingBurgerIcon: UIImageView?
+    // Nút ⌄ thu gọn thanh gợi ý đã BỎ (10/2026, user: "không cần, nhường chỗ cho gợi ý") —
+    // gợi ý / 📋 / 😊 / nhân vật dời sát mép phải. Muốn bỏ hẳn thanh: Cài đặt → tắt Gợi ý.
+    // Khoá "suggestionBarCollapsed" cũ không còn đọc ⇒ ai đang thu gọn sẽ thấy thanh mở lại.
 
-    // Burger (☰) + chevron (⌄) khi bar MỞ: 2 nút GHIM CỐ ĐỊNH ở mép, cao trọn
+    // Burger (☰) khi bar MỞ: nút GHIM CỐ ĐỊNH ở mép trái, cao trọn
     // strip, tự vẽ icon + nhận tap. Trước nằm trong bar (fillProportionally) nên
     // trôi vào giữa khi hết gợi ý + vùng tap chỉ 20pt sát mép rất khó bấm
     // (user 2026-07-25). Giờ frame lớn, luôn ở mép → bấm đâu trong vùng cũng ăn.
@@ -590,19 +488,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         Self.clickModifier()
         setOneHand(OneHand.toggled(oneHand, preferred: lastOneHandSide))
     }
-    private lazy var chevronZone: UIButton = {
-        let b = UIButton(type: .custom)
-        b.addAction(UIAction { [weak self] _ in self?.toggleBarCollapsed() }, for: .touchUpInside)
-        addSubview(b)
-        return b
-    }()
 
     /// Bar là HÀNG NỘI DUNG ghim đỉnh, cao barRowNow (20 ở mức Thấp, + delta "Chiều cao thanh
-    /// gợi ý"), thụt 2 mép chừa chỗ burgerZone/chevronZone (+ nút 📋) — gợi ý nằm giữa, không
-    /// chồng lên nút mép. Frame thường không đổi ⇒ SuggestionBar không layout lại.
+    /// gợi ý"), thụt mép trái chừa burgerZone, mép phải chừa 📋 / 😊 / nhân vật (không còn ⌄) —
+    /// không chồng lên nút mép. Frame thường không đổi ⇒ SuggestionBar không layout lại.
     private func layoutSuggestionBar() {
         let w = Self.stripZoneWidth
-        let right = w + barRightExtras
+        let right = barRightExtras
         // Host cấp thiếu chiều cao ⇒ strip co (phím giữ nguyên): bar Vừa/Cao co về chỗ còn lại
         // trước (sàn 20 = mức Thấp), hết chỗ mới dời lên VỪA đủ để không đè hàng đầu.
         let room = rowsContainer.frame.height > 0 ? rowsContainer.frame.minY - Self.barTopPad : .greatestFiniteMagnitude
@@ -613,14 +505,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if suggestionBar.frame != f { suggestionBar.frame = f }
     }
 
-    /// Đặt lại frame + icon + ẩn/hiện 2 nút mép theo trạng thái bar. Gọi mỗi
+    /// Đặt lại frame + icon + ẩn/hiện nút mép trái (☰) theo trạng thái bar. Gọi mỗi
     /// layoutSubviews. Chiều cao lấy từ HẰNG SỐ constraint (rowsTop), KHÔNG từ
     /// frame — frame có thể chưa kịp cập nhật trong cùng pass → strip=0 → tịt.
     private func layoutStripZones() {
-        let open = suggestionsEnabled && !barCollapsed && plane != .emoji && plane != .emojiSearch
+        let open = suggestionsEnabled && plane != .emoji && plane != .emojiSearch
         let zone = leftZone
         burgerZone.isHidden = !open || zone == .none
-        chevronZone.isHidden = !open
         layoutClipboardExtras(stripOpen: open)
         layoutBuddy(stripOpen: open)
         layoutEmojiBarButton()
@@ -630,65 +521,26 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         // dựng lại ảnh SF Symbol + insets mỗi lượt.
         let key = StripZonesKey(width: bounds.width, strip: strip, templates: templatesActive, ink: palette.barInk,
                                 zone: zone, oneHand: oneHand, lastSide: lastOneHandSide)
-        defer { bringSubviewToFront(burgerZone); bringSubviewToFront(chevronZone) }
+        defer { bringSubviewToFront(burgerZone) }
         guard key != stripZonesKey else { return }
         stripZonesKey = key
         let w = Self.stripZoneWidth
         burgerZone.frame = CGRect(x: 0, y: 0, width: w, height: strip)
-        chevronZone.frame = CGRect(x: bounds.width - w, y: 0, width: w, height: strip)
         let ink = palette.barInk.ui
         burgerZone.setImage(leftZoneImage(pointSize: 13), for: .normal)
         let lit = zone == .oneHand ? oneHand != .off : templatesActive
         burgerZone.tintColor = ink.withAlphaComponent(lit ? 0.9 : 0.45)
         applyLeftZoneAccessibility(burgerZone)
-        chevronZone.setImage(UIImage(systemName: "chevron.down",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold)), for: .normal)
-        chevronZone.tintColor = ink.withAlphaComponent(0.45)
-        chevronZone.accessibilityLabel = L("Thu gọn thanh gợi ý")
-        chevronZone.imageView?.transform = .identity   // bar mở = chevron xuôi
         // Icon canh giữa trong vùng 20pt TRÊN CÙNG (tâm y≈10) để khớp chữ gợi ý,
         // thay vì canh giữa cả strip 36 (tâm y≈18 → icon thấp hơn chữ, user 2026-07-25).
         let bottomInset = max(strip - barRowNow - Self.barTopPad, 0)
         burgerZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
-        chevronZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
     }
     private struct StripZonesKey: Equatable {
         let width: CGFloat, strip: CGFloat, templates: Bool, ink: RGBA
         let zone: LeftZone, oneHand: OneHandSide, lastSide: OneHandSide
     }
     private var stripZonesKey: StripZonesKey?
-
-    private func refreshCollapseButton(visible: Bool) {
-        // Nút nổi chỉ hiện khi THU GỌN; bar mở dùng slot trong bar.
-        let floating = visible && barCollapsed
-        collapseButton.isHidden = !floating
-        floatingBurger.isHidden = !floating || leftZone == .none
-        if floating {
-            floatingBurgerIcon?.image = leftZoneImage(pointSize: 12)
-            let lit = leftZone == .oneHand && oneHand != .off
-            floatingBurgerIcon?.tintColor = palette.barInk.ui.withAlphaComponent(lit ? 0.9 : 0.45)
-            applyLeftZoneAccessibility(floatingBurger)
-        }
-        let chevImg = UIImage(systemName: "chevron.down",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: 12, weight: .semibold))
-        let ink = palette.barInk.ui.withAlphaComponent(0.45)
-        if floating {
-            // 18 = strip 14 + margin hàng phím (phím bắt đầu ở 19) — mục tiêu
-            // to hơn mà không cướp tap phím.
-            chevronHeight?.constant = 18
-            chevronIconY?.constant = 7
-            chevronIcon?.image = chevImg      // một icon duy nhất, xoay bằng transform
-            chevronIcon?.tintColor = ink
-            collapseButton.accessibilityLabel = L("Mở thanh gợi ý")
-        }
-        // Bar mở: burger/chevron là burgerZone/chevronZone (ghim mép) — style +
-        // frame do layoutStripZones lo. Chỉ cần đảm bảo pool đã dựng.
-        if visible && !barCollapsed {
-            buildSuggestionPoolIfNeeded()
-        }
-        // Transform icon nút nổi (thu gọn) khớp trạng thái.
-        chevronIcon?.transform = CGAffineTransform(rotationAngle: barCollapsed ? .pi : 0)
-    }
 
     /// User chỉnh ±10pt/hàng qua Settings (Giao diện); 4 hàng nên tổng đổi 4×. iPhone: so với
     /// bàn phím gốc của máy (0 = như bàn phím iPhone — KeyGeometry.RowAdjust).
@@ -906,11 +758,6 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         barHeight = h
         updateSuggestionChrome(); setNeedsLayout()
     }
-    /// Test hook: thu gọn / mở bar không animation, không ghi UserDefaults.
-    func debugSetBarCollapsed(_ c: Bool) {
-        barCollapsed = c
-        updateSuggestionChrome(); setNeedsLayout()
-    }
     var debugOpenStrip: CGFloat { openStripNow }
     var debugBarRow: CGFloat { barRowNow }
     var debugSlotFontSize: CGFloat { slotFont.pointSize }
@@ -934,7 +781,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     private var barHeight = SuggestionBarHeight.defaultValue
     /// iPhone xoay ngang: mức Cao kẹp về Vừa (màn thấp). Máy gập mở / iPad: không kẹp.
     private var barLandscapeCap: Bool { !Self.isPad && bounds.width > 0 && phoneForm == .landscape }
-    /// Hàng nội dung bar (chữ gợi ý + icon ☰/⌄/📋/😊): 20 ở mức Thấp, + delta ở Vừa/Cao.
+    /// Hàng nội dung bar (chữ gợi ý + icon ☰/📋/😊): 20 ở mức Thấp, + delta ở Vừa/Cao.
     private var barRowNow: CGFloat { barHeight.rowHeight(landscape: barLandscapeCap) }
     /// Headroom balloon phía trên hàng đầu (KeyLayout.headroom): chỉ chừa khi có thứ cần vẽ
     /// lên trên phím (ô phóng to / giữ phím ra ký tự phụ). Tắt cả hai ⇒ gợi ý tắt không còn
@@ -992,11 +839,10 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// phím cuối là vùng globe/mic hệ thống, không thuộc view mình.
     private func updateSuggestionChrome() {
         let visible = suggestionsEnabled && plane != .emoji && plane != .emojiSearch
-        // Strip mở (bar 20pt + đệm trên) / 14 thu gọn / 0 tắt. Plane emoji GIỮ NGUYÊN
+        // Strip mở (bar 20pt + đệm trên) / 0 tắt. Plane emoji GIỮ NGUYÊN
         // chiều cao strip (chỉ ẩn bar): đổi chiều cao bàn phím khi vào emoji làm host
         // relayout dở dang — dải trống + vạch đè hàng emoji đầu (Telegram, 25/09/2026).
-        let strip = KeyLayout.stripHeight(reserved: stripReserved, collapsed: barCollapsed,
-                                          open: openStripNow)
+        let strip = KeyLayout.stripHeight(reserved: stripReserved, open: openStripNow)
         // Lưới emoji chiếm luôn dải strip (thanh tìm nằm đúng chỗ thanh gợi ý như stock):
         // chỉ dời vùng hàng phím, tổng chiều cao GIỮ NGUYÊN → host không relayout.
         // Tìm emoji: ô tìm thế chỗ strip, phím chữ giữ đủ keyArea (KeyLayout.chrome).
@@ -1013,11 +859,11 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if rowsMaxHeightConstraint?.constant != c.rows + 60 { rowsMaxHeightConstraint?.constant = c.rows + 60 }
         let barH = KeyLayout.emojiSearchBarHeight(strip: strip)
         if let h = searchBarHeight, h.constant != barH { h.constant = barH }
-        suggestionBar.isHidden = !visible || barCollapsed
+        suggestionBar.isHidden = !visible
         suggestionBar.alpha = 1
-        if !visible || barCollapsed { pasteCard.isHidden = true; notePasteOffer(false) }   // thu gọn / emoji plane
+        if !visible { pasteCard.isHidden = true; notePasteOffer(false) }   // emoji plane
         lastSuggestionSig = nil   // chrome đổi → lượt show kế ghi lại (kể cả thẻ Dán)
-        refreshCollapseButton(visible: visible)
+        if visible { buildSuggestionPoolIfNeeded() }
         refreshBarFonts()
         refreshBarHitInsets()
         layoutEmojiBarButton()   // 😊 Thanh trên: ẩn/hiện theo plane ngay (không đợi layoutSubviews)
@@ -1061,7 +907,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if pasteCard.superview != nil, !pasteCard.isHidden {   // xoay màn hình
             let w = Self.stripZoneWidth
             let clipW = barRightExtras   // chừa nút 📋 / 😊
-            pasteCard.frame = CGRect(x: w, y: Self.barTopPad, width: max(bounds.width - 2 * w - clipW, 0),
+            pasteCard.frame = CGRect(x: w, y: Self.barTopPad, width: max(bounds.width - w - clipW, 0),
                                      height: openStripNow - Self.barTopPad)
         }
     }
@@ -1289,8 +1135,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             }, for: .touchUpInside)
             b.addAction(UIAction { [weak b] _ in b?.downPayload = nil }, for: [.touchCancel, .touchUpOutside])
         }
-        // Burger + chevron KHÔNG nằm trong bar: 2 nút ghim cố định ở mép
-        // (burgerZone / chevronZone — xem layoutStripZones).
+        // Burger KHÔNG nằm trong bar: nút ghim cố định ở mép trái (burgerZone — xem layoutStripZones).
     }
 
     // MARK: mẫu câu nhanh (burger menu, user 2026-07-24)
@@ -1472,7 +1317,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     var suggestionSlotCount: Int { suggestionBar.slotCount }
 
     func showSuggestions(_ set: SuggestionSet) {
-        guard suggestionsEnabled, !barCollapsed else { return }
+        guard suggestionsEnabled else { return }
         buildSuggestionPoolIfNeeded()
         lastShownSet = set
 
@@ -1591,7 +1436,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
     /// Panel clipboard bám ĐÚNG vùng phím mỗi lượt layout. Trước đây chỉ đặt frame lúc mở
     /// + autoresizing (cao cố định, neo đáy): bàn phím đổi chiều cao khi panel đang mở (xoay,
-    /// thu gọn ⌄, host cấp lại khung) ⇒ panel trồi lên đè dải gợi ý / hở hàng phím.
+    /// host cấp lại khung) ⇒ panel trồi lên đè dải gợi ý / hở hàng phím.
     private func layoutOverlayPanel() {
         guard let p = overlayPanel, p.superview === self else { return }
         let f = rowsContainer.frame
@@ -1601,7 +1446,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
     // MARK: Nút emoji trên thanh gợi ý ("Nút emoji" = Thanh trên, EmojiKeyPlacement)
     static let emojiZoneWidth: CGFloat = 40
-    /// Bề ngang chừa bên phải bar (trước ⌄): 📋 (lịch sử clipboard) + 😊 (Thanh trên).
+    /// Bề ngang chừa bên phải bar (sát mép phải): 📋 (lịch sử clipboard) + 😊 (Thanh trên).
     private var barRightExtras: CGFloat {
         (clipboardButtonVisible ? Self.clipZoneWidth : 0) + (emojiInBar ? Self.emojiZoneWidth : 0) + buddyZone
     }
@@ -1620,11 +1465,9 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         addSubview(b)
         return b
     }()
-    /// Khung nút 😊 trên thanh (nil = không hiện) — THUẦN để test: bar mở ⇒ ô cao trọn strip bên
-    /// trái 📋 (hoặc ⌄); thu gọn ⇒ nút nổi 18pt bên trái ⌄ nổi (48pt).
-    static func emojiBarFrame(width: CGFloat, strip: CGFloat, collapsed: Bool, clip: Bool, buddy: CGFloat = 0) -> CGRect {
-        if collapsed { return CGRect(x: width - 48 - 44, y: 0, width: 44, height: 18) }
-        let x = width - stripZoneWidth - buddy - (clip ? clipZoneWidth : 0) - emojiZoneWidth
+    /// Khung nút 😊 trên thanh — THUẦN để test: ô cao trọn strip bên trái 📋 (hoặc nhân vật / mép phải).
+    static func emojiBarFrame(width: CGFloat, strip: CGFloat, clip: Bool, buddy: CGFloat = 0) -> CGRect {
+        let x = width - buddy - (clip ? clipZoneWidth : 0) - emojiZoneWidth
         return CGRect(x: x, y: 0, width: emojiZoneWidth, height: strip)
     }
     private func layoutEmojiBarButton() {
@@ -1632,28 +1475,24 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if !visible { if emojiZoneMade { emojiZone.isHidden = true }; return }
         guard bounds.width > 0 else { return }
         let strip = max(rowsTopConstraint?.constant ?? openStripNow, openStripNow)
-        let f = Self.emojiBarFrame(width: bounds.width, strip: strip, collapsed: barCollapsed,
+        let f = Self.emojiBarFrame(width: bounds.width, strip: strip,
                                    clip: clipboardButtonVisible, buddy: buddyZone)
         emojiZone.isHidden = false
         defer { bringSubviewToFront(emojiZone) }
         // layoutSubviews chạy cả khi gõ (shift/balloon): trạng thái không đổi ⇒ khỏi dựng lại ảnh.
-        let key = EmojiZoneKey(frame: f, collapsed: barCollapsed, ink: palette.barInk)
+        let key = EmojiZoneKey(frame: f, ink: palette.barInk)
         guard key != emojiZoneKey else { return }
         emojiZoneKey = key
         emojiZone.frame = f
         emojiZone.setImage(UIImage(systemName: "face.smiling",
-            withConfiguration: UIImage.SymbolConfiguration(pointSize: barCollapsed ? 12 : 14, weight: .regular)),
+            withConfiguration: UIImage.SymbolConfiguration(pointSize: 14, weight: .regular)),
             for: .normal)
-        emojiZone.tintColor = palette.barInk.ui.withAlphaComponent(barCollapsed ? 0.45 : 0.6)
-        // Icon canh hàng chữ gợi ý (tâm y≈10) như ⌄ / 📋; thu gọn: tâm 7 như nút nổi.
-        if barCollapsed {
-            emojiZone.contentEdgeInsets = UIEdgeInsets(top: 0, left: 0, bottom: 4, right: 0)
-        } else {
-            let bottomInset = max(strip - barRowNow - Self.barTopPad, 0)
-            emojiZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
-        }
+        emojiZone.tintColor = palette.barInk.ui.withAlphaComponent(0.6)
+        // Icon canh hàng chữ gợi ý (tâm y≈10) như 📋.
+        let bottomInset = max(strip - barRowNow - Self.barTopPad, 0)
+        emojiZone.contentEdgeInsets = UIEdgeInsets(top: Self.barTopPad, left: 0, bottom: bottomInset, right: 0)
     }
-    private struct EmojiZoneKey: Equatable { let frame: CGRect; let collapsed: Bool; let ink: RGBA }
+    private struct EmojiZoneKey: Equatable { let frame: CGRect; let ink: RGBA }
     private var emojiZoneKey: EmojiZoneKey?
     #if DEBUG
     /// Test hook: khung nút 😊 trên thanh (nil = ẩn / chưa tạo).
@@ -1665,8 +1504,8 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if clipboardButtonVisible || clipZoneMade { clipZone.isHidden = !showClip }
         if showClip, bounds.width > 0 {
             let strip = max(rowsTopConstraint?.constant ?? openStripNow, openStripNow)
-            let w = Self.stripZoneWidth, cw = Self.clipZoneWidth
-            clipZone.frame = CGRect(x: bounds.width - w - buddyZone - cw, y: 0, width: cw, height: strip)
+            let cw = Self.clipZoneWidth
+            clipZone.frame = CGRect(x: bounds.width - buddyZone - cw, y: 0, width: cw, height: strip)
             clipZone.setImage(UIImage(systemName: "doc.on.clipboard",
                 withConfiguration: UIImage.SymbolConfiguration(pointSize: 13, weight: .regular)), for: .normal)
             clipZone.tintColor = palette.barInk.ui.withAlphaComponent(overlayPanel == nil ? 0.45 : 0.9)
@@ -1753,7 +1592,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
             if pasteCard.superview == nil { addSubview(pasteCard) }
             let w = Self.stripZoneWidth
             let clipW = barRightExtras   // chừa nút 📋 / 😊
-            pasteCard.frame = CGRect(x: w, y: Self.barTopPad, width: max(bounds.width - 2 * w - clipW, 0),
+            pasteCard.frame = CGRect(x: w, y: Self.barTopPad, width: max(bounds.width - w - clipW, 0),
                                      height: openStripNow - Self.barTopPad)
             (pasteCard.viewWithTag(91) as? UILabel)?.textColor = ink
             (pasteCard.viewWithTag(92) as? UILabel)?.textColor = ink.withAlphaComponent(0.55)
@@ -2225,12 +2064,6 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         if s != .off { lastOneHandSide = s }
         applyOneHand()
         setNeedsLayout()
-        // Thanh thu gọn: nút một tay nổi (ô mép trái) đổi icon/độ đậm theo trạng thái mới.
-        if let icon = floatingBurgerIcon, !floatingBurger.isHidden, leftZone == .oneHand {
-            icon.image = leftZoneImage(pointSize: 12)
-            icon.tintColor = palette.barInk.ui.withAlphaComponent(oneHand != .off ? 0.9 : 0.45)
-            applyLeftZoneAccessibility(floatingBurger)
-        }
     }
 
     /// Người dùng đổi trên bàn phím.
@@ -2982,7 +2815,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         rowsContainer.insertArrangedSubview(bar, at: 0)
         // Ô tìm cao cố định = phần bàn phím cao thêm (KeyLayout.chrome .emojiSearch) — trước
         // đây bằng một hàng chữ và CHIA keyArea với 4 hàng chữ ⇒ phím bị ép (bug 1.2.x).
-        let strip = KeyLayout.stripHeight(reserved: stripReserved, collapsed: barCollapsed, open: openStripNow)
+        let strip = KeyLayout.stripHeight(reserved: stripReserved, open: openStripNow)
         let h = bar.heightAnchor.constraint(equalToConstant: KeyLayout.emojiSearchBarHeight(strip: strip))
         crossRow(h)
         searchBarHeight = h
@@ -6061,7 +5894,7 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
 
     // MARK: Bạn đồng hành (KeyboardBuddy*.swift) — Tắt / chưa Plus ⇒ nil: không view, không layer, 0 chi phí.
     private(set) var buddy: BuddyView?
-    /// Ô nhân vật ngay TRÁI ⌄ (thanh gợi ý co lại đúng bấy nhiêu, 📋 / 😊 dời trái) — không đè chip gợi ý.
+    /// Ô nhân vật sát MÉP PHẢI (thanh gợi ý co lại đúng bấy nhiêu, 📋 / 😊 dời trái) — không đè chip gợi ý.
     static let buddyZoneWidth: CGFloat = 34
     private var buddyZone: CGFloat { buddy == nil ? 0 : Self.buddyZoneWidth }
 
@@ -6069,13 +5902,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
     /// (BuddyView.isUserInteractionEnabled = false) nên phím bên dưới vẫn bấm bình thường.
     static let buddyOverlapRatio: CGFloat = 0.65
 
-    /// Ô chừa cho nhân vật trong thanh gợi ý (chip gợi ý / 📋 / 😊 dời trái đúng bấy nhiêu) — sát trái ⌄.
+    /// Ô chừa cho nhân vật trong thanh gợi ý (chip gợi ý / 📋 / 😊 dời trái đúng bấy nhiêu) — sát mép phải.
     static func buddyZoneFrame(width: CGFloat, strip: CGFloat) -> CGRect {
-        CGRect(x: width - stripZoneWidth - buddyZoneWidth, y: 0, width: buddyZoneWidth, height: strip)
+        CGRect(x: width - buddyZoneWidth, y: 0, width: buddyZoneWidth, height: strip)
     }
 
     /// Khung VẼ nhân vật — THUẦN để test: cao strip + phần tràn xuống phím, rộng vuông (dáng ngủ nằm ngang không
-    /// bị cắt), canh giữa ô chừa; được đè lên ⌄ / 📋 / phím (lớp trên cùng, không nhận chạm).
+    /// bị cắt), canh giữa ô chừa nhưng không vượt mép phải; được đè lên 📋 / phím (lớp trên cùng, không nhận chạm).
     static func buddyFrame(width: CGFloat, strip: CGFloat) -> CGRect {
         let zone = buddyZoneFrame(width: width, strip: strip)
         let h = (strip * (1 + buddyOverlapRatio)).rounded()
@@ -6284,13 +6117,13 @@ final class KeyboardView: UIView, UIInputViewAudioFeedback {
         let card = pasteCard.superview != nil && !pasteCard.isHidden ? pasteCard.frame : nil
         return (cells, divs, titles, card)
     }
-    /// Test hook dải gợi ý: frame bar, nút 📋 (nil = ẩn/chưa tạo), chevron, ô slot.
+    /// Test hook dải gợi ý: frame bar, nút 📋 (nil = ẩn/chưa tạo), ô slot.
     /// `slots`/`dividers`: frame (toạ độ KeyboardView) các ô / vạch ngăn đang HIỆN.
-    func debugStripLayout() -> (bar: CGRect, clip: CGRect?, chevron: CGRect, cells: [CGRect],
+    func debugStripLayout() -> (bar: CGRect, clip: CGRect?, cells: [CGRect],
                                 slots: [CGRect], dividers: [CGRect]) {
         layoutIfNeeded()
         let clip: CGRect? = clipZoneMade && !clipZone.isHidden ? clipZone.frame : nil
-        return (suggestionBar.frame, clip, chevronZone.frame,
+        return (suggestionBar.frame, clip,
                 suggestionBar.cellFrames.map { convert($0, from: suggestionBar) },
                 slotButtons.filter { !$0.isHidden }.map { convert($0.bounds, from: $0) },
                 slotDividers.filter { !$0.isHidden }.map { convert($0.bounds, from: $0) })

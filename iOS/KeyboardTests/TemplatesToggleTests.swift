@@ -46,8 +46,9 @@ final class TemplatesToggleTests: XCTestCase {
             kb.debugTapBurger()
             XCTAssertFalse(kb.debugInTemplates, "tắt: không mở plane mẫu câu")
             XCTAssertFalse(kb.debugTemplatesLoaded, "tắt: không đọc danh sách mẫu")
-            // Nút ⌄ (thu gọn thanh gợi ý) không thuộc mẫu câu — vẫn còn.
-            XCTAssertGreaterThan(kb.debugStripLayout().chevron.width, 0)
+            // Không còn nút ⌄ ở mép phải (10/2026): thanh gợi ý (hoặc 📋) chạm mép phải.
+            let s = kb.debugStripLayout()
+            XCTAssertEqual(s.clip?.maxX ?? s.bar.maxX, kb.bounds.width, accuracy: 0.5)
         }
     }
 

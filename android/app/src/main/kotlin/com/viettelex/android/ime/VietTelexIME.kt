@@ -126,7 +126,6 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
 
     private var field = FieldMapping.map(0, 0)
     private var pendingGen = 0
-    private var collapsed = false
 
     private val autoShiftRun = Runnable { if (pendingGen == session.generation) applyAutoShift() }
     private val suggestRun = Runnable { if (pendingGen == session.generation) refreshBar() }
@@ -513,15 +512,15 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         warmSmartTouch()
 
         inputShown = true
-        collapsed = prefs.getBoolean(Keys.SUGGESTION_BAR_COLLAPSED, false)
-        session.barCollapsed = collapsed
-        // Ô cấm gợi ý chữ nhưng không nhạy cảm (StripMode.TOOLS): vẫn ☰/con trỏ/📋/⌄ + Dán (#113).
+        // Nút ⌄ thu gọn đã bỏ (10/2026): bar luôn mở; khoá "suggestionBarCollapsed" cũ không còn đọc.
+        session.barCollapsed = false
+        // Ô cấm gợi ý chữ nhưng không nhạy cảm (StripMode.TOOLS): vẫn ☰/con trỏ/📋 + Dán (#113).
         val barOn = session.stripMode.shown
         // "Nút emoji" = Thanh trên: chỉ khi strip CÓ vẽ (barOn) — không thì 😊 ở lại hàng đáy.
         // TalkBack: strip không đọc được (importantForAccessibility NO) ⇒ giữ phím 😊 cho người dùng trợ năng.
         val emojiInStrip = com.viettelex.keyboard.EmojiKeyPlacement.inStrip(settings.emojiKeyPlacement,
             barOn && accessibility?.isTouchExplorationEnabled != true)
-        st.configure(barOn, collapsed, settings.templatesEnabled,
+        st.configure(barOn, settings.templatesEnabled,
             reserved = KeyLayout.stripReserved(settings.showSuggestions), emojiButton = emojiInStrip,
             slotSetting = settings.suggestionCount,
             // "Chiều cao thanh gợi ý" — điện thoại ngang kẹp ở Vừa (màn thấp).
@@ -1559,15 +1558,6 @@ class VietTelexIME : InputMethodService(), KeyboardView.Listener, StripView.List
         if (floatingNow) return             // một tay tắt khi thả nổi (lưu lại, áp khi gắn lại)
         keyboard?.setOneHand(side)
     }
-
-    override fun onBarToggled(collapsed: Boolean) {
-        this.collapsed = collapsed
-        editPrefs().putBoolean(Keys.SUGGESTION_BAR_COLLAPSED, collapsed).apply()
-        session.barCollapsed = collapsed
-        if (!collapsed) refreshBar()
-    }
-
-    override fun onStripHeightChanged() { root?.requestLayout() }
 
     // MARK: auto-shift + gợi ý
 

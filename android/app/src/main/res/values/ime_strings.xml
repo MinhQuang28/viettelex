@@ -10,7 +10,6 @@
     <string name="ime_undo" translatable="false">Hoàn tác</string>
     <string name="ime_templates" translatable="false">Mẫu câu</string>
     <string name="ime_templates_close" translatable="false">Đóng mẫu câu</string>
-    <string name="ime_collapse" translatable="false">Thu gọn thanh gợi ý</string>
     <string name="ime_expand" translatable="false">Mở thanh gợi ý</string>
     <string name="ime_keyboard_desc" translatable="false">Bàn phím VietTelex</string>
 </resources>

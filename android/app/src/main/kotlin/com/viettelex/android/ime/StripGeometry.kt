@@ -10,12 +10,12 @@ import com.viettelex.keyboard.BarLayout
 object StripGeometry {
     /** Chiều cao pill (thẻ Dán, chip số, Khôi phục) và ô nhấn slot, dp. */
     const val PILL_H = 32f
-    /** Bề ngang ô icon con trỏ (sau ô mẫu câu) / ô 📋 (trước ⌄), dp. */
+    /** Bề ngang ô icon con trỏ (sau ô mẫu câu) / ô 📋 (mép phải), dp. */
     const val TOOL_W = 44f
     const val CLIP_W = 40f
-    /** Ô nút 😊 sát trái ⌄ ("Nút emoji" = Thanh trên), dp. */
+    /** Ô nút 😊 sát mép phải / ô nhân vật ("Nút emoji" = Thanh trên), dp. */
     const val EMOJI_W = 40f
-    /** Icon thanh công cụ khi mở (☰ mẫu câu, con trỏ, 📋), dp; ⌄ nhỏ hơn 2 dp. */
+    /** Icon thanh công cụ (☰ mẫu câu, con trỏ, 😊, 📋), dp. */
     const val ICON_OPEN = 22f
     /** Icon khi thu gọn (hàng nổi 14 dp). */
     const val ICON_COLLAPSED = 14f
@@ -28,7 +28,7 @@ object StripGeometry {
 
     /**
      * #113 kiểu Gboard: đang có nội dung gợi ý (chữ, emoji, chip số/email, thẻ Dán, pill hoàn
-     * tác) ⇒ ẩn icon con trỏ + 📋 để 3 slot rộng hơn; ☰ và ⌄ giữ nguyên. Bảng sửa / lịch sử
+     * tác) ⇒ ẩn icon con trỏ + 📋 để 3 slot rộng hơn; ☰ giữ nguyên. Bảng sửa / lịch sử
      * clipboard đang mở ⇒ vẫn hiện icon tương ứng để đóng được. Chỉ đổi khi nội dung rỗng↔có.
      */
     fun toolsShown(hasContent: Boolean, editOpen: Boolean, clipOpen: Boolean): Boolean =
@@ -49,17 +49,17 @@ object StripGeometry {
         zoneW + if (toolsShown) toolW else 0f
 
     /**
-     * Bề ngang các nút giữa slot và zone ⌄ (dp): 😊 ([emojiButton], LUÔN — cả khi có gợi ý, để emoji
+     * Bề ngang các nút giữa slot và mép phải (dp): nhân vật + 😊 ([emojiButton], LUÔN — cả khi có gợi ý, để emoji
      * không mất lối vào) + 📋 (chỉ khi có nút và [toolsShown]).
      */
     fun rightExtraW(clipW: Float, clipButton: Boolean, toolsShown: Boolean, emojiButton: Boolean = false, buddy: Float = 0f): Float =
         buddy + (if (emojiButton) EMOJI_W else 0f) + (if (clipButton && toolsShown) clipW else 0f)
 
-    /** Ô "Bạn đồng hành" (dp) ngay TRÁI ⌄ — 😊 / 📋 dời sang trái đúng bấy nhiêu. = iOS KeyboardView.buddyZoneWidth. */
+    /** Ô "Bạn đồng hành" (dp) sát MÉP PHẢI — 😊 / 📋 dời sang trái đúng bấy nhiêu. = iOS KeyboardView.buddyZoneWidth. */
     const val BUDDY_W = 34f
 
-    /** Mép trái / phải ô nhân vật (dp) khi bar mở: sát trái zone ⌄. */
-    fun buddyLeft(width: Float, zoneW: Float): Float = width - zoneW - BUDDY_W
+    /** Mép trái ô nhân vật (dp) khi bar mở: ô sát mép phải (không còn nút ⌄). */
+    fun buddyLeft(width: Float): Float = width - BUDDY_W
 
     /** Phần nhân vật tràn xuống hàng phím đầu (theo tỉ lệ strip) — = iOS KeyboardView.buddyOverlapRatio. Chỉ là
      *  hình (BuddyView không nhận chạm) nên phím bên dưới vẫn bấm bình thường. */
@@ -69,13 +69,13 @@ object StripGeometry {
     fun buddyHeight(strip: Int): Int = Math.round(strip * (1 + BUDDY_OVERLAP))
 
     /** Bề ngang khung VẼ nhân vật (px): vuông theo [buddyHeight] (dáng ngủ nằm ngang không bị cắt), tối thiểu ô
-     *  chừa [zone]; canh giữa ô chừa, được đè lên ⌄ / 📋 / phím (lớp trên cùng). = iOS KeyboardView.buddyFrame. */
+     *  chừa [zone]; canh giữa ô chừa nhưng kẹp trong mép phải, được đè lên 📋 / phím (lớp trên cùng). = iOS KeyboardView.buddyFrame. */
     fun buddyDrawWidth(strip: Int, zone: Int): Int = maxOf(zone, buddyHeight(strip))
 
-    /** Mép phải vùng slot (dp): trừ zone ⌄, ô 😊 ([emojiButton]) và ô 📋 (chỉ khi có nút và [toolsShown]). */
-    fun barRight(width: Float, zoneW: Float, clipW: Float, clipButton: Boolean, toolsShown: Boolean,
+    /** Mép phải vùng slot (dp): từ mép phải trừ ô nhân vật, 😊 ([emojiButton]) và 📋 (chỉ khi có nút và [toolsShown]). */
+    fun barRight(width: Float, clipW: Float, clipButton: Boolean, toolsShown: Boolean,
                  emojiButton: Boolean = false, buddy: Float = 0f): Float =
-        width - zoneW - rightExtraW(clipW, clipButton, toolsShown, emojiButton, buddy)
+        width - rightExtraW(clipW, clipButton, toolsShown, emojiButton, buddy)
 
     /** Mép trái/phải slot i (0..2) trong [barL, barR] → ghi vào [l]/[r]. */
     fun thirds(barL: Float, barR: Float, l: FloatArray, r: FloatArray) = cells(barL, barR, 3, l, r)
